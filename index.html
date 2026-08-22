@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title data-i18n="meta.title">作品集 | 個人網站</title>
+<link rel="stylesheet" href="assets/css/style.css">
+</head>
+<body>
+
+<header class="site-header">
+  <div class="container header-inner">
+    <a href="#top" class="logo" data-i18n="hero.name">你的名字</a>
+
+    <button class="nav-toggle" id="navToggle" aria-label="Toggle navigation" aria-expanded="false">
+      <span></span><span></span><span></span>
+    </button>
+
+    <nav class="site-nav" id="siteNav">
+      <a href="#about" data-i18n="nav.about">關於我</a>
+      <a href="#projects" data-i18n="nav.projects">作品集</a>
+      <a href="#resume" data-i18n="nav.resume">履歷</a>
+      <a href="#contact" data-i18n="nav.contact">聯絡我</a>
+      <button class="lang-toggle" id="langToggle" data-i18n="nav.langToggle">EN</button>
+    </nav>
+  </div>
+</header>
+
+<main>
+
+  <section id="top" class="hero">
+    <div class="container hero-inner">
+      <div class="avatar-placeholder" aria-hidden="true">
+        <svg viewBox="0 0 24 24" width="48" height="48" fill="none" stroke="currentColor" stroke-width="1.5">
+          <circle cx="12" cy="8" r="4"></circle>
+          <path d="M4 20c0-4 3.5-7 8-7s8 3 8 7"></path>
+        </svg>
+      </div>
+      <p class="hero-greeting" data-i18n="hero.greeting">哈囉,我是</p>
+      <h1 class="hero-name" data-i18n="hero.name">你的名字</h1>
+      <p class="hero-tagline" data-i18n="hero.tagline">在這裡放一句吸引人的自我定位標語</p>
+      <div class="hero-cta">
+        <a href="#projects" class="btn btn-primary" data-i18n="hero.ctaProjects">查看作品</a>
+        <a href="#contact" class="btn btn-outline" data-i18n="hero.ctaContact">聯絡我</a>
+      </div>
+    </div>
+  </section>
+
+  <section id="about" class="section">
+    <div class="container">
+      <h2 class="section-title" data-i18n="about.title">關於我</h2>
+      <p class="about-body" data-i18n="about.body">這裡放一段自我介紹文字。</p>
+
+      <h3 class="skills-title" data-i18n="about.skillsTitle">技能</h3>
+      <ul class="skills-list">
+        <li data-i18n="skills.item1">技能一</li>
+        <li data-i18n="skills.item2">技能二</li>
+        <li data-i18n="skills.item3">技能三</li>
+        <li data-i18n="skills.item4">技能四</li>
+        <li data-i18n="skills.item5">技能五</li>
+        <li data-i18n="skills.item6">技能六</li>
+      </ul>
+    </div>
+  </section>
+
+  <section id="projects" class="section section-alt">
+    <div class="container">
+      <h2 class="section-title" data-i18n="projects.title">作品集</h2>
+      <p class="section-subtitle" data-i18n="projects.subtitle">這裡放你想展示的專案</p>
+
+      <div class="projects-grid">
+        <article class="project-card">
+          <div class="project-thumb" aria-hidden="true"></div>
+          <span class="project-tag" data-i18n="project1.tag">標籤</span>
+          <h3 data-i18n="project1.title">專案名稱一</h3>
+          <p data-i18n="project1.desc">專案簡短描述。</p>
+          <a href="#" class="project-link" data-i18n="project.viewLink">查看專案</a>
+        </article>
+
+        <article class="project-card">
+          <div class="project-thumb" aria-hidden="true"></div>
+          <span class="project-tag" data-i18n="project2.tag">標籤</span>
+          <h3 data-i18n="project2.title">專案名稱二</h3>
+          <p data-i18n="project2.desc">專案簡短描述。</p>
+          <a href="#" class="project-link" data-i18n="project.viewLink">查看專案</a>
+        </article>
+
+        <article class="project-card">
+          <div class="project-thumb" aria-hidden="true"></div>
+          <span class="project-tag" data-i18n="project3.tag">標籤</span>
+          <h3 data-i18n="project3.title">專案名稱三</h3>
+          <p data-i18n="project3.desc">專案簡短描述。</p>
+          <a href="#" class="project-link" data-i18n="project.viewLink">查看專案</a>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <section id="resume" class="section">
+    <div class="container resume-inner">
+      <h2 class="section-title" data-i18n="resume.title">履歷</h2>
+      <p data-i18n="resume.body">可以下載我的履歷 PDF。</p>
+      <div class="resume-cta">
+        <a href="assets/resume/cv-zh.pdf" class="btn btn-primary" data-i18n="resume.downloadZh">下載中文履歷</a>
+        <a href="assets/resume/cv-en.pdf" class="btn btn-outline" data-i18n="resume.downloadEn">下載英文履歷</a>
+      </div>
+      <p class="resume-note" data-i18n="resume.notReady">(履歷檔案尚未上傳,之後補上)</p>
+    </div>
+  </section>
+
+  <section id="contact" class="section section-alt">
+    <div class="container contact-inner">
+      <h2 class="section-title" data-i18n="contact.title">聯絡我</h2>
+      <p data-i18n="contact.body">歡迎聯絡我。</p>
+
+      <dl class="contact-list">
+        <div>
+          <dt data-i18n="contact.emailLabel">Email</dt>
+          <dd><a href="mailto:your-email@example.com" data-i18n="contact.emailValue">your-email@example.com</a></dd>
+        </div>
+        <div>
+          <dt data-i18n="contact.socialLabel">社群連結</dt>
+          <dd class="social-links">
+            <a href="#" aria-label="LinkedIn">LinkedIn</a>
+            <a href="#" aria-label="GitHub">GitHub</a>
+          </dd>
+        </div>
+      </dl>
+
+      <p class="contact-note" data-i18n="contact.formNote">聯絡表單功能之後補上。</p>
+    </div>
+  </section>
+
+</main>
+
+<footer class="site-footer">
+  <div class="container">
+    <p data-i18n="footer.text">© 2026 你的名字. All rights reserved.</p>
+  </div>
+</footer>
+
+<script src="assets/js/main.js"></script>
+</body>
+</html>
