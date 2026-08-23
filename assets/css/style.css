@@ -57,10 +57,35 @@ a:hover { text-decoration: underline; }
 }
 
 .logo {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
   font-weight: 700;
   font-size: 1.1rem;
   color: var(--color-text);
   text-decoration: none;
+}
+
+.logo-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  background: var(--color-accent);
+  color: var(--color-accent-contrast);
+  font-weight: 800;
+  font-size: 0.9rem;
+  flex-shrink: 0;
+}
+
+.logo-mark-lg {
+  width: 64px;
+  height: 64px;
+  margin: 0 auto 24px;
+  border-radius: 16px;
+  font-size: 1.75rem;
 }
 
 .site-nav {
@@ -112,23 +137,13 @@ a:hover { text-decoration: underline; }
   text-align: center;
 }
 
-.avatar-placeholder {
-  width: 96px;
-  height: 96px;
-  margin: 0 auto 24px;
-  border-radius: 50%;
-  background: var(--color-bg-alt);
-  border: 1px solid var(--color-border);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--color-text-muted);
-}
-
-.hero-greeting {
+.hero-eyebrow {
   margin: 0 0 8px;
-  color: var(--color-text-muted);
-  font-size: 1rem;
+  color: var(--color-accent);
+  font-size: 0.9rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
 }
 
 .hero-name {
@@ -225,19 +240,45 @@ a:hover { text-decoration: underline; }
   font-size: 0.9rem;
 }
 
-/* Projects */
-.projects-grid {
+/* Cards (Services / Projects) */
+.card-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
   gap: 24px;
 }
 
-.project-card {
+.card {
   background: var(--color-bg);
   border: 1px solid var(--color-border);
   border-radius: var(--radius);
   padding: 20px;
   box-shadow: var(--shadow);
+}
+
+.card h3 {
+  margin: 0 0 8px;
+  font-size: 1.15rem;
+}
+
+.card p {
+  color: var(--color-text-muted);
+  font-size: 0.95rem;
+  margin: 0 0 12px;
+}
+
+.service-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 44px;
+  height: 44px;
+  padding: 0 12px;
+  margin-bottom: 16px;
+  border-radius: 10px;
+  background: rgba(47, 111, 235, 0.1);
+  color: var(--color-accent);
+  font-weight: 800;
+  font-size: 0.85rem;
 }
 
 .project-thumb {
@@ -257,38 +298,9 @@ a:hover { text-decoration: underline; }
   margin-bottom: 10px;
 }
 
-.project-card h3 {
-  margin: 0 0 8px;
-  font-size: 1.15rem;
-}
-
-.project-card p {
-  color: var(--color-text-muted);
-  font-size: 0.95rem;
-  margin: 0 0 12px;
-}
-
 .project-link {
   font-size: 0.9rem;
   font-weight: 600;
-}
-
-/* Resume */
-.resume-inner {
-  text-align: center;
-}
-
-.resume-cta {
-  display: flex;
-  gap: 16px;
-  justify-content: center;
-  flex-wrap: wrap;
-  margin: 24px 0 12px;
-}
-
-.resume-note {
-  color: var(--color-text-muted);
-  font-size: 0.9rem;
 }
 
 /* Contact */
