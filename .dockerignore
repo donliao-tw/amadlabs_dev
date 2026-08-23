@@ -1,4 +1,4 @@
 .git
-deploy
+deploy/nginx.conf
 backend
 *.md
