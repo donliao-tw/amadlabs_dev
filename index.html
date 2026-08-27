@@ -4,6 +4,9 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title data-i18n="meta.title">AMAD Labs | AI × 全端開發工作室</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="assets/css/style.css">
 </head>
 <body>
@@ -33,11 +36,20 @@
 
   <section id="top" class="hero">
     <div class="container hero-inner">
-      <div class="logo-mark logo-mark-lg" aria-hidden="true">A</div>
-      <p class="hero-eyebrow" data-i18n="hero.eyebrow">AI × 全端開發工作室</p>
-      <h1 class="hero-name" data-i18n="hero.title">AMAD Labs</h1>
-      <p class="hero-tagline" data-i18n="hero.tagline">我們用 AI 與全端技術,協助團隊把想法變成能上線的產品。</p>
-      <div class="hero-cta">
+      <p class="hero-eyebrow" id="heroEyebrow" data-i18n="hero.eyebrow">AI × 機器人 × 自動化 × 全端開發 × 資料整合</p>
+
+      <div class="hero-logo-wrap">
+        <h1 class="hero-name" id="heroLogoLine">
+          <span class="hero-seg hero-letter" id="hLetter1">A</span><span class="hero-seg hero-letter" id="hLetter2">M</span><span class="hero-seg hero-letter" id="hLetter3">A</span><span class="hero-seg hero-seg-d" id="hSegD">D</span><span class="hero-seg hero-seg-labs" id="hSegLabs">&nbsp;Labs</span>
+        </h1>
+        <h1 class="hero-name hero-shine" id="heroShine" aria-hidden="true">AMAD&nbsp;Labs</h1>
+      </div>
+
+      <p class="hero-tagline">
+        <span class="hero-tw-wrap" id="heroTwWrap"><span class="hero-tw-text" id="heroTwText" data-i18n="hero.tagline">你的想法，交給我們實現。</span></span><span class="hero-tw-cursor" id="heroTwCursor"></span>
+      </p>
+
+      <div class="hero-cta" id="heroCta">
         <a href="#services" class="btn btn-primary" data-i18n="hero.ctaServices">看我們能做什麼</a>
         <a href="#contact" class="btn btn-outline" data-i18n="hero.ctaContact">洽談合作</a>
       </div>
