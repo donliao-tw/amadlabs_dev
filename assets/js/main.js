@@ -148,20 +148,25 @@
       heroTwWrap.style.width = "auto";
       heroTwCursor.style.opacity = "1";
       heroCta.classList.add("in");
-      schedule(playShine, 250);
-      entranceSettled = true;
-      applyHeroTheme(currentTheme);
     }).catch(function () {});
   }
 
-  // timeline (ms) — 3rd letter of AMA enters first, then 2nd, then 1st
+  function settleAndShine() {
+    entranceSettled = true;
+    applyHeroTheme(currentTheme);
+    playShine();
+  }
+
+  // timeline (ms) — 3rd letter of AMA enters first, then 2nd, then 1st;
+  // the logo settles + shine plays, THEN the tagline types out.
   var T_EYEBROW = 0;
   var T_FIRST_IN = 300;   // letter3
   var T_SECOND_IN = 500;  // letter2
   var T_THIRD_IN = 700;   // letter1
   var T_D = 1000;
-  var T_LABS = 1800;
-  var T_TYPE = 2900;
+  var T_LABS = 1800;      // Labs finishes settling at 1800 + 950 = 2750
+  var T_SHINE = 3000;     // shine sweep, duration 2s (see .hero-shine.shine-go)
+  var T_TYPE = 5100;      // starts once the shine sweep has finished
 
   function playHeroInstant() {
     [heroEyebrow, hLetter1, hLetter2, hLetter3, hSegD, hSegLabs].forEach(function (el) {
@@ -191,6 +196,7 @@
     schedule(function () { startLetter(hLetter1); }, T_THIRD_IN);
     schedule(function () { startD(hSegD); }, T_D);
     schedule(function () { startLabs(hSegLabs); }, T_LABS);
+    schedule(settleAndShine, T_SHINE);
     schedule(startHeroTypewriter, T_TYPE);
   }
 
