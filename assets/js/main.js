@@ -194,13 +194,12 @@
     schedule(startHeroTypewriter, T_TYPE);
   }
 
-  // ---- Hero theme (admin-only, server-stored) ----
+  // ---- Hero theme (public setting for now — SSO/permissions come later) ----
 
   var SHINE_WHITE = "linear-gradient(100deg, transparent 25%, rgba(255,255,255,0.65) 42%, rgba(255,255,255,1) 50%, rgba(255,255,255,0.65) 58%, transparent 75%)";
 
   var currentTheme = null; // { stops: [hex, ...] } or { stops: null }
   var entranceSettled = false;
-  var ADMIN_TOKEN_KEY = "amadlabs_admin_token";
 
   function applyHeroTheme(theme) {
     currentTheme = theme;
@@ -226,7 +225,7 @@
       .catch(function () {});
   }
 
-  // -- Settings panel (opened via the quiet gear button, bottom-right) --
+  // -- Personal settings panel (opened via the avatar button in nav) --
 
   var THEME_PRESETS = [
     { id: 11, name: "藍→綠",         stops: ["#5b8def", "#34d399"] },
@@ -241,29 +240,99 @@
     { id: 20, name: "粉→紫→藍",      stops: ["#f472b6", "#a78bfa", "#5b8def"] }
   ];
 
+  // Preview inside the panel replays the same entrance (letters/D/Labs +
+  // shine) on its own small set of elements, so picking a color shows both
+  // the color AND the motion — not just a static swatch.
+  var pvRafIds = [];
+  var pvTimers = [];
+
+  function pvTween(el, duration, ease, buildTransform) {
+    el.style.visibility = "visible";
+    var start = null;
+    function frame(ts) {
+      if (start === null) start = ts;
+      var p = Math.min((ts - start) / duration, 1);
+      el.style.transform = buildTransform(ease(p));
+      if (p < 1) {
+        pvRafIds.push(requestAnimationFrame(frame));
+      } else {
+        el.style.transform = buildTransform(1);
+      }
+    }
+    pvRafIds.push(requestAnimationFrame(frame));
+  }
+
+  function pvClear() {
+    pvTimers.forEach(clearTimeout);
+    pvTimers = [];
+    pvRafIds.forEach(cancelAnimationFrame);
+    pvRafIds = [];
+  }
+
   function initThemePanel() {
-    var gear = document.getElementById("themeGear");
+    var avatarBtn = document.getElementById("avatarBtn");
     var panel = document.getElementById("themePanel");
     var closeBtn = document.getElementById("themePanelClose");
-    var previewText = document.getElementById("themePreviewText");
     var swatchGrid = document.getElementById("themeSwatchGrid");
     var pickerRow = document.getElementById("themePickerRow");
-    var tokenInput = document.getElementById("themeToken");
     var saveBtn = document.getElementById("themeSave");
     var resetBtn = document.getElementById("themeReset");
     var statusEl = document.getElementById("themeStatus");
+    var replayBtn = document.getElementById("themePreviewReplay");
 
-    if (!gear || !panel) return;
+    var tpLetter1 = document.getElementById("tpLetter1");
+    var tpLetter2 = document.getElementById("tpLetter2");
+    var tpLetter3 = document.getElementById("tpLetter3");
+    var tpSegD = document.getElementById("tpSegD");
+    var tpSegLabs = document.getElementById("tpSegLabs");
+    var tpLogoLine = document.getElementById("tpLogoLine");
+    var tpGradientText = document.getElementById("tpGradientText");
+    var tpShine = document.getElementById("tpShine");
+
+    if (!avatarBtn || !panel) return;
 
     var pickerStops = THEME_PRESETS[0].stops.slice();
 
-    try {
-      var savedToken = localStorage.getItem(ADMIN_TOKEN_KEY);
-      if (savedToken) tokenInput.value = savedToken;
-    } catch (e) {}
+    function playPreview() {
+      pvClear();
+      [tpLetter1, tpLetter2, tpLetter3, tpSegD, tpSegLabs].forEach(function (el) {
+        el.style.visibility = "hidden";
+        el.style.transform = "";
+      });
+      tpLogoLine.style.opacity = "1";
+      tpGradientText.style.opacity = "0";
+      tpShine.classList.remove("shine-go");
 
-    function renderPreview() {
-      previewText.style.backgroundImage = "linear-gradient(100deg, " + pickerStops.join(", ") + ")";
+      var gradientCss = "linear-gradient(100deg, " + pickerStops.join(", ") + ")";
+      tpGradientText.style.backgroundImage = gradientCss;
+      tpShine.style.backgroundImage = SHINE_WHITE;
+
+      function sched(fn, d) { pvTimers.push(setTimeout(fn, d)); }
+
+      sched(function () {
+        pvTween(tpLetter3, 900, easeLinear, function (e) { return "translateX(" + interp(BOUNCE_X, e).toFixed(2) + "px)"; });
+      }, 300);
+      sched(function () {
+        pvTween(tpLetter2, 900, easeLinear, function (e) { return "translateX(" + interp(BOUNCE_X, e).toFixed(2) + "px)"; });
+      }, 500);
+      sched(function () {
+        pvTween(tpLetter1, 900, easeLinear, function (e) { return "translateX(" + interp(BOUNCE_X, e).toFixed(2) + "px)"; });
+      }, 700);
+      sched(function () {
+        pvTween(tpSegD, 900, easeOutQuad, function (e) { return "scale(" + interp(D_SCALE, e).toFixed(3) + ")"; });
+      }, 1000);
+      sched(function () {
+        pvTween(tpSegLabs, 950, easeOutCubic, function (e) {
+          var x = interp(LABS_X, e).toFixed(2), sk = interp(LABS_SKEW, e).toFixed(2);
+          return "translateX(" + x + "px) skewX(" + sk + "deg)";
+        });
+      }, 1800);
+      sched(function () {
+        tpGradientText.style.opacity = "1";
+        tpLogoLine.style.opacity = "0";
+        void tpShine.offsetWidth;
+        tpShine.classList.add("shine-go");
+      }, 2900);
     }
 
     function renderPickerRow() {
@@ -275,8 +344,8 @@
         input.setAttribute("aria-label", "色 " + (i + 1));
         input.addEventListener("input", function () {
           pickerStops[i] = input.value;
-          renderPreview();
           markActiveSwatch(null);
+          playPreview();
         });
         pickerRow.appendChild(input);
       });
@@ -298,50 +367,44 @@
       btn.addEventListener("click", function () {
         pickerStops = preset.stops.slice();
         renderPickerRow();
-        renderPreview();
         markActiveSwatch(preset.id);
+        playPreview();
       });
       swatchGrid.appendChild(btn);
     });
 
     renderPickerRow();
-    renderPreview();
+
+    replayBtn.addEventListener("click", playPreview);
 
     function openPanel() {
       if (currentTheme && currentTheme.stops) {
         pickerStops = currentTheme.stops.slice();
         renderPickerRow();
-        renderPreview();
       }
       panel.hidden = false;
+      playPreview();
     }
-    function closePanel() { panel.hidden = true; }
+    function closePanel() { panel.hidden = true; pvClear(); }
 
-    gear.addEventListener("click", openPanel);
+    avatarBtn.addEventListener("click", openPanel);
     closeBtn.addEventListener("click", closePanel);
     panel.addEventListener("click", function (e) {
       if (e.target === panel) closePanel();
     });
 
     function saveTheme(stops) {
-      var token = tokenInput.value.trim();
-      if (!token) {
-        statusEl.textContent = "請先輸入管理密碼。";
-        return;
-      }
       statusEl.textContent = "儲存中…";
       fetch("/api/theme", {
         method: "POST",
-        headers: { "Content-Type": "application/json", "X-Admin-Token": token },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ stops: stops })
       })
         .then(function (res) {
-          if (res.status === 401) throw new Error("密碼錯誤");
           if (!res.ok) throw new Error("儲存失敗");
           return res.json();
         })
         .then(function (theme) {
-          try { localStorage.setItem(ADMIN_TOKEN_KEY, token); } catch (e) {}
           statusEl.textContent = "已儲存,所有訪客都會看到這個配色。";
           applyHeroTheme(theme);
         })

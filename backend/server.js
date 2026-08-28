@@ -3,7 +3,6 @@ const fs = require("fs");
 const path = require("path");
 
 const PORT = process.env.PORT || 3000;
-const ADMIN_TOKEN = process.env.ADMIN_TOKEN || "amadlabs-dev-token";
 const THEME_FILE = process.env.THEME_FILE || path.join(__dirname, "data", "theme.json");
 
 const HEX_RE = /^#[0-9a-fA-F]{6}$/;
@@ -61,12 +60,9 @@ const server = http.createServer((req, res) => {
   }
 
   if (req.url === "/theme" && req.method === "POST") {
-    const token = req.headers["x-admin-token"];
-    if (token !== ADMIN_TOKEN) {
-      res.writeHead(401);
-      res.end(JSON.stringify({ status: "unauthorized" }));
-      return;
-    }
+    // No auth for now — this is a public setting until SSO + permissions
+    // land, at which point this route should require an authenticated
+    // request with an authorized role before writing.
 
     readBody(req, 4096)
       .then((raw) => {

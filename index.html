@@ -28,6 +28,12 @@
       <a href="#about" data-i18n="nav.about">關於我們</a>
       <a href="#contact" data-i18n="nav.contact">聯絡我們</a>
       <button class="lang-toggle" id="langToggle" data-i18n="nav.langToggle">EN</button>
+      <button class="avatar-btn" id="avatarBtn" aria-label="個人設定" title="個人設定">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="8" r="3.4"></circle>
+          <path d="M4.5 19.5c1.6-3.4 4.3-5 7.5-5s5.9 1.6 7.5 5"></path>
+        </svg>
+      </button>
     </nav>
   </div>
 </header>
@@ -165,27 +171,28 @@
   </div>
 </footer>
 
-<button class="theme-gear" id="themeGear" aria-label="佈景設定" title="佈景設定">⚙</button>
-
 <div class="theme-panel" id="themePanel" hidden>
   <div class="theme-panel-inner">
     <div class="theme-panel-head">
-      <h3>Hero 主題配色</h3>
+      <h3>個人設定</h3>
       <button class="theme-panel-close" id="themePanelClose" aria-label="關閉">×</button>
     </div>
+    <p class="theme-panel-note">目前開放所有人設定,之後接上 SSO 會依權限管控。</p>
 
-    <div class="theme-preview-stage">
-      <h4 class="theme-preview-text" id="themePreviewText">AMAD&nbsp;Labs</h4>
+    <h4 class="theme-section-title">Hero 主題配色</h4>
+
+    <div class="theme-preview-stage" id="themePreviewStage">
+      <button class="replay-btn-sm" id="themePreviewReplay" aria-label="重播動畫">↻</button>
+      <div class="tp-wrap" id="tpLogoLine">
+        <span class="tp-seg tp-letter" id="tpLetter1">A</span><span class="tp-seg tp-letter" id="tpLetter2">M</span><span class="tp-seg tp-letter" id="tpLetter3">A</span><span class="tp-seg tp-seg-d" id="tpSegD">D</span><span class="tp-seg tp-seg-labs" id="tpSegLabs">&nbsp;Labs</span>
+      </div>
+      <div class="tp-wrap tp-gradient-text" id="tpGradientText" aria-hidden="true">AMAD&nbsp;Labs</div>
+      <div class="tp-wrap tp-shine" id="tpShine" aria-hidden="true">AMAD&nbsp;Labs</div>
     </div>
 
     <div class="theme-swatch-grid" id="themeSwatchGrid"></div>
 
     <div class="theme-picker-row" id="themePickerRow"></div>
-
-    <label class="theme-token-label" for="themeToken">
-      管理密碼
-      <input type="password" id="themeToken" placeholder="第一次儲存時輸入" autocomplete="off">
-    </label>
 
     <div class="theme-panel-actions">
       <button class="btn btn-outline" id="themeReset">還原預設(灰階)</button>

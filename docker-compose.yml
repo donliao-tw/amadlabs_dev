@@ -14,8 +14,6 @@ services:
     restart: unless-stopped
     ports:
       - "127.0.0.1:8082:3000"
-    environment:
-      - ADMIN_TOKEN=${ADMIN_TOKEN:-amadlabs-dev-token}
     volumes:
       - theme_data:/app/data
 
