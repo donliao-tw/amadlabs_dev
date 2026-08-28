@@ -166,7 +166,7 @@
   var T_D = 1000;
   var T_LABS = 1800;      // Labs finishes settling at 1800 + 950 = 2750
   var T_SHINE = 3000;     // shine sweep, duration 2s (see .hero-shine.shine-go)
-  var T_TYPE = 5100;      // starts once the shine sweep has finished
+  var T_TYPE = 4100;      // starts ~1s before the shine sweep fully finishes
 
   function playHeroInstant() {
     [heroEyebrow, hLetter1, hLetter2, hLetter3, hSegD, hSegLabs].forEach(function (el) {

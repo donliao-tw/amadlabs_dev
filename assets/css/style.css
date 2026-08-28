@@ -257,11 +257,23 @@ a:hover { text-decoration: underline; }
 }
 
 .hero-tagline {
+  display: inline-block;
   max-width: 620px;
   margin: 0 auto 40px;
-  color: var(--color-text-muted);
-  font-size: 1.25rem;
   min-height: 1.7em;
+  font-size: 1.1rem;
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+  color: #7ee787;
+  background: #0a0e14;
+  border: 1px solid rgba(126, 231, 135, 0.25);
+  border-radius: 10px;
+  padding: 14px 22px;
+  box-shadow: 0 0 24px rgba(126, 231, 135, 0.08), inset 0 0 20px rgba(0, 0, 0, 0.4);
+}
+
+.hero-tagline::before {
+  content: "> ";
+  color: rgba(126, 231, 135, 0.55);
 }
 
 .hero-tw-wrap {
@@ -276,9 +288,9 @@ a:hover { text-decoration: underline; }
 
 .hero-tw-cursor {
   display: inline-block;
-  width: 2px;
+  width: 8px;
   height: 1.05em;
-  background: var(--color-accent);
+  background: #7ee787;
   vertical-align: text-bottom;
   margin-left: 2px;
   opacity: 0;
