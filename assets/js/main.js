@@ -48,7 +48,9 @@
   var hLetter3 = document.getElementById("hLetter3");
   var hSegD = document.getElementById("hSegD");
   var hSegLabs = document.getElementById("hSegLabs");
+  var heroGradientText = document.getElementById("heroGradientText");
   var heroShine = document.getElementById("heroShine");
+  var heroLogoLine = document.getElementById("heroLogoLine");
   var heroTwWrap = document.getElementById("heroTwWrap");
   var heroTwText = document.getElementById("heroTwText");
   var heroTwCursor = document.getElementById("heroTwCursor");
@@ -147,6 +149,8 @@
       heroTwCursor.style.opacity = "1";
       heroCta.classList.add("in");
       schedule(playShine, 250);
+      entranceSettled = true;
+      applyHeroTheme(currentTheme);
     }).catch(function () {});
   }
 
@@ -167,6 +171,8 @@
     heroTwWrap.style.width = "auto";
     heroTwCursor.style.opacity = "1";
     heroCta.classList.add("in");
+    entranceSettled = true;
+    applyHeroTheme(currentTheme);
   }
 
   function runHeroEntrance(eyebrowText, taglineText) {
@@ -186,6 +192,166 @@
     schedule(function () { startD(hSegD); }, T_D);
     schedule(function () { startLabs(hSegLabs); }, T_LABS);
     schedule(startHeroTypewriter, T_TYPE);
+  }
+
+  // ---- Hero theme (admin-only, server-stored) ----
+
+  var SHINE_WHITE = "linear-gradient(100deg, transparent 25%, rgba(255,255,255,0.65) 42%, rgba(255,255,255,1) 50%, rgba(255,255,255,0.65) 58%, transparent 75%)";
+
+  var currentTheme = null; // { stops: [hex, ...] } or { stops: null }
+  var entranceSettled = false;
+  var ADMIN_TOKEN_KEY = "amadlabs_admin_token";
+
+  function applyHeroTheme(theme) {
+    currentTheme = theme;
+    if (!entranceSettled) return; // wait for the entrance to finish first
+
+    var stops = theme && theme.stops;
+    if (stops && stops.length >= 2) {
+      heroGradientText.style.backgroundImage = "linear-gradient(100deg, " + stops.join(", ") + ")";
+      heroGradientText.style.opacity = "1";
+      heroLogoLine.style.opacity = "0";
+      heroShine.style.backgroundImage = SHINE_WHITE;
+    } else {
+      heroGradientText.style.opacity = "0";
+      heroLogoLine.style.opacity = "1";
+      heroShine.style.backgroundImage = "";
+    }
+  }
+
+  function fetchHeroTheme() {
+    fetch("/api/theme")
+      .then(function (res) { return res.json(); })
+      .then(applyHeroTheme)
+      .catch(function () {});
+  }
+
+  // -- Settings panel (opened via the quiet gear button, bottom-right) --
+
+  var THEME_PRESETS = [
+    { id: 11, name: "藍→綠",         stops: ["#5b8def", "#34d399"] },
+    { id: 12, name: "紫→粉",         stops: ["#a78bfa", "#f472b6"] },
+    { id: 13, name: "橘→黃",         stops: ["#fb923c", "#fbbf24"] },
+    { id: 14, name: "紅→紫",         stops: ["#f87171", "#a78bfa"] },
+    { id: 15, name: "青→藍",         stops: ["#22d3ee", "#5b8def"] },
+    { id: 16, name: "金→橘",         stops: ["#fbbf24", "#fb923c"] },
+    { id: 17, name: "綠→青",         stops: ["#34d399", "#22d3ee"] },
+    { id: 18, name: "靛→粉",         stops: ["#6366f1", "#f472b6"] },
+    { id: 19, name: "灰→藍",         stops: ["#9aa3b0", "#5b8def"] },
+    { id: 20, name: "粉→紫→藍",      stops: ["#f472b6", "#a78bfa", "#5b8def"] }
+  ];
+
+  function initThemePanel() {
+    var gear = document.getElementById("themeGear");
+    var panel = document.getElementById("themePanel");
+    var closeBtn = document.getElementById("themePanelClose");
+    var previewText = document.getElementById("themePreviewText");
+    var swatchGrid = document.getElementById("themeSwatchGrid");
+    var pickerRow = document.getElementById("themePickerRow");
+    var tokenInput = document.getElementById("themeToken");
+    var saveBtn = document.getElementById("themeSave");
+    var resetBtn = document.getElementById("themeReset");
+    var statusEl = document.getElementById("themeStatus");
+
+    if (!gear || !panel) return;
+
+    var pickerStops = THEME_PRESETS[0].stops.slice();
+
+    try {
+      var savedToken = localStorage.getItem(ADMIN_TOKEN_KEY);
+      if (savedToken) tokenInput.value = savedToken;
+    } catch (e) {}
+
+    function renderPreview() {
+      previewText.style.backgroundImage = "linear-gradient(100deg, " + pickerStops.join(", ") + ")";
+    }
+
+    function renderPickerRow() {
+      pickerRow.innerHTML = "";
+      pickerStops.forEach(function (color, i) {
+        var input = document.createElement("input");
+        input.type = "color";
+        input.value = color;
+        input.setAttribute("aria-label", "色 " + (i + 1));
+        input.addEventListener("input", function () {
+          pickerStops[i] = input.value;
+          renderPreview();
+          markActiveSwatch(null);
+        });
+        pickerRow.appendChild(input);
+      });
+    }
+
+    function markActiveSwatch(id) {
+      swatchGrid.querySelectorAll(".theme-swatch").forEach(function (btn) {
+        btn.classList.toggle("active", btn.getAttribute("data-id") === String(id));
+      });
+    }
+
+    THEME_PRESETS.forEach(function (preset) {
+      var btn = document.createElement("button");
+      btn.className = "theme-swatch";
+      btn.type = "button";
+      btn.setAttribute("data-id", preset.id);
+      btn.title = preset.name;
+      btn.style.background = "linear-gradient(100deg, " + preset.stops.join(", ") + ")";
+      btn.addEventListener("click", function () {
+        pickerStops = preset.stops.slice();
+        renderPickerRow();
+        renderPreview();
+        markActiveSwatch(preset.id);
+      });
+      swatchGrid.appendChild(btn);
+    });
+
+    renderPickerRow();
+    renderPreview();
+
+    function openPanel() {
+      if (currentTheme && currentTheme.stops) {
+        pickerStops = currentTheme.stops.slice();
+        renderPickerRow();
+        renderPreview();
+      }
+      panel.hidden = false;
+    }
+    function closePanel() { panel.hidden = true; }
+
+    gear.addEventListener("click", openPanel);
+    closeBtn.addEventListener("click", closePanel);
+    panel.addEventListener("click", function (e) {
+      if (e.target === panel) closePanel();
+    });
+
+    function saveTheme(stops) {
+      var token = tokenInput.value.trim();
+      if (!token) {
+        statusEl.textContent = "請先輸入管理密碼。";
+        return;
+      }
+      statusEl.textContent = "儲存中…";
+      fetch("/api/theme", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-Admin-Token": token },
+        body: JSON.stringify({ stops: stops })
+      })
+        .then(function (res) {
+          if (res.status === 401) throw new Error("密碼錯誤");
+          if (!res.ok) throw new Error("儲存失敗");
+          return res.json();
+        })
+        .then(function (theme) {
+          try { localStorage.setItem(ADMIN_TOKEN_KEY, token); } catch (e) {}
+          statusEl.textContent = "已儲存,所有訪客都會看到這個配色。";
+          applyHeroTheme(theme);
+        })
+        .catch(function (err) {
+          statusEl.textContent = err.message || "儲存失敗";
+        });
+    }
+
+    saveBtn.addEventListener("click", function () { saveTheme(pickerStops); });
+    resetBtn.addEventListener("click", function () { saveTheme(null); });
   }
 
   // ---- Language loading ----
@@ -223,6 +389,8 @@
   document.addEventListener("DOMContentLoaded", function () {
     var currentLang = getStoredLang();
     setLang(currentLang);
+    fetchHeroTheme();
+    initThemePanel();
 
     var langToggle = document.getElementById("langToggle");
     if (langToggle) {

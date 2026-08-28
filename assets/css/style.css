@@ -234,6 +234,28 @@ a:hover { text-decoration: underline; }
 
 .hero-shine.shine-go { animation: heroShineSweep 2s ease-in-out; }
 
+/* Persistent gradient-text overlay, revealed once the entrance settles
+   (only when an admin theme is active — see main.js). The animated
+   letter spans underneath fade out at the same moment, so the handoff
+   is invisible. Default state (no theme) leaves this fully transparent
+   and the plain white wordmark visible, unchanged. */
+.hero-gradient-text {
+  position: absolute;
+  top: 0;
+  left: 0;
+  margin: 0;
+  pointer-events: none;
+  color: transparent;
+  -webkit-background-clip: text;
+  background-clip: text;
+  opacity: 0;
+  transition: opacity 0.6s ease;
+}
+
+#heroLogoLine {
+  transition: opacity 0.6s ease;
+}
+
 .hero-tagline {
   max-width: 620px;
   margin: 0 auto 40px;
@@ -464,6 +486,173 @@ a:hover { text-decoration: underline; }
 .contact-note {
   color: var(--color-text-muted);
   font-size: 0.9rem;
+}
+
+/* Theme settings (quiet control, not part of the public nav) */
+.theme-gear {
+  position: fixed;
+  right: 18px;
+  bottom: 18px;
+  z-index: 200;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-text-muted);
+  font-size: 1rem;
+  cursor: pointer;
+  opacity: 0.35;
+  transition: opacity 0.15s ease, transform 0.15s ease, color 0.15s ease;
+}
+
+.theme-gear:hover,
+.theme-gear:focus-visible {
+  opacity: 1;
+  color: var(--color-accent);
+  transform: rotate(25deg);
+}
+
+.theme-panel {
+  position: fixed;
+  inset: 0;
+  z-index: 300;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+
+.theme-panel[hidden] { display: none; }
+
+.theme-panel-inner {
+  width: 100%;
+  max-width: 420px;
+  max-height: 88vh;
+  overflow-y: auto;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 16px;
+  padding: 22px;
+  box-shadow: var(--shadow-lg);
+}
+
+.theme-panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
+
+.theme-panel-head h3 {
+  font-family: var(--font-display);
+  margin: 0;
+  font-size: 1.05rem;
+}
+
+.theme-panel-close {
+  border: none;
+  background: none;
+  font-size: 1.3rem;
+  line-height: 1;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  padding: 4px;
+}
+.theme-panel-close:hover { color: var(--color-accent); }
+
+.theme-preview-stage {
+  background: #0b0d12;
+  border-radius: 10px;
+  padding: 24px 16px;
+  text-align: center;
+  margin-bottom: 16px;
+}
+
+.theme-preview-text {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 1.7rem;
+  margin: 0;
+  color: #ffffff;
+  -webkit-background-clip: text;
+  background-clip: text;
+}
+
+.theme-swatch-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.theme-swatch {
+  height: 34px;
+  border-radius: 8px;
+  border: 2px solid transparent;
+  cursor: pointer;
+  padding: 0;
+}
+.theme-swatch.active { border-color: var(--color-accent); }
+.theme-swatch.is-reset {
+  background: repeating-linear-gradient(45deg, #9aa3b0, #9aa3b0 4px, #cfd3da 4px, #cfd3da 8px);
+}
+
+.theme-picker-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.theme-picker-row input[type="color"] {
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  background: none;
+  cursor: pointer;
+}
+
+.theme-token-label {
+  display: block;
+  font-size: 0.82rem;
+  color: var(--color-text-muted);
+  margin-bottom: 16px;
+}
+
+.theme-token-label input {
+  display: block;
+  width: 100%;
+  margin-top: 6px;
+  padding: 8px 10px;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-size: 0.9rem;
+}
+
+.theme-panel-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.theme-panel-actions .btn {
+  flex: 1;
+  text-align: center;
+  padding: 10px 16px;
+  font-size: 0.85rem;
+}
+
+.theme-status {
+  margin: 12px 0 0;
+  font-size: 0.85rem;
+  color: var(--color-text-muted);
+  min-height: 1.2em;
 }
 
 /* Footer */

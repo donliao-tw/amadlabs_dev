@@ -42,6 +42,7 @@
         <h1 class="hero-name" id="heroLogoLine">
           <span class="hero-seg hero-letter" id="hLetter1">A</span><span class="hero-seg hero-letter" id="hLetter2">M</span><span class="hero-seg hero-letter" id="hLetter3">A</span><span class="hero-seg hero-seg-d" id="hSegD">D</span><span class="hero-seg hero-seg-labs" id="hSegLabs">&nbsp;Labs</span>
         </h1>
+        <h1 class="hero-name hero-gradient-text" id="heroGradientText" aria-hidden="true">AMAD&nbsp;Labs</h1>
         <h1 class="hero-name hero-shine" id="heroShine" aria-hidden="true">AMAD&nbsp;Labs</h1>
       </div>
 
@@ -163,6 +164,36 @@
     <p data-i18n="footer.text">© 2026 AMAD Labs. All rights reserved.</p>
   </div>
 </footer>
+
+<button class="theme-gear" id="themeGear" aria-label="佈景設定" title="佈景設定">⚙</button>
+
+<div class="theme-panel" id="themePanel" hidden>
+  <div class="theme-panel-inner">
+    <div class="theme-panel-head">
+      <h3>Hero 主題配色</h3>
+      <button class="theme-panel-close" id="themePanelClose" aria-label="關閉">×</button>
+    </div>
+
+    <div class="theme-preview-stage">
+      <h4 class="theme-preview-text" id="themePreviewText">AMAD&nbsp;Labs</h4>
+    </div>
+
+    <div class="theme-swatch-grid" id="themeSwatchGrid"></div>
+
+    <div class="theme-picker-row" id="themePickerRow"></div>
+
+    <label class="theme-token-label" for="themeToken">
+      管理密碼
+      <input type="password" id="themeToken" placeholder="第一次儲存時輸入" autocomplete="off">
+    </label>
+
+    <div class="theme-panel-actions">
+      <button class="btn btn-outline" id="themeReset">還原預設(灰階)</button>
+      <button class="btn btn-primary" id="themeSave">儲存到伺服器</button>
+    </div>
+    <p class="theme-status" id="themeStatus"></p>
+  </div>
+</div>
 
 <script src="assets/js/main.js"></script>
 </body>
