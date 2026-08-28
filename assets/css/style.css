@@ -184,7 +184,9 @@ a:hover { text-decoration: underline; }
 
 .hero-logo-wrap {
   position: relative;
-  display: inline-block;
+  display: block;
+  width: fit-content;
+  margin: 0 auto;
 }
 
 .hero-name {
@@ -257,7 +259,8 @@ a:hover { text-decoration: underline; }
 }
 
 .hero-tagline {
-  display: inline-block;
+  display: block;
+  width: fit-content;
   max-width: 620px;
   margin: 0 auto 40px;
   min-height: 1.7em;
@@ -269,6 +272,14 @@ a:hover { text-decoration: underline; }
   border-radius: 10px;
   padding: 14px 22px;
   box-shadow: 0 0 24px rgba(126, 231, 135, 0.08), inset 0 0 20px rgba(0, 0, 0, 0.4);
+  opacity: 0;
+  transform: translateY(6px);
+  transition: opacity 0.5s ease, transform 0.5s ease;
+}
+
+.hero-tagline.in {
+  opacity: 1;
+  transform: translateY(0);
 }
 
 .hero-tagline::before {
@@ -706,7 +717,7 @@ a:hover { text-decoration: underline; }
 
 @media (prefers-reduced-motion: reduce) {
   .hero-seg, .hero-eyebrow { visibility: visible !important; transform: none !important; }
-  .hero-cta { transition: none; }
+  .hero-cta, .hero-tagline { transition: none; }
 }
 
 /* Mobile */

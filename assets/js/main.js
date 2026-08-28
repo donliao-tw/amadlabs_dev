@@ -51,6 +51,7 @@
   var heroGradientText = document.getElementById("heroGradientText");
   var heroShine = document.getElementById("heroShine");
   var heroLogoLine = document.getElementById("heroLogoLine");
+  var heroTagline = document.getElementById("heroTagline");
   var heroTwWrap = document.getElementById("heroTwWrap");
   var heroTwText = document.getElementById("heroTwText");
   var heroTwCursor = document.getElementById("heroTwCursor");
@@ -173,6 +174,7 @@
       el.style.visibility = "visible";
       el.style.transform = "none";
     });
+    heroTagline.classList.add("in");
     heroTwWrap.style.width = "auto";
     heroTwCursor.style.opacity = "1";
     heroCta.classList.add("in");
@@ -197,6 +199,7 @@
     schedule(function () { startD(hSegD); }, T_D);
     schedule(function () { startLabs(hSegLabs); }, T_LABS);
     schedule(settleAndShine, T_SHINE);
+    schedule(function () { heroTagline.classList.add("in"); }, T_TYPE - 400);
     schedule(startHeroTypewriter, T_TYPE);
   }
 
