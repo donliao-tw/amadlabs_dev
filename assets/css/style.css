@@ -351,12 +351,21 @@ a:hover { text-decoration: underline; }
 
 .hero-tw-cursor {
   display: inline-block;
-  width: 8px;
+  width: 2px;
   height: 1.05em;
   background: #7ee787;
   vertical-align: text-bottom;
   margin-left: 2px;
   opacity: 0;
+}
+
+.hero-tw-cursor.blink {
+  animation: heroCursorBlink 1s step-end infinite;
+}
+
+@keyframes heroCursorBlink {
+  0%, 50%   { opacity: 1; }
+  50.01%, 100% { opacity: 0; }
 }
 
 .hero-cta {
@@ -800,6 +809,7 @@ a:hover { text-decoration: underline; }
   .hero { min-height: 0; transition: none; }
   .btn-primary::after { animation: none !important; }
   html { scroll-snap-type: none; }
+  .hero-tw-cursor.blink { animation: none; opacity: 1; }
 }
 
 /* Mobile */

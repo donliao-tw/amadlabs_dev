@@ -148,7 +148,7 @@
 
     heroTypeAnim.finished.then(function () {
       heroTwWrap.style.width = "auto";
-      heroTwCursor.style.opacity = "1";
+      heroTwCursor.classList.add("blink");
       heroCta.classList.add("in");
       unlockScrollAfterEntrance();
       setTimeout(function () { heroSection.classList.add("compact"); }, 1000);
@@ -181,7 +181,7 @@
     });
     heroTagline.classList.add("in");
     heroTwWrap.style.width = "auto";
-    heroTwCursor.style.opacity = "1";
+    heroTwCursor.classList.add("blink");
     heroCta.classList.add("in");
     heroSection.classList.add("compact");
     entranceSettled = true;
