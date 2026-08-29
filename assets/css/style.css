@@ -377,18 +377,18 @@ a:hover { text-decoration: underline; }
 .hero-cta .btn-primary::after {
   content: "";
   position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  border: 3px solid var(--color-accent);
+  inset: -16px;
+  border-radius: 22px;
+  background: linear-gradient(135deg, var(--color-accent), var(--color-accent-2));
+  filter: blur(16px);
   opacity: 0;
   pointer-events: none;
-  animation: ctaRipple 1.8s ease-out infinite;
+  animation: ctaGlow 1.8s ease-in-out infinite;
 }
 
-@keyframes ctaRipple {
-  0%   { transform: scale(1.8); opacity: 0; }
-  20%  { opacity: 0.6; }
-  100% { transform: scale(1); opacity: 0; }
+@keyframes ctaGlow {
+  0%, 100% { opacity: 0; transform: scale(0.9); }
+  50%      { opacity: 0.35; transform: scale(1.05); }
 }
 
 .btn-outline {
