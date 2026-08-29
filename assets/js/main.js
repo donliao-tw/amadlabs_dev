@@ -150,7 +150,7 @@
       heroTwWrap.style.width = "auto";
       heroTwCursor.style.opacity = "1";
       heroCta.classList.add("in");
-      armHeroScrollJump();
+      unlockScrollAfterEntrance();
       setTimeout(function () { heroSection.classList.add("compact"); }, 1000);
     }).catch(function () {});
   }
@@ -186,7 +186,7 @@
     heroSection.classList.add("compact");
     entranceSettled = true;
     applyHeroTheme(currentTheme);
-    armHeroScrollJump();
+    unlockScrollAfterEntrance();
   }
 
   function runHeroEntrance(eyebrowText, taglineText) {
@@ -250,9 +250,11 @@
   }
 
   // Scroll is fully locked while the hero entrance is playing (no wheel,
-  // touch, or keyboard scrolling). Once it settles, the lock lifts and the
-  // very next scroll gesture jumps straight to #services — same
-  // destination as clicking the CTA, instead of a normal gradual scroll.
+  // touch, or keyboard scrolling). Once it settles, the lock lifts and
+  // normal scrolling resumes — section-to-section navigation itself is
+  // handled by native CSS scroll-snap (see .snap-section in style.css),
+  // not custom JS, since that's far more robust than hand-rolled wheel
+  // interception.
   var heroScrollEl = document.documentElement;
   var scrollLocked = false;
 
@@ -280,68 +282,12 @@
 
   function blockEvent(e) { e.preventDefault(); }
 
-  var scrollJumpArmed = false;
-  var scrollAnimating = false;
-
-  // Within this zone near the top of the page, wheel/touch scrolling snaps
-  // to either #services (scrolling down) or the very top (scrolling up),
-  // every time — not just once. Outside this zone (further down the page)
-  // scrolling behaves normally.
-  function withinHeroZone() {
-    return window.scrollY < heroSection.offsetHeight + 40;
-  }
-
-  function scrollToY(y) {
-    scrollAnimating = true;
-    window.scrollTo({ top: y, behavior: "smooth" });
-    setTimeout(function () { scrollAnimating = false; }, 700);
-  }
-
-  function jumpToServices() {
-    heroSection.classList.add("compact");
-    var servicesEl = document.getElementById("services");
-    scrollToY(servicesEl ? servicesEl.offsetTop : 0);
-  }
-
-  function onHeroWheel(e) {
-    if (scrollAnimating || !withinHeroZone()) return;
-    e.preventDefault();
-    if (e.deltaY > 0) jumpToServices();
-    else if (e.deltaY < 0) scrollToY(0);
-  }
-
-  var heroTouchStartY = null;
-  function onHeroTouchStart(e) { heroTouchStartY = e.touches[0].clientY; }
-  function onHeroTouchMove(e) {
-    if (scrollAnimating || !withinHeroZone() || heroTouchStartY === null) return;
-    var dy = heroTouchStartY - e.touches[0].clientY;
-    if (dy > 10) { e.preventDefault(); jumpToServices(); }
-    else if (dy < -10) { e.preventDefault(); scrollToY(0); }
-  }
-
-  // Called once the entrance has settled: release the scroll lock and arm
-  // the persistent hero-zone scroll snapping.
-  function armHeroScrollJump() {
-    if (scrollJumpArmed) return;
-    scrollJumpArmed = true;
+  function unlockScrollAfterEntrance() {
     unlockScroll();
-    window.addEventListener("wheel", onHeroWheel, { passive: false });
-    window.addEventListener("touchstart", onHeroTouchStart, { passive: true });
-    window.addEventListener("touchmove", onHeroTouchMove, { passive: false });
   }
 
-  function initHeroScrollJump() {
-    if (!document.getElementById("services")) return;
-
+  function lockScrollDuringEntrance() {
     lockScroll();
-
-    var ctaPrimary = document.querySelector("#heroCta .btn-primary");
-    if (ctaPrimary) {
-      ctaPrimary.addEventListener("click", function () {
-        heroSection.classList.add("compact");
-        unlockScroll();
-      });
-    }
   }
 
   // -- Personal settings panel (opened via the avatar button in nav) --
@@ -590,7 +536,7 @@
     setLang(currentLang);
     fetchHeroTheme();
     initThemePanel();
-    initHeroScrollJump();
+    lockScrollDuringEntrance();
 
     var langToggle = document.getElementById("langToggle");
     if (langToggle) {

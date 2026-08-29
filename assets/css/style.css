@@ -38,6 +38,23 @@
 
 html {
   scroll-behavior: smooth;
+  scroll-snap-type: y mandatory;
+}
+
+/* Each top-level section is its own full-screen "page" — wheel/touch/
+   keyboard scrolling snaps from one straight to the next via native
+   browser behaviour (far more robust than intercepting scroll in JS). */
+.snap-section {
+  scroll-snap-align: start;
+  scroll-snap-stop: always;
+}
+
+.snap-section:not(.hero) {
+  min-height: calc(100vh - 64px);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  border-top: 1px solid var(--color-border);
 }
 
 /* Applied while the hero entrance is playing so the page can't be
@@ -782,6 +799,7 @@ a:hover { text-decoration: underline; }
   .hero-shine.shine-go { animation: none !important; }
   .hero { min-height: 0; transition: none; }
   .btn-primary::after { animation: none !important; }
+  html { scroll-snap-type: none; }
 }
 
 /* Mobile */
