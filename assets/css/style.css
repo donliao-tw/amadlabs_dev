@@ -167,7 +167,7 @@ a:hover { text-decoration: underline; }
   background:
     radial-gradient(560px 320px at 50% -10%, rgba(47, 111, 235, 0.16), transparent 70%),
     radial-gradient(480px 320px at 85% 10%, rgba(106, 140, 255, 0.10), transparent 70%);
-  transition: min-height 0.6s ease;
+  transition: min-height 1.4s cubic-bezier(0.76, 0, 0.24, 1);
 }
 
 /* On first load the hero fills the screen so nothing below it is visible;
@@ -379,16 +379,16 @@ a:hover { text-decoration: underline; }
   position: absolute;
   inset: 0;
   border-radius: inherit;
-  border: 2px solid var(--color-accent);
+  border: 3px solid var(--color-accent);
   opacity: 0;
   pointer-events: none;
-  animation: ctaRipple 2.2s ease-out infinite;
+  animation: ctaRipple 1.8s ease-out infinite;
 }
 
 @keyframes ctaRipple {
   0%   { transform: scale(1); opacity: 0.55; }
-  70%  { transform: scale(1.35); opacity: 0; }
-  100% { transform: scale(1.35); opacity: 0; }
+  70%  { transform: scale(1.8); opacity: 0; }
+  100% { transform: scale(1.8); opacity: 0; }
 }
 
 .btn-outline {
