@@ -14,9 +14,11 @@ function ensureDataDir() {
 function readTheme() {
   try {
     const raw = fs.readFileSync(THEME_FILE, "utf8");
-    return JSON.parse(raw);
+    const theme = JSON.parse(raw);
+    if (theme.bg === undefined) theme.bg = null;
+    return theme;
   } catch (e) {
-    return { stops: null };
+    return { stops: null, bg: null };
   }
 }
 
@@ -84,7 +86,14 @@ const server = http.createServer((req, res) => {
           throw new Error("stops must be null or an array of 2-3 hex colors");
         }
 
-        const theme = { stops: stops };
+        const bg = body.bg === undefined ? null : body.bg;
+        const isValidBg = bg === null || (typeof bg === "string" && HEX_RE.test(bg));
+
+        if (!isValidBg) {
+          throw new Error("bg must be null or a hex color");
+        }
+
+        const theme = { stops: stops, bg: bg };
         writeTheme(theme);
         res.writeHead(200);
         res.end(JSON.stringify(theme));

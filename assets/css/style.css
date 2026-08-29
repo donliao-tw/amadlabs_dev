@@ -686,6 +686,11 @@ a:hover { text-decoration: underline; }
   cursor: pointer;
 }
 
+.theme-bg-hint {
+  font-size: 0.8rem;
+  color: var(--color-text-muted);
+}
+
 .theme-panel-actions {
   display: flex;
   gap: 10px;

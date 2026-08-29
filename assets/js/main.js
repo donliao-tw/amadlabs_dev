@@ -206,12 +206,20 @@
   // ---- Hero theme (public setting for now — SSO/permissions come later) ----
 
   var SHINE_WHITE = "linear-gradient(100deg, transparent 25%, rgba(255,255,255,0.65) 42%, rgba(255,255,255,1) 50%, rgba(255,255,255,0.65) 58%, transparent 75%)";
+  var HERO_GLOW = "radial-gradient(560px 320px at 50% -10%, rgba(47, 111, 235, 0.16), transparent 70%), radial-gradient(480px 320px at 85% 10%, rgba(106, 140, 255, 0.10), transparent 70%)";
+  var heroSection = document.querySelector(".hero");
 
-  var currentTheme = null; // { stops: [hex, ...] } or { stops: null }
+  var currentTheme = null; // { stops: [hex, ...] | null, bg: hex | null }
   var entranceSettled = false;
 
   function applyHeroTheme(theme) {
     currentTheme = theme;
+
+    // Background applies immediately (it's visible from page load, not
+    // part of the entrance choreography that has to wait to settle).
+    var bg = theme && theme.bg;
+    heroSection.style.background = bg ? (HERO_GLOW + ", " + bg) : "";
+
     if (!entranceSettled) return; // wait for the entrance to finish first
 
     var stops = theme && theme.stops;
@@ -288,6 +296,8 @@
     var resetBtn = document.getElementById("themeReset");
     var statusEl = document.getElementById("themeStatus");
     var replayBtn = document.getElementById("themePreviewReplay");
+    var bgPicker = document.getElementById("themeBgPicker");
+    var previewStage = document.getElementById("themePreviewStage");
 
     var tpLetter1 = document.getElementById("tpLetter1");
     var tpLetter2 = document.getElementById("tpLetter2");
@@ -300,7 +310,15 @@
 
     if (!avatarBtn || !panel) return;
 
+    var DEFAULT_BG = "#0b0d12";
     var pickerStops = THEME_PRESETS[0].stops.slice();
+    var pickerBg = DEFAULT_BG;
+
+    bgPicker.value = pickerBg;
+    bgPicker.addEventListener("input", function () {
+      pickerBg = bgPicker.value;
+      previewStage.style.background = pickerBg;
+    });
 
     function playPreview() {
       pvClear();
@@ -391,6 +409,9 @@
         pickerStops = currentTheme.stops.slice();
         renderPickerRow();
       }
+      pickerBg = (currentTheme && currentTheme.bg) || DEFAULT_BG;
+      bgPicker.value = pickerBg;
+      previewStage.style.background = pickerBg;
       panel.hidden = false;
       playPreview();
     }
@@ -402,12 +423,12 @@
       if (e.target === panel) closePanel();
     });
 
-    function saveTheme(stops) {
+    function saveTheme(stops, bg) {
       statusEl.textContent = "儲存中…";
       fetch("/api/theme", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ stops: stops })
+        body: JSON.stringify({ stops: stops, bg: bg })
       })
         .then(function (res) {
           if (!res.ok) throw new Error("儲存失敗");
@@ -422,8 +443,13 @@
         });
     }
 
-    saveBtn.addEventListener("click", function () { saveTheme(pickerStops); });
-    resetBtn.addEventListener("click", function () { saveTheme(null); });
+    saveBtn.addEventListener("click", function () { saveTheme(pickerStops, pickerBg); });
+    resetBtn.addEventListener("click", function () {
+      pickerBg = DEFAULT_BG;
+      bgPicker.value = pickerBg;
+      previewStage.style.background = pickerBg;
+      saveTheme(null, null);
+    });
   }
 
   // ---- Language loading ----
