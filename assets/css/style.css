@@ -40,6 +40,15 @@ html {
   scroll-behavior: smooth;
 }
 
+/* Applied while the hero entrance is playing so the page can't be
+   scrolled by any input method until it settles. */
+html.scroll-locked,
+html.scroll-locked body {
+  overflow: hidden;
+  height: 100%;
+  overscroll-behavior: none;
+}
+
 body {
   margin: 0;
   font-family: var(--font-sans);

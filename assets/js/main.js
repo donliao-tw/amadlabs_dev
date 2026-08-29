@@ -150,6 +150,7 @@
       heroTwWrap.style.width = "auto";
       heroTwCursor.style.opacity = "1";
       heroCta.classList.add("in");
+      armHeroScrollJump();
       setTimeout(function () { heroSection.classList.add("compact"); }, 1000);
     }).catch(function () {});
   }
@@ -185,6 +186,7 @@
     heroSection.classList.add("compact");
     entranceSettled = true;
     applyHeroTheme(currentTheme);
+    armHeroScrollJump();
   }
 
   function runHeroEntrance(eyebrowText, taglineText) {
@@ -247,47 +249,84 @@
       .catch(function () {});
   }
 
-  // While the hero is still full-screen, the first scroll-down gesture (or
-  // clicking the CTA) jumps straight to #services instead of scrolling
-  // through the shrinking hero — same destination either way, per request.
-  function initHeroScrollJump() {
+  // Scroll is fully locked while the hero entrance is playing (no wheel,
+  // touch, or keyboard scrolling). Once it settles, the lock lifts and the
+  // very next scroll gesture jumps straight to #services — same
+  // destination as clicking the CTA, instead of a normal gradual scroll.
+  var heroScrollEl = document.documentElement;
+  var scrollLocked = false;
+
+  function preventScrollKeys(e) {
+    var keys = ["ArrowDown", "ArrowUp", "PageDown", "PageUp", " ", "Spacebar"];
+    if (keys.indexOf(e.key) !== -1) e.preventDefault();
+  }
+
+  function lockScroll() {
+    scrollLocked = true;
+    heroScrollEl.classList.add("scroll-locked");
+    window.addEventListener("wheel", blockEvent, { passive: false });
+    window.addEventListener("touchmove", blockEvent, { passive: false });
+    window.addEventListener("keydown", preventScrollKeys, { passive: false });
+  }
+
+  function unlockScroll() {
+    if (!scrollLocked) return;
+    scrollLocked = false;
+    heroScrollEl.classList.remove("scroll-locked");
+    window.removeEventListener("wheel", blockEvent);
+    window.removeEventListener("touchmove", blockEvent);
+    window.removeEventListener("keydown", preventScrollKeys);
+  }
+
+  function blockEvent(e) { e.preventDefault(); }
+
+  var scrollJumpArmed = false;
+  var scrollJumped = false;
+
+  function onHeroWheel(e) {
+    if (e.deltaY > 0) { e.preventDefault(); jumpToServices(); }
+  }
+
+  var heroTouchStartY = null;
+  function onHeroTouchStart(e) { heroTouchStartY = e.touches[0].clientY; }
+  function onHeroTouchMove(e) {
+    if (heroTouchStartY === null) return;
+    if (heroTouchStartY - e.touches[0].clientY > 10) jumpToServices();
+  }
+
+  function jumpToServices() {
+    if (scrollJumped) return;
+    scrollJumped = true;
+    window.removeEventListener("wheel", onHeroWheel);
+    window.removeEventListener("touchmove", onHeroTouchMove);
+    heroSection.classList.add("compact");
     var servicesEl = document.getElementById("services");
-    if (!servicesEl) return;
-    var jumped = false;
+    if (servicesEl) servicesEl.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
 
-    function jumpToServices() {
-      if (jumped) return;
-      jumped = true;
-      window.removeEventListener("wheel", onWheel);
-      window.removeEventListener("touchmove", onTouchMove);
-      heroSection.classList.add("compact");
-      servicesEl.scrollIntoView({ behavior: "smooth", block: "start" });
-    }
+  // Called once the entrance has settled: release the scroll lock and arm
+  // the "next scroll = jump to services" listeners.
+  function armHeroScrollJump() {
+    if (scrollJumpArmed) return;
+    scrollJumpArmed = true;
+    unlockScroll();
+    window.addEventListener("wheel", onHeroWheel, { passive: false });
+    window.addEventListener("touchstart", onHeroTouchStart, { passive: true });
+    window.addEventListener("touchmove", onHeroTouchMove, { passive: true });
+  }
 
-    function onWheel(e) {
-      if (e.deltaY > 0 && !heroSection.classList.contains("compact")) {
-        e.preventDefault();
-        jumpToServices();
-      }
-    }
+  function initHeroScrollJump() {
+    if (!document.getElementById("services")) return;
 
-    var touchStartY = null;
-    function onTouchStart(e) { touchStartY = e.touches[0].clientY; }
-    function onTouchMove(e) {
-      if (touchStartY === null || heroSection.classList.contains("compact")) return;
-      if (touchStartY - e.touches[0].clientY > 10) jumpToServices();
-    }
-
-    window.addEventListener("wheel", onWheel, { passive: false });
-    window.addEventListener("touchstart", onTouchStart, { passive: true });
-    window.addEventListener("touchmove", onTouchMove, { passive: true });
+    lockScroll();
 
     var ctaPrimary = document.querySelector("#heroCta .btn-primary");
     if (ctaPrimary) {
       ctaPrimary.addEventListener("click", function () {
-        jumped = true;
-        window.removeEventListener("wheel", onWheel);
-        window.removeEventListener("touchmove", onTouchMove);
+        scrollJumped = true;
+        unlockScroll();
+        window.removeEventListener("wheel", onHeroWheel);
+        window.removeEventListener("touchmove", onHeroTouchMove);
         heroSection.classList.add("compact");
       });
     }
