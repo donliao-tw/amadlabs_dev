@@ -156,12 +156,25 @@ a:hover { text-decoration: underline; }
 /* Hero */
 .hero {
   position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  min-height: calc(100vh - 64px);
   padding: 152px 0 112px;
   text-align: center;
   overflow: hidden;
   background:
     radial-gradient(560px 320px at 50% -10%, rgba(47, 111, 235, 0.16), transparent 70%),
     radial-gradient(480px 320px at 85% 10%, rgba(106, 140, 255, 0.10), transparent 70%);
+  transition: min-height 0.6s ease;
+}
+
+/* On first load the hero fills the screen so nothing below it is visible;
+   once the entrance settles, main.js adds this class and it eases back
+   down to its normal compact height. */
+.hero.compact {
+  min-height: 0;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -336,6 +349,7 @@ a:hover { text-decoration: underline; }
 }
 
 .btn {
+  position: relative;
   display: inline-block;
   padding: 13px 26px;
   border-radius: var(--radius);
@@ -356,6 +370,26 @@ a:hover { text-decoration: underline; }
 }
 
 .btn-primary:hover { transform: translateY(-1px); box-shadow: 0 10px 24px rgba(47, 111, 235, 0.36); }
+
+/* Ripple hint on the primary hero CTA — pulses continuously to nudge
+   people toward "看我們能做什麼". Purely decorative (pointer-events: none)
+   so it never interferes with the actual click. */
+.hero-cta .btn-primary::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  border: 2px solid var(--color-accent);
+  opacity: 0;
+  pointer-events: none;
+  animation: ctaRipple 2.2s ease-out infinite;
+}
+
+@keyframes ctaRipple {
+  0%   { transform: scale(1); opacity: 0.55; }
+  70%  { transform: scale(1.35); opacity: 0; }
+  100% { transform: scale(1.35); opacity: 0; }
+}
 
 .btn-outline {
   background: transparent;
@@ -737,6 +771,8 @@ a:hover { text-decoration: underline; }
   .hero-seg, .hero-eyebrow { visibility: visible !important; transform: none !important; }
   .hero-cta, .hero-tagline { transition: none; }
   .hero-shine.shine-go { animation: none !important; }
+  .hero { min-height: 0; transition: none; }
+  .btn-primary::after { animation: none !important; }
 }
 
 /* Mobile */

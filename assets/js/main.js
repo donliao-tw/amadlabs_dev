@@ -42,6 +42,7 @@
   var reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   var heroPlayed = false;
 
+  var heroSection = document.querySelector(".hero");
   var heroEyebrow = document.getElementById("heroEyebrow");
   var hLetter1 = document.getElementById("hLetter1");
   var hLetter2 = document.getElementById("hLetter2");
@@ -149,6 +150,7 @@
       heroTwWrap.style.width = "auto";
       heroTwCursor.style.opacity = "1";
       heroCta.classList.add("in");
+      setTimeout(function () { heroSection.classList.add("compact"); }, 1000);
     }).catch(function () {});
   }
 
@@ -180,6 +182,7 @@
     heroTwWrap.style.width = "auto";
     heroTwCursor.style.opacity = "1";
     heroCta.classList.add("in");
+    heroSection.classList.add("compact");
     entranceSettled = true;
     applyHeroTheme(currentTheme);
   }
