@@ -173,7 +173,7 @@ a:hover { text-decoration: underline; }
 }
 
 .hero-eyebrow {
-  margin: 0 0 20px;
+  margin: 0 0 34px;
   color: var(--color-accent);
   font-family: var(--font-display);
   font-size: 0.85rem;
@@ -190,7 +190,7 @@ a:hover { text-decoration: underline; }
 }
 
 .hero-name {
-  margin: 0 0 28px;
+  margin: 0 0 44px;
   font-family: var(--font-display);
   font-size: clamp(3.4rem, 12vw, 7rem);
   line-height: 1.05;
@@ -273,7 +273,7 @@ a:hover { text-decoration: underline; }
   display: block;
   width: fit-content;
   max-width: 620px;
-  margin: 0 auto 40px;
+  margin: 0 auto 60px;
   min-height: 1.7em;
   font-size: 1.1rem;
   font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
