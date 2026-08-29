@@ -287,7 +287,7 @@ a:hover { text-decoration: underline; }
   box-shadow: 0 0 24px rgba(126, 231, 135, 0.08), inset 0 0 20px rgba(0, 0, 0, 0.4);
   opacity: 0;
   transform: translateY(6px);
-  transition: opacity 0.5s ease, transform 0.5s ease;
+  transition: opacity 0.4s ease, transform 0.4s ease;
 }
 
 .hero-tagline.in {
@@ -327,7 +327,7 @@ a:hover { text-decoration: underline; }
   flex-wrap: wrap;
   opacity: 0;
   transform: translateY(10px);
-  transition: opacity 0.5s ease, transform 0.5s ease;
+  transition: opacity 0.4s ease, transform 0.4s ease;
 }
 
 .hero-cta.in {

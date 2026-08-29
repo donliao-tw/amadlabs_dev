@@ -102,19 +102,19 @@
   }
 
   function startLetter(el) {
-    tween(el, 900, easeLinear, function (e) {
+    tween(el, 720, easeLinear, function (e) {
       return "translateX(" + interp(BOUNCE_X, e).toFixed(2) + "px)";
     });
   }
 
   function startD(el) {
-    tween(el, 900, easeOutQuad, function (e) {
+    tween(el, 720, easeOutQuad, function (e) {
       return "scale(" + interp(D_SCALE, e).toFixed(3) + ")";
     });
   }
 
   function startLabs(el) {
-    tween(el, 950, easeOutCubic, function (e) {
+    tween(el, 760, easeOutCubic, function (e) {
       var x = interp(LABS_X, e).toFixed(2);
       var sk = interp(LABS_SKEW, e).toFixed(2);
       return "translateX(" + x + "px) skewX(" + sk + "deg)";
@@ -138,7 +138,7 @@
     var naturalWidth = heroTwText.scrollWidth;
     var text = heroTwText.textContent;
     var charCount = Math.max(text.length, 1);
-    var duration = Math.min(2100, Math.max(800, charCount * 73));
+    var duration = Math.min(1680, Math.max(640, charCount * 58));
 
     heroTypeAnim = heroTwWrap.animate(
       [{ width: "0px" }, { width: naturalWidth + "px" }],
@@ -160,14 +160,16 @@
 
   // timeline (ms) — 3rd letter of AMA enters first, then 2nd, then 1st;
   // the logo settles + shine plays, THEN the tagline types out.
+  // Overall pace is ~20% faster than the previous timeline, and typing
+  // starts 1s earlier still on top of that.
   var T_EYEBROW = 0;
-  var T_FIRST_IN = 300;   // letter3
-  var T_SECOND_IN = 500;  // letter2
-  var T_THIRD_IN = 700;   // letter1
-  var T_D = 1000;
-  var T_LABS = 1800;      // Labs finishes settling at 1800 + 950 = 2750
-  var T_SHINE = 3000;     // shine sweep, duration 2s (see .hero-shine.shine-go)
-  var T_TYPE = 4100;      // starts ~1s before the shine sweep fully finishes
+  var T_FIRST_IN = 240;   // letter3
+  var T_SECOND_IN = 400;  // letter2
+  var T_THIRD_IN = 560;   // letter1
+  var T_D = 800;
+  var T_LABS = 1440;      // Labs finishes settling at 1440 + 760 = 2200
+  var T_SHINE = 2400;     // shine starts sweeping (now loops, see .hero-shine.shine-go)
+  var T_TYPE = 2480;
 
   function playHeroInstant() {
     [heroEyebrow, hLetter1, hLetter2, hLetter3, hSegD, hSegLabs].forEach(function (el) {
@@ -199,7 +201,7 @@
     schedule(function () { startD(hSegD); }, T_D);
     schedule(function () { startLabs(hSegLabs); }, T_LABS);
     schedule(settleAndShine, T_SHINE);
-    schedule(function () { heroTagline.classList.add("in"); }, T_TYPE - 400);
+    schedule(function () { heroTagline.classList.add("in"); }, T_TYPE - 150);
     schedule(startHeroTypewriter, T_TYPE);
   }
 
