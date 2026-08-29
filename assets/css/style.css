@@ -386,9 +386,9 @@ a:hover { text-decoration: underline; }
 }
 
 @keyframes ctaRipple {
-  0%   { transform: scale(1); opacity: 0.55; }
-  70%  { transform: scale(1.8); opacity: 0; }
-  100% { transform: scale(1.8); opacity: 0; }
+  0%   { transform: scale(1.8); opacity: 0; }
+  20%  { opacity: 0.6; }
+  100% { transform: scale(1); opacity: 0; }
 }
 
 .btn-outline {
