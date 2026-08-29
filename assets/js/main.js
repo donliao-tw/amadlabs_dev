@@ -281,38 +281,53 @@
   function blockEvent(e) { e.preventDefault(); }
 
   var scrollJumpArmed = false;
-  var scrollJumped = false;
+  var scrollAnimating = false;
+
+  // Within this zone near the top of the page, wheel/touch scrolling snaps
+  // to either #services (scrolling down) or the very top (scrolling up),
+  // every time — not just once. Outside this zone (further down the page)
+  // scrolling behaves normally.
+  function withinHeroZone() {
+    return window.scrollY < heroSection.offsetHeight + 40;
+  }
+
+  function scrollToY(y) {
+    scrollAnimating = true;
+    window.scrollTo({ top: y, behavior: "smooth" });
+    setTimeout(function () { scrollAnimating = false; }, 700);
+  }
+
+  function jumpToServices() {
+    heroSection.classList.add("compact");
+    var servicesEl = document.getElementById("services");
+    scrollToY(servicesEl ? servicesEl.offsetTop : 0);
+  }
 
   function onHeroWheel(e) {
-    if (e.deltaY > 0) { e.preventDefault(); jumpToServices(); }
+    if (scrollAnimating || !withinHeroZone()) return;
+    e.preventDefault();
+    if (e.deltaY > 0) jumpToServices();
+    else if (e.deltaY < 0) scrollToY(0);
   }
 
   var heroTouchStartY = null;
   function onHeroTouchStart(e) { heroTouchStartY = e.touches[0].clientY; }
   function onHeroTouchMove(e) {
-    if (heroTouchStartY === null) return;
-    if (heroTouchStartY - e.touches[0].clientY > 10) jumpToServices();
-  }
-
-  function jumpToServices() {
-    if (scrollJumped) return;
-    scrollJumped = true;
-    window.removeEventListener("wheel", onHeroWheel);
-    window.removeEventListener("touchmove", onHeroTouchMove);
-    heroSection.classList.add("compact");
-    var servicesEl = document.getElementById("services");
-    if (servicesEl) servicesEl.scrollIntoView({ behavior: "smooth", block: "start" });
+    if (scrollAnimating || !withinHeroZone() || heroTouchStartY === null) return;
+    var dy = heroTouchStartY - e.touches[0].clientY;
+    if (dy > 10) { e.preventDefault(); jumpToServices(); }
+    else if (dy < -10) { e.preventDefault(); scrollToY(0); }
   }
 
   // Called once the entrance has settled: release the scroll lock and arm
-  // the "next scroll = jump to services" listeners.
+  // the persistent hero-zone scroll snapping.
   function armHeroScrollJump() {
     if (scrollJumpArmed) return;
     scrollJumpArmed = true;
     unlockScroll();
     window.addEventListener("wheel", onHeroWheel, { passive: false });
     window.addEventListener("touchstart", onHeroTouchStart, { passive: true });
-    window.addEventListener("touchmove", onHeroTouchMove, { passive: true });
+    window.addEventListener("touchmove", onHeroTouchMove, { passive: false });
   }
 
   function initHeroScrollJump() {
@@ -323,11 +338,8 @@
     var ctaPrimary = document.querySelector("#heroCta .btn-primary");
     if (ctaPrimary) {
       ctaPrimary.addEventListener("click", function () {
-        scrollJumped = true;
-        unlockScroll();
-        window.removeEventListener("wheel", onHeroWheel);
-        window.removeEventListener("touchmove", onHeroTouchMove);
         heroSection.classList.add("compact");
+        unlockScroll();
       });
     }
   }
