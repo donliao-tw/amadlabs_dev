@@ -234,7 +234,18 @@ a:hover { text-decoration: underline; }
   100% { background-position: 120% 0; opacity: 0; }
 }
 
-.hero-shine.shine-go { animation: heroShineSweep 2s ease-in-out; }
+/* Same sweep shape as heroShineSweep, but compressed into the first half
+   of the cycle with an idle hold after, so it can repeat as a periodic
+   flash instead of a one-shot. */
+@keyframes heroShineSweepLoop {
+  0%   { background-position: -120% 0; opacity: 0; }
+  5%   { opacity: 1; }
+  45%  { opacity: 1; }
+  50%  { background-position: 120% 0; opacity: 0; }
+  100% { background-position: 120% 0; opacity: 0; }
+}
+
+.hero-shine.shine-go { animation: heroShineSweepLoop 4s ease-in-out infinite; }
 
 /* Persistent gradient-text overlay, revealed once the entrance settles
    (only when an admin theme is active — see main.js). The animated
@@ -723,6 +734,7 @@ a:hover { text-decoration: underline; }
 @media (prefers-reduced-motion: reduce) {
   .hero-seg, .hero-eyebrow { visibility: visible !important; transform: none !important; }
   .hero-cta, .hero-tagline { transition: none; }
+  .hero-shine.shine-go { animation: none !important; }
 }
 
 /* Mobile */
