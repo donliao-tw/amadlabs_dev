@@ -247,6 +247,52 @@
       .catch(function () {});
   }
 
+  // While the hero is still full-screen, the first scroll-down gesture (or
+  // clicking the CTA) jumps straight to #services instead of scrolling
+  // through the shrinking hero — same destination either way, per request.
+  function initHeroScrollJump() {
+    var servicesEl = document.getElementById("services");
+    if (!servicesEl) return;
+    var jumped = false;
+
+    function jumpToServices() {
+      if (jumped) return;
+      jumped = true;
+      window.removeEventListener("wheel", onWheel);
+      window.removeEventListener("touchmove", onTouchMove);
+      heroSection.classList.add("compact");
+      servicesEl.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+
+    function onWheel(e) {
+      if (e.deltaY > 0 && !heroSection.classList.contains("compact")) {
+        e.preventDefault();
+        jumpToServices();
+      }
+    }
+
+    var touchStartY = null;
+    function onTouchStart(e) { touchStartY = e.touches[0].clientY; }
+    function onTouchMove(e) {
+      if (touchStartY === null || heroSection.classList.contains("compact")) return;
+      if (touchStartY - e.touches[0].clientY > 10) jumpToServices();
+    }
+
+    window.addEventListener("wheel", onWheel, { passive: false });
+    window.addEventListener("touchstart", onTouchStart, { passive: true });
+    window.addEventListener("touchmove", onTouchMove, { passive: true });
+
+    var ctaPrimary = document.querySelector("#heroCta .btn-primary");
+    if (ctaPrimary) {
+      ctaPrimary.addEventListener("click", function () {
+        jumped = true;
+        window.removeEventListener("wheel", onWheel);
+        window.removeEventListener("touchmove", onTouchMove);
+        heroSection.classList.add("compact");
+      });
+    }
+  }
+
   // -- Personal settings panel (opened via the avatar button in nav) --
 
   var THEME_PRESETS = [
@@ -493,6 +539,7 @@
     setLang(currentLang);
     fetchHeroTheme();
     initThemePanel();
+    initHeroScrollJump();
 
     var langToggle = document.getElementById("langToggle");
     if (langToggle) {
