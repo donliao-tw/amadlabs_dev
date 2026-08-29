@@ -57,6 +57,16 @@ html {
   border-top: 1px solid var(--color-border);
 }
 
+/* #about is the first section after the last full-screen slide (#projects).
+   Under `mandatory` snap, a trailing run of sections with no snap point at
+   all traps scrolling — the browser keeps snapping back to #projects. This
+   gives it one lightweight landing point (no forced height/centering) so
+   scrolling past #projects has somewhere valid to go; #contact and the
+   footer then follow it as normal, freely-scrollable content. */
+#about {
+  scroll-snap-align: start;
+}
+
 /* Applied while the hero entrance is playing so the page can't be
    scrolled by any input method until it settles. */
 html.scroll-locked,
