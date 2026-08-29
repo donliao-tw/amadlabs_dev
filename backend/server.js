@@ -15,10 +15,10 @@ function readTheme() {
   try {
     const raw = fs.readFileSync(THEME_FILE, "utf8");
     const theme = JSON.parse(raw);
-    if (theme.bg === undefined) theme.bg = null;
+    if (theme.letterColor === undefined) theme.letterColor = null;
     return theme;
   } catch (e) {
-    return { stops: null, bg: null };
+    return { stops: null, letterColor: null };
   }
 }
 
@@ -86,14 +86,14 @@ const server = http.createServer((req, res) => {
           throw new Error("stops must be null or an array of 2-3 hex colors");
         }
 
-        const bg = body.bg === undefined ? null : body.bg;
-        const isValidBg = bg === null || (typeof bg === "string" && HEX_RE.test(bg));
+        const letterColor = body.letterColor === undefined ? null : body.letterColor;
+        const isValidLetterColor = letterColor === null || (typeof letterColor === "string" && HEX_RE.test(letterColor));
 
-        if (!isValidBg) {
-          throw new Error("bg must be null or a hex color");
+        if (!isValidLetterColor) {
+          throw new Error("letterColor must be null or a hex color");
         }
 
-        const theme = { stops: stops, bg: bg };
+        const theme = { stops: stops, letterColor: letterColor };
         writeTheme(theme);
         res.writeHead(200);
         res.end(JSON.stringify(theme));

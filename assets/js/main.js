@@ -206,19 +206,19 @@
   // ---- Hero theme (public setting for now — SSO/permissions come later) ----
 
   var SHINE_WHITE = "linear-gradient(100deg, transparent 25%, rgba(255,255,255,0.65) 42%, rgba(255,255,255,1) 50%, rgba(255,255,255,0.65) 58%, transparent 75%)";
-  var HERO_GLOW = "radial-gradient(560px 320px at 50% -10%, rgba(47, 111, 235, 0.16), transparent 70%), radial-gradient(480px 320px at 85% 10%, rgba(106, 140, 255, 0.10), transparent 70%)";
-  var heroSection = document.querySelector(".hero");
+  var DEFAULT_LETTER_COLOR = "#ffffff";
+  var heroLetters = [hLetter1, hLetter2, hLetter3, hSegD, hSegLabs];
 
-  var currentTheme = null; // { stops: [hex, ...] | null, bg: hex | null }
+  var currentTheme = null; // { stops: [hex, ...] | null, letterColor: hex | null }
   var entranceSettled = false;
 
   function applyHeroTheme(theme) {
     currentTheme = theme;
 
-    // Background applies immediately (it's visible from page load, not
-    // part of the entrance choreography that has to wait to settle).
-    var bg = theme && theme.bg;
-    heroSection.style.background = bg ? (HERO_GLOW + ", " + bg) : "";
+    // Letter color applies immediately (it's visible from the moment the
+    // entrance starts, not something that waits for it to settle).
+    var letterColor = (theme && theme.letterColor) || DEFAULT_LETTER_COLOR;
+    heroLetters.forEach(function (el) { el.style.color = letterColor; });
 
     if (!entranceSettled) return; // wait for the entrance to finish first
 
@@ -296,8 +296,7 @@
     var resetBtn = document.getElementById("themeReset");
     var statusEl = document.getElementById("themeStatus");
     var replayBtn = document.getElementById("themePreviewReplay");
-    var bgPicker = document.getElementById("themeBgPicker");
-    var previewStage = document.getElementById("themePreviewStage");
+    var letterColorPicker = document.getElementById("themeLetterColorPicker");
 
     var tpLetter1 = document.getElementById("tpLetter1");
     var tpLetter2 = document.getElementById("tpLetter2");
@@ -307,24 +306,25 @@
     var tpLogoLine = document.getElementById("tpLogoLine");
     var tpGradientText = document.getElementById("tpGradientText");
     var tpShine = document.getElementById("tpShine");
+    var tpLetters = [tpLetter1, tpLetter2, tpLetter3, tpSegD, tpSegLabs];
 
     if (!avatarBtn || !panel) return;
 
-    var DEFAULT_BG = "#0b0d12";
     var pickerStops = THEME_PRESETS[0].stops.slice();
-    var pickerBg = DEFAULT_BG;
+    var pickerLetterColor = DEFAULT_LETTER_COLOR;
 
-    bgPicker.value = pickerBg;
-    bgPicker.addEventListener("input", function () {
-      pickerBg = bgPicker.value;
-      previewStage.style.background = pickerBg;
+    letterColorPicker.value = pickerLetterColor;
+    letterColorPicker.addEventListener("input", function () {
+      pickerLetterColor = letterColorPicker.value;
+      tpLetters.forEach(function (el) { el.style.color = pickerLetterColor; });
     });
 
     function playPreview() {
       pvClear();
-      [tpLetter1, tpLetter2, tpLetter3, tpSegD, tpSegLabs].forEach(function (el) {
+      tpLetters.forEach(function (el) {
         el.style.visibility = "hidden";
         el.style.transform = "";
+        el.style.color = pickerLetterColor;
       });
       tpLogoLine.style.opacity = "1";
       tpGradientText.style.opacity = "0";
@@ -409,9 +409,8 @@
         pickerStops = currentTheme.stops.slice();
         renderPickerRow();
       }
-      pickerBg = (currentTheme && currentTheme.bg) || DEFAULT_BG;
-      bgPicker.value = pickerBg;
-      previewStage.style.background = pickerBg;
+      pickerLetterColor = (currentTheme && currentTheme.letterColor) || DEFAULT_LETTER_COLOR;
+      letterColorPicker.value = pickerLetterColor;
       panel.hidden = false;
       playPreview();
     }
@@ -423,12 +422,12 @@
       if (e.target === panel) closePanel();
     });
 
-    function saveTheme(stops, bg) {
+    function saveTheme(stops, letterColor) {
       statusEl.textContent = "儲存中…";
       fetch("/api/theme", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ stops: stops, bg: bg })
+        body: JSON.stringify({ stops: stops, letterColor: letterColor })
       })
         .then(function (res) {
           if (!res.ok) throw new Error("儲存失敗");
@@ -443,11 +442,11 @@
         });
     }
 
-    saveBtn.addEventListener("click", function () { saveTheme(pickerStops, pickerBg); });
+    saveBtn.addEventListener("click", function () { saveTheme(pickerStops, pickerLetterColor); });
     resetBtn.addEventListener("click", function () {
-      pickerBg = DEFAULT_BG;
-      bgPicker.value = pickerBg;
-      previewStage.style.background = pickerBg;
+      pickerLetterColor = DEFAULT_LETTER_COLOR;
+      letterColorPicker.value = pickerLetterColor;
+      tpLetters.forEach(function (el) { el.style.color = pickerLetterColor; });
       saveTheme(null, null);
     });
   }
