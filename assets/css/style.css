@@ -270,7 +270,9 @@ a:hover { text-decoration: underline; }
 }
 
 .hero-tagline {
-  display: block;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   width: fit-content;
   max-width: 620px;
   margin: 0 auto 60px;
