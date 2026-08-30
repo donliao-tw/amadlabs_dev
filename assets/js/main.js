@@ -571,12 +571,19 @@
     }
 
     function render() {
+      // On narrow screens there's no room for the 3D side-peek — only the
+      // active card is shown, full width; still swipeable via touch/dots.
+      var mobile = window.matchMedia("(max-width: 720px)").matches;
+
       cards.forEach(function (card, i) {
         var d = i - active;
         if (d > n / 2) d -= n;
         else if (d < -n / 2) d += n;
 
         var t = transformFor(d);
+        if (mobile && d !== 0) {
+          t = { transform: t.transform, opacity: 0, z: 1, interactive: false };
+        }
         card.style.transform = t.transform;
         card.style.opacity = t.opacity;
         card.style.zIndex = t.z;
@@ -612,6 +619,12 @@
       else if (dx < -40) goTo(active + 1);
       touchStartX = null;
     }, { passive: true });
+
+    var resizeTimer = null;
+    window.addEventListener("resize", function () {
+      clearTimeout(resizeTimer);
+      resizeTimer = setTimeout(render, 150);
+    });
 
     render();
   }
