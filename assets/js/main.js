@@ -534,6 +534,7 @@
   // ---- Services: 3D coverflow carousel over the 4 pain-point cards ----
 
   function initServicesCarousel() {
+    var carousel = document.querySelector(".cat-carousel");
     var stage = document.getElementById("catStage");
     var dotsWrap = document.getElementById("catDots");
     var prevBtn = document.getElementById("catPrev");
@@ -544,6 +545,7 @@
     var n = cards.length;
     if (!n) return;
     var active = 0;
+    var expanded = false;
 
     cards.forEach(function (card, i) {
       var dot = document.createElement("button");
@@ -551,12 +553,22 @@
       dot.setAttribute("aria-label", "第 " + (i + 1) + " 項,共 " + n + " 項");
       dot.addEventListener("click", function () { goTo(i); });
       dotsWrap.appendChild(dot);
+
+      var expandBtn = card.querySelector(".cat-expand-btn");
+      if (expandBtn) {
+        expandBtn.addEventListener("click", function () {
+          if (i !== active) return; // only the active card can expand
+          expanded = !expanded;
+          render();
+        });
+      }
     });
     var dots = Array.prototype.slice.call(dotsWrap.children);
 
-    function transformFor(d) {
+    function transformFor(d, isExpanded) {
       if (d === 0) {
-        return { transform: "translateX(-50%) translateZ(0) rotateY(0deg) scale(1)", opacity: 1, z: 3, interactive: true };
+        var scale = isExpanded ? 1.5 : 1;
+        return { transform: "translateX(-50%) translateZ(0) rotateY(0deg) scale(" + scale + ")", opacity: 1, z: 3, interactive: true };
       }
       if (d === -1) {
         return { transform: "translateX(-132%) translateZ(-160px) rotateY(32deg) scale(0.82)", opacity: 0.55, z: 2, interactive: false };
@@ -580,7 +592,8 @@
         if (d > n / 2) d -= n;
         else if (d < -n / 2) d += n;
 
-        var t = transformFor(d);
+        var isExpanded = d === 0 && expanded;
+        var t = transformFor(d, isExpanded);
         if (mobile && d !== 0) {
           t = { transform: t.transform, opacity: 0, z: 1, interactive: false };
         }
@@ -589,16 +602,15 @@
         card.style.zIndex = t.z;
         card.style.pointerEvents = t.interactive ? "auto" : "none";
         card.classList.toggle("is-active", d === 0);
-        if (d !== 0) {
-          var det = card.querySelector(".cat-details");
-          if (det) det.open = false;
-        }
+        card.classList.toggle("is-expanded", isExpanded);
       });
       dots.forEach(function (dot, i) { dot.classList.toggle("is-active", i === active); });
+      if (carousel) carousel.classList.toggle("has-expanded", expanded);
     }
 
     function goTo(i) {
       active = ((i % n) + n) % n;
+      expanded = false;
       render();
     }
 
@@ -608,6 +620,18 @@
     stage.addEventListener("keydown", function (e) {
       if (e.key === "ArrowLeft") goTo(active - 1);
       else if (e.key === "ArrowRight") goTo(active + 1);
+      else if (e.key === "Escape" && expanded) { expanded = false; render(); }
+    });
+
+    // Click anywhere in the stage that isn't the expanded card itself (or
+    // its chips) collapses it back.
+    stage.addEventListener("click", function (e) {
+      if (!expanded) return;
+      var activeCard = cards[active];
+      if (!activeCard.contains(e.target)) {
+        expanded = false;
+        render();
+      }
     });
 
     var touchStartX = null;

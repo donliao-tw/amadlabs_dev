@@ -545,8 +545,13 @@ a:hover { text-decoration: underline; }
   top: 0;
   left: 50%;
   width: min(420px, calc(100vw - 140px));
-  background: var(--color-surface);
-  border: 1px solid var(--color-border);
+  /* Translucent "glass" card — a tech-themed background image sits behind
+     the carousel later, so the card itself stays see-through rather than
+     a solid fill. */
+  background: rgba(10, 14, 22, 0.4);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 16px;
   padding: 28px;
   box-shadow: var(--shadow-lg);
@@ -557,6 +562,10 @@ a:hover { text-decoration: underline; }
 .cat-card.is-active {
   z-index: 3;
   box-shadow: var(--shadow-lg);
+}
+
+.cat-card.is-expanded {
+  z-index: 10;
 }
 
 .cat-nav-btn {
@@ -573,7 +582,7 @@ a:hover { text-decoration: underline; }
   font-size: 1.4rem;
   line-height: 1;
   cursor: pointer;
-  transition: border-color 0.15s ease, color 0.15s ease;
+  transition: border-color 0.15s ease, color 0.15s ease, opacity 0.25s ease;
 }
 .cat-nav-btn:hover { border-color: var(--color-accent); color: var(--color-accent); }
 .cat-nav-prev { left: 0; }
@@ -584,6 +593,13 @@ a:hover { text-decoration: underline; }
   justify-content: center;
   gap: 8px;
   margin-top: 24px;
+  transition: opacity 0.25s ease;
+}
+
+.cat-carousel.has-expanded .cat-nav-btn,
+.cat-carousel.has-expanded .cat-dots {
+  opacity: 0;
+  pointer-events: none;
 }
 
 .cat-dots button {
@@ -621,58 +637,92 @@ a:hover { text-decoration: underline; }
   text-align: center;
   margin: 0 0 18px;
   text-wrap: balance;
+  /* Fixed light color, not the theme text token — the card is a dark glass
+     surface regardless of site light/dark mode. */
+  color: #f5f7fa;
 }
 
-.cat-details summary {
+.cat-expand-btn {
+  display: block;
+  width: 100%;
   cursor: pointer;
-  list-style: none;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
   font-family: var(--font-display);
   font-weight: 600;
   font-size: 0.9rem;
   color: var(--color-accent);
-  padding: 8px 0;
-  border-top: 1px solid var(--color-border);
+  background: none;
+  border: none;
+  border-top: 1px solid rgba(255, 255, 255, 0.12);
+  padding: 10px 0 0;
 }
 
-.cat-details summary::-webkit-details-marker { display: none; }
-
-.cat-details summary::after {
-  content: "▾";
-  transition: transform 0.15s ease;
+.cat-expand-btn::after {
+  content: " ▾";
 }
 
-.cat-details[open] summary::after {
-  transform: rotate(180deg);
+.cat-card.is-expanded .cat-expand-btn::after {
+  content: " ▴";
 }
 
-.cat-list {
-  list-style: none;
-  margin: 16px 0 0;
-  padding: 0;
-  display: grid;
-  gap: 14px;
+/* Floating detail chips: absolutely positioned so opening them never adds
+   to the section's document height (that's what was fighting scroll-snap
+   before) — they just float over the stage instead. */
+.cat-chips {
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  width: max(560px, 70vw);
+  max-width: 90vw;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 12px;
+  margin-top: 20px;
+  pointer-events: none;
 }
 
-.cat-list li {
+.chip {
+  opacity: 0;
+  transform: translateY(14px) scale(0.85);
+  transition: opacity 0.3s ease, transform 0.3s ease;
+  background: rgba(10, 14, 22, 0.55);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  padding: 12px 16px;
+  width: 190px;
   display: flex;
   flex-direction: column;
-  gap: 3px;
-  padding-left: 14px;
-  border-left: 2px solid var(--color-accent);
+  gap: 4px;
 }
 
-.cat-list strong {
+.cat-card.is-expanded .cat-chips {
+  pointer-events: auto;
+}
+
+.cat-card.is-expanded .chip {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+}
+
+.chip:nth-child(1) { transition-delay: 0.03s; }
+.chip:nth-child(2) { transition-delay: 0.08s; }
+.chip:nth-child(3) { transition-delay: 0.13s; }
+.chip:nth-child(4) { transition-delay: 0.18s; }
+.chip:nth-child(5) { transition-delay: 0.23s; }
+.chip:nth-child(6) { transition-delay: 0.28s; }
+
+.chip strong {
   font-family: var(--font-display);
-  font-size: 0.92rem;
+  font-size: 0.88rem;
+  color: #f5f7fa;
 }
 
-.cat-list span {
-  color: var(--color-text-muted);
-  font-size: 0.85rem;
+.chip span {
+  color: rgba(245, 247, 250, 0.7);
+  font-size: 0.8rem;
   line-height: 1.5;
 }
 
