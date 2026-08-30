@@ -528,20 +528,100 @@ a:hover { text-decoration: underline; }
   margin: 0 0 12px;
 }
 
-.service-icon {
-  display: inline-flex;
+/* Services: 4 pain-point category cards */
+.cat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 24px;
+}
+
+.cat-card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 16px;
+  padding: 28px;
+  box-shadow: var(--shadow);
+  transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
+}
+
+.cat-card:hover {
+  transform: translateY(-3px);
+  box-shadow: var(--shadow-lg);
+  border-color: rgba(47, 111, 235, 0.35);
+}
+
+.cat-illustration {
+  width: 100%;
+  max-width: 200px;
+  margin: 0 auto 20px;
+}
+
+.cat-illustration svg {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
+.cat-question {
+  font-family: var(--font-display);
+  font-size: 1.2rem;
+  font-weight: 700;
+  text-align: center;
+  margin: 0 0 18px;
+  text-wrap: balance;
+}
+
+.cat-details summary {
+  cursor: pointer;
+  list-style: none;
+  display: flex;
   align-items: center;
   justify-content: center;
-  min-width: 46px;
-  height: 46px;
-  padding: 0 12px;
-  margin-bottom: 18px;
-  border-radius: 12px;
-  background: linear-gradient(135deg, rgba(47, 111, 235, 0.16), rgba(106, 140, 255, 0.08));
-  color: var(--color-accent);
+  gap: 6px;
   font-family: var(--font-display);
-  font-weight: 800;
+  font-weight: 600;
+  font-size: 0.9rem;
+  color: var(--color-accent);
+  padding: 8px 0;
+  border-top: 1px solid var(--color-border);
+}
+
+.cat-details summary::-webkit-details-marker { display: none; }
+
+.cat-details summary::after {
+  content: "▾";
+  transition: transform 0.15s ease;
+}
+
+.cat-details[open] summary::after {
+  transform: rotate(180deg);
+}
+
+.cat-list {
+  list-style: none;
+  margin: 16px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 14px;
+}
+
+.cat-list li {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding-left: 14px;
+  border-left: 2px solid var(--color-accent);
+}
+
+.cat-list strong {
+  font-family: var(--font-display);
+  font-size: 0.92rem;
+}
+
+.cat-list span {
+  color: var(--color-text-muted);
   font-size: 0.85rem;
+  line-height: 1.5;
 }
 
 .project-thumb {
