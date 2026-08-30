@@ -544,7 +544,7 @@ a:hover { text-decoration: underline; }
   position: absolute;
   top: 0;
   left: 50%;
-  width: min(420px, 100%);
+  width: min(420px, calc(100vw - 140px));
   background: var(--color-surface);
   border: 1px solid var(--color-border);
   border-radius: 16px;
@@ -994,7 +994,7 @@ a:hover { text-decoration: underline; }
   }
 
   .cat-card {
-    width: 100%;
+    width: calc(100vw - 68px);
   }
 
   .cat-question {
