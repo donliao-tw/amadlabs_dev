@@ -68,7 +68,11 @@
       <h2 class="section-title" data-i18n="services.title">我們能幫你做什麼</h2>
       <p class="section-subtitle" data-i18n="services.subtitle">看看有沒有講到你的痛點</p>
 
-      <div class="cat-grid">
+      <div class="cat-carousel">
+        <button class="cat-nav-btn cat-nav-prev" id="catPrev" aria-label="上一個">‹</button>
+        <button class="cat-nav-btn cat-nav-next" id="catNext" aria-label="下一個">›</button>
+
+        <div class="cat-stage" id="catStage">
 
         <article class="cat-card">
           <div class="cat-illustration" aria-hidden="true">
@@ -202,6 +206,9 @@
           </details>
         </article>
 
+        </div>
+
+        <div class="cat-dots" id="catDots"></div>
       </div>
     </div>
   </section>

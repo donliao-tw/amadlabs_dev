@@ -531,12 +531,98 @@
       });
   }
 
+  // ---- Services: 3D coverflow carousel over the 4 pain-point cards ----
+
+  function initServicesCarousel() {
+    var stage = document.getElementById("catStage");
+    var dotsWrap = document.getElementById("catDots");
+    var prevBtn = document.getElementById("catPrev");
+    var nextBtn = document.getElementById("catNext");
+    if (!stage || !dotsWrap || !prevBtn || !nextBtn) return;
+
+    var cards = Array.prototype.slice.call(stage.querySelectorAll(".cat-card"));
+    var n = cards.length;
+    if (!n) return;
+    var active = 0;
+
+    cards.forEach(function (card, i) {
+      var dot = document.createElement("button");
+      dot.type = "button";
+      dot.setAttribute("aria-label", "第 " + (i + 1) + " 項,共 " + n + " 項");
+      dot.addEventListener("click", function () { goTo(i); });
+      dotsWrap.appendChild(dot);
+    });
+    var dots = Array.prototype.slice.call(dotsWrap.children);
+
+    function transformFor(d) {
+      if (d === 0) {
+        return { transform: "translateX(-50%) translateZ(0) rotateY(0deg) scale(1)", opacity: 1, z: 3, interactive: true };
+      }
+      if (d === -1) {
+        return { transform: "translateX(-132%) translateZ(-160px) rotateY(32deg) scale(0.82)", opacity: 0.55, z: 2, interactive: false };
+      }
+      if (d === 1) {
+        return { transform: "translateX(32%) translateZ(-160px) rotateY(-32deg) scale(0.82)", opacity: 0.55, z: 2, interactive: false };
+      }
+      if (d < 0) {
+        return { transform: "translateX(-170%) translateZ(-320px) rotateY(40deg) scale(0.6)", opacity: 0, z: 1, interactive: false };
+      }
+      return { transform: "translateX(70%) translateZ(-320px) rotateY(-40deg) scale(0.6)", opacity: 0, z: 1, interactive: false };
+    }
+
+    function render() {
+      cards.forEach(function (card, i) {
+        var d = i - active;
+        if (d > n / 2) d -= n;
+        else if (d < -n / 2) d += n;
+
+        var t = transformFor(d);
+        card.style.transform = t.transform;
+        card.style.opacity = t.opacity;
+        card.style.zIndex = t.z;
+        card.style.pointerEvents = t.interactive ? "auto" : "none";
+        card.classList.toggle("is-active", d === 0);
+        if (d !== 0) {
+          var det = card.querySelector(".cat-details");
+          if (det) det.open = false;
+        }
+      });
+      dots.forEach(function (dot, i) { dot.classList.toggle("is-active", i === active); });
+    }
+
+    function goTo(i) {
+      active = ((i % n) + n) % n;
+      render();
+    }
+
+    prevBtn.addEventListener("click", function () { goTo(active - 1); });
+    nextBtn.addEventListener("click", function () { goTo(active + 1); });
+
+    stage.addEventListener("keydown", function (e) {
+      if (e.key === "ArrowLeft") goTo(active - 1);
+      else if (e.key === "ArrowRight") goTo(active + 1);
+    });
+
+    var touchStartX = null;
+    stage.addEventListener("touchstart", function (e) { touchStartX = e.touches[0].clientX; }, { passive: true });
+    stage.addEventListener("touchend", function (e) {
+      if (touchStartX === null) return;
+      var dx = e.changedTouches[0].clientX - touchStartX;
+      if (dx > 40) goTo(active - 1);
+      else if (dx < -40) goTo(active + 1);
+      touchStartX = null;
+    }, { passive: true });
+
+    render();
+  }
+
   document.addEventListener("DOMContentLoaded", function () {
     var currentLang = getStoredLang();
     setLang(currentLang);
     fetchHeroTheme();
     initThemePanel();
     lockScrollDuringEntrance();
+    initServicesCarousel();
 
     var langToggle = document.getElementById("langToggle");
     if (langToggle) {
