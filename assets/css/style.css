@@ -565,6 +565,7 @@ a:hover { text-decoration: underline; }
 
 .cat-card.is-expanded {
   z-index: 10;
+  cursor: zoom-out;
 }
 
 .cat-nav-btn {
@@ -642,7 +643,10 @@ a:hover { text-decoration: underline; }
 }
 
 .cat-expand-btn {
-  display: block;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
   width: 100%;
   cursor: pointer;
   font-family: var(--font-display);
@@ -655,12 +659,19 @@ a:hover { text-decoration: underline; }
   padding: 10px 0 0;
 }
 
-.cat-expand-btn::after {
-  content: " ▾";
+.icon-zoom-out { display: none; }
+.cat-card.is-expanded .icon-zoom-in { display: none; }
+.cat-card.is-expanded .icon-zoom-out { display: block; }
+
+/* Collapsed active card reads as clickable-to-zoom; the button itself
+   still handles the click, this is just the cursor affordance. */
+.cat-card.is-active:not(.is-expanded) {
+  cursor: zoom-in;
 }
 
-.cat-card.is-expanded .cat-expand-btn::after {
-  content: " ▴";
+/* Side cards are clickable to bring them to the center. */
+.cat-card:not(.is-active) {
+  cursor: pointer;
 }
 
 /* Floating detail chips: absolutely positioned so opening them never adds

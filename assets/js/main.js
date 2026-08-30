@@ -553,15 +553,6 @@
       dot.setAttribute("aria-label", "第 " + (i + 1) + " 項,共 " + n + " 項");
       dot.addEventListener("click", function () { goTo(i); });
       dotsWrap.appendChild(dot);
-
-      var expandBtn = card.querySelector(".cat-expand-btn");
-      if (expandBtn) {
-        expandBtn.addEventListener("click", function () {
-          if (i !== active) return; // only the active card can expand
-          expanded = !expanded;
-          render();
-        });
-      }
     });
     var dots = Array.prototype.slice.call(dotsWrap.children);
 
@@ -571,10 +562,10 @@
         return { transform: "translateX(-50%) translateZ(0) rotateY(0deg) scale(" + scale + ")", opacity: 1, z: 3, interactive: true };
       }
       if (d === -1) {
-        return { transform: "translateX(-132%) translateZ(-160px) rotateY(32deg) scale(0.82)", opacity: 0.55, z: 2, interactive: false };
+        return { transform: "translateX(-132%) translateZ(-160px) rotateY(32deg) scale(0.82)", opacity: 0.55, z: 2, interactive: true };
       }
       if (d === 1) {
-        return { transform: "translateX(32%) translateZ(-160px) rotateY(-32deg) scale(0.82)", opacity: 0.55, z: 2, interactive: false };
+        return { transform: "translateX(32%) translateZ(-160px) rotateY(-32deg) scale(0.82)", opacity: 0.55, z: 2, interactive: true };
       }
       if (d < 0) {
         return { transform: "translateX(-170%) translateZ(-320px) rotateY(40deg) scale(0.6)", opacity: 0, z: 1, interactive: false };
@@ -623,14 +614,26 @@
       else if (e.key === "Escape" && expanded) { expanded = false; render(); }
     });
 
-    // Click anywhere in the stage that isn't the expanded card itself (or
-    // its chips) collapses it back.
+    // Single delegated click handler for the whole stage:
+    //  - expanded: any click at all collapses it back.
+    //  - collapsed, click on the active card: zoom it in.
+    //  - collapsed, click on a side card: bring that one to the center.
     stage.addEventListener("click", function (e) {
-      if (!expanded) return;
-      var activeCard = cards[active];
-      if (!activeCard.contains(e.target)) {
+      if (expanded) {
         expanded = false;
         render();
+        return;
+      }
+      var clickedIndex = -1;
+      cards.forEach(function (card, i) {
+        if (clickedIndex === -1 && card.contains(e.target)) clickedIndex = i;
+      });
+      if (clickedIndex === -1) return;
+      if (clickedIndex === active) {
+        expanded = true;
+        render();
+      } else {
+        goTo(clickedIndex);
       }
     });
 
