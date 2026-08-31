@@ -683,6 +683,7 @@ a:hover { text-decoration: underline; }
   top: 100%;
   left: 50%;
   transform: translateX(-50%);
+  transform-origin: top center;
   width: max(560px, 70vw);
   max-width: 90vw;
   display: flex;
@@ -691,6 +692,15 @@ a:hover { text-decoration: underline; }
   gap: 12px;
   margin-top: 20px;
   pointer-events: none;
+}
+
+/* The expanded card itself is scaled 1.5x (see .cat-card transform in JS);
+   without this, the chips — nested inside that card — inherit the same
+   1.5x enlargement and their text gets rasterized as a blurry upscale
+   instead of crisp glyphs. Counter-scale by 1/1.5 so the net visual size
+   stays 1:1 and text renders sharp. */
+.cat-card.is-expanded .cat-chips {
+  transform: translateX(-50%) scale(0.6667);
 }
 
 .chip {
