@@ -39,6 +39,7 @@
 html {
   scroll-behavior: smooth;
   scroll-snap-type: y mandatory;
+  overflow-x: hidden;
 }
 
 /* Each top-level section is its own full-screen "page" — wheel/touch/
@@ -528,7 +529,7 @@ a:hover { text-decoration: underline; }
   margin: 0 0 12px;
 }
 
-/* Services: 4 pain-point category cards, shown as a 3D coverflow carousel */
+/* Services: 5 pain-point category cards, shown as a 3D coverflow carousel */
 .cat-carousel {
   position: relative;
   padding: 0 56px;

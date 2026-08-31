@@ -568,9 +568,9 @@
         return { transform: "translateX(32%) translateZ(-160px) rotateY(32deg) scale(0.82)", opacity: 0.55, z: 2, interactive: true };
       }
       if (d < 0) {
-        return { transform: "translateX(-170%) translateZ(-320px) rotateY(-40deg) scale(0.6)", opacity: 0, z: 1, interactive: false };
+        return { transform: "translateX(-205%) translateZ(-320px) rotateY(-48deg) scale(0.62)", opacity: 0.3, z: 1, interactive: true };
       }
-      return { transform: "translateX(70%) translateZ(-320px) rotateY(40deg) scale(0.6)", opacity: 0, z: 1, interactive: false };
+      return { transform: "translateX(105%) translateZ(-320px) rotateY(48deg) scale(0.62)", opacity: 0.3, z: 1, interactive: true };
     }
 
     function render() {
