@@ -558,8 +558,12 @@
 
     function transformFor(d, isExpanded) {
       if (d === 0) {
-        var scale = isExpanded ? 1.5 : 1;
-        return { transform: "translateX(-50%) scale(" + scale + ")", opacity: 1, z: 3, interactive: true };
+        // Sizing up on expand is done in CSS via real width/padding/
+        // font-size growth on .cat-card.is-expanded (see style.css) rather
+        // than a transform: scale() here — scaling text through a
+        // compositor transform rasterizes it as a stretched bitmap and
+        // never renders crisp.
+        return { transform: "translateX(-50%)", opacity: 1, z: 3, interactive: true };
       }
       if (d === -1) {
         return { transform: "translateX(-132%) translateZ(-160px) rotateY(-32deg) scale(0.82)", opacity: 0.55, z: 2, interactive: true };

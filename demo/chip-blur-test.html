@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<title>Chip Blur Debug</title>
+<style>
+  :root {
+    --color-bg: #0b0d12;
+    --color-surface: #151922;
+    --color-text: #edf0f4;
+    --color-text-muted: #939bab;
+    --color-border: #262b36;
+    --color-accent: #5b8def;
+    --color-accent-2: #8fb0ff;
+    --font-display: 'IBM Plex Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang TC", "Microsoft JhengHei", Roboto, Helvetica, Arial, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--color-bg);
+    font-family: var(--font-display);
+    color: var(--color-text);
+    padding: 40px 24px 120px;
+  }
+  h1 { text-align: center; font-size: 22px; }
+  .intro { color: var(--color-text-muted); text-align: center; max-width: 640px; margin: 0 auto 56px; line-height: 1.6; }
+
+  .lab-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 420px);
+    gap: 64px 40px;
+    justify-content: center;
+  }
+  .lab-item { }
+  .lab-label {
+    color: #9fb0c9;
+    font: 13px/1.5 monospace;
+    white-space: pre-line;
+    margin: 0 0 14px;
+  }
+
+  /* ---- shared card look, decoupled from the real site's absolute-position
+     carousel rules so it just lays out top-to-bottom here ---- */
+  .demo-card {
+    background: rgba(10, 14, 22, 0.4);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 16px;
+    padding: 28px;
+    transform-origin: center center;
+  }
+  .demo-card h3 {
+    font-size: 1.15rem;
+    text-align: center;
+    color: #f5f7fa;
+    margin: 0 0 18px;
+  }
+  .demo-btn {
+    display: block;
+    width: 100%;
+    text-align: center;
+    border: 1px solid rgba(255, 255, 255, 0.25);
+    border-radius: 999px;
+    padding: 10px;
+    color: var(--color-accent-2);
+    font: 600 0.95rem var(--font-display);
+    margin-bottom: 18px;
+    background: none;
+  }
+  .demo-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    justify-content: center;
+  }
+  .demo-chip {
+    background: rgba(10, 14, 22, 0.55);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 12px;
+    padding: 12px 16px;
+    width: 190px;
+  }
+  .demo-chip strong { display: block; font-size: 0.88rem; color: #f5f7fa; margin-bottom: 4px; }
+  .demo-chip span { display: block; font-size: 0.8rem; line-height: 1.5; color: rgba(245, 247, 250, 0.7); }
+
+  /* Variant A: card scaled 1.5x, chip counter-scaled 1/1.5 to cancel it
+     (this is what production currently does) */
+  .variant-a .demo-card { transform: scale(1.5); }
+  .variant-a .demo-chips { transform: scale(0.6667); margin-top: 20px; }
+
+  /* Variant B: same 1.5x scaled card, but chip drops its own
+     backdrop-filter (solid background instead) */
+  .variant-b .demo-card { transform: scale(1.5); }
+  .variant-b .demo-chips { transform: scale(0.6667); margin-top: 20px; }
+  .variant-b .demo-chip { backdrop-filter: none; -webkit-backdrop-filter: none; background: #171d29; }
+
+  /* Variant C: same 1.5x scaled card, card itself drops backdrop-filter
+     (only one blur layer in the whole stack, not two nested ones) */
+  .variant-c .demo-card { transform: scale(1.5); backdrop-filter: none; -webkit-backdrop-filter: none; background: rgba(10, 14, 22, 0.86); }
+  .variant-c .demo-chips { transform: scale(0.6667); margin-top: 20px; }
+
+  /* Variant D: control — card is NOT scaled at all, chips render at
+     their natural 1:1 size with no counter-scale trick either */
+  .variant-d .demo-chips { margin-top: 20px; }
+</style>
+</head>
+<body>
+
+<h1>Chip 文字模糊除錯 — 四個變體</h1>
+<p class="intro">
+  這頁完全獨立，不依賴正式站的 style.css，只把卡片跟 chip 相關的樣式抽出來重現，
+  避免跟正式站的絕對定位規則打架。重新整理這個檔案就能看到結果，不用部署。
+</p>
+
+<div class="lab-grid">
+
+  <div class="lab-item variant-a">
+    <p class="lab-label">A. 目前正式站版本
+卡片 scale(1.5)，chip 用 scale(0.6667) 抵消</p>
+    <div class="demo-card">
+      <h3>資料散落各地?想找一份東西要翻好幾個地方?</h3>
+      <div class="demo-btn">看看我們怎麼幫你</div>
+      <div class="demo-chips">
+        <div class="demo-chip"><strong>告別 Excel 地獄</strong><span>報表、對帳表散落在好幾份 Excel,複製貼上到眼花?整合成一套系統,一次輸入到處同步。</span></div>
+        <div class="demo-chip"><strong>系統互相打通</strong><span>會計軟體、ERP 各用各的,同一筆資料打三次?幫你把系統串起來。</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="lab-item variant-b">
+    <p class="lab-label">B. chip 拿掉自己的 backdrop-filter
+卡片仍 scale(1.5)，chip 改用不透明深色底</p>
+    <div class="demo-card">
+      <h3>資料散落各地?想找一份東西要翻好幾個地方?</h3>
+      <div class="demo-btn">看看我們怎麼幫你</div>
+      <div class="demo-chips">
+        <div class="demo-chip"><strong>告別 Excel 地獄</strong><span>報表、對帳表散落在好幾份 Excel,複製貼上到眼花?整合成一套系統,一次輸入到處同步。</span></div>
+        <div class="demo-chip"><strong>系統互相打通</strong><span>會計軟體、ERP 各用各的,同一筆資料打三次?幫你把系統串起來。</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="lab-item variant-c">
+    <p class="lab-label">C. 卡片拿掉自己的 backdrop-filter
+只剩 chip 一層 blur,不是兩層疊在一起</p>
+    <div class="demo-card">
+      <h3>資料散落各地?想找一份東西要翻好幾個地方?</h3>
+      <div class="demo-btn">看看我們怎麼幫你</div>
+      <div class="demo-chips">
+        <div class="demo-chip"><strong>告別 Excel 地獄</strong><span>報表、對帳表散落在好幾份 Excel,複製貼上到眼花?整合成一套系統,一次輸入到處同步。</span></div>
+        <div class="demo-chip"><strong>系統互相打通</strong><span>會計軟體、ERP 各用各的,同一筆資料打三次?幫你把系統串起來。</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="lab-item variant-d">
+    <p class="lab-label">D. 對照組:卡片完全不 scale
+如果這個也模糊,代表問題根本不是 scale,而是 backdrop-filter 本身</p>
+    <div class="demo-card">
+      <h3>資料散落各地?想找一份東西要翻好幾個地方?</h3>
+      <div class="demo-btn">看看我們怎麼幫你</div>
+      <div class="demo-chips">
+        <div class="demo-chip"><strong>告別 Excel 地獄</strong><span>報表、對帳表散落在好幾份 Excel,複製貼上到眼花?整合成一套系統,一次輸入到處同步。</span></div>
+        <div class="demo-chip"><strong>系統互相打通</strong><span>會計軟體、ERP 各用各的,同一筆資料打三次?幫你把系統串起來。</span></div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+</body>
+</html>

@@ -546,6 +546,7 @@ a:hover { text-decoration: underline; }
   top: 0;
   left: 50%;
   width: min(420px, calc(100vw - 140px));
+  font-size: 1rem;
   /* Translucent "glass" card — a tech-themed background image sits behind
      the carousel later, so the card itself stays see-through rather than
      a solid fill. */
@@ -556,7 +557,13 @@ a:hover { text-decoration: underline; }
   border-radius: 16px;
   padding: 28px;
   box-shadow: var(--shadow-lg);
-  transition: transform 0.55s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.55s ease;
+  /* Expanding on click grows real layout (width/padding/font-size), not a
+     transform: scale() — scaling text via a compositor transform renders
+     it as a stretched bitmap and never comes out crisp. Growing the box
+     for real keeps every glyph laid out (and rasterized) at its true size. */
+  transition: transform 0.55s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.55s ease,
+    width 0.55s cubic-bezier(0.22, 1, 0.36, 1), padding 0.55s cubic-bezier(0.22, 1, 0.36, 1),
+    font-size 0.55s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .cat-card.is-active {
@@ -567,6 +574,9 @@ a:hover { text-decoration: underline; }
 .cat-card.is-expanded {
   z-index: 10;
   cursor: zoom-out;
+  width: min(630px, calc(100vw - 140px));
+  padding: 40px;
+  font-size: 1.5rem;
 }
 
 .cat-nav-btn {
@@ -633,7 +643,7 @@ a:hover { text-decoration: underline; }
 
 .cat-question {
   font-family: var(--font-display);
-  font-size: 1.2rem;
+  font-size: 1.2em;
   font-weight: 700;
   text-align: center;
   margin: 0 0 18px;
@@ -692,15 +702,6 @@ a:hover { text-decoration: underline; }
   gap: 12px;
   margin-top: 20px;
   pointer-events: none;
-}
-
-/* The expanded card itself is scaled 1.5x (see .cat-card transform in JS);
-   without this, the chips — nested inside that card — inherit the same
-   1.5x enlargement and their text gets rasterized as a blurry upscale
-   instead of crisp glyphs. Counter-scale by 1/1.5 so the net visual size
-   stays 1:1 and text renders sharp. */
-.cat-card.is-expanded .cat-chips {
-  transform: translateX(-50%) scale(0.6667);
 }
 
 .chip {
