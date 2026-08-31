@@ -562,15 +562,15 @@
         return { transform: "translateX(-50%) translateZ(0) rotateY(0deg) scale(" + scale + ")", opacity: 1, z: 3, interactive: true };
       }
       if (d === -1) {
-        return { transform: "translateX(-132%) translateZ(-160px) rotateY(32deg) scale(0.82)", opacity: 0.55, z: 2, interactive: true };
+        return { transform: "translateX(-132%) translateZ(-160px) rotateY(-32deg) scale(0.82)", opacity: 0.55, z: 2, interactive: true };
       }
       if (d === 1) {
-        return { transform: "translateX(32%) translateZ(-160px) rotateY(-32deg) scale(0.82)", opacity: 0.55, z: 2, interactive: true };
+        return { transform: "translateX(32%) translateZ(-160px) rotateY(32deg) scale(0.82)", opacity: 0.55, z: 2, interactive: true };
       }
       if (d < 0) {
-        return { transform: "translateX(-170%) translateZ(-320px) rotateY(40deg) scale(0.6)", opacity: 0, z: 1, interactive: false };
+        return { transform: "translateX(-170%) translateZ(-320px) rotateY(-40deg) scale(0.6)", opacity: 0, z: 1, interactive: false };
       }
-      return { transform: "translateX(70%) translateZ(-320px) rotateY(-40deg) scale(0.6)", opacity: 0, z: 1, interactive: false };
+      return { transform: "translateX(70%) translateZ(-320px) rotateY(40deg) scale(0.6)", opacity: 0, z: 1, interactive: false };
     }
 
     function render() {
