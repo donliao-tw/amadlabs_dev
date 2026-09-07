@@ -17,5 +17,14 @@ services:
     volumes:
       - theme_data:/app/data
 
+  iea-backend:
+    build:
+      context: ./iea-backend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8083:8000"
+    # Stateless: uploads are analyzed in memory and never persisted, so no volume.
+
 volumes:
   theme_data:

@@ -1,4 +1,7 @@
 .git
 deploy/nginx.conf
 backend
+iea-backend
+demo
+docs
 *.md

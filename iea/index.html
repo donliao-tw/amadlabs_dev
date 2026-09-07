@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Industrial Excel AI | AMAD Labs</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../assets/css/style.css">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header class="site-header">
+  <div class="container header-inner">
+    <a href="../" class="logo">
+      <span class="logo-mark" aria-hidden="true">A</span>
+      <span>AMAD Labs</span>
+    </a>
+    <nav class="site-nav">
+      <a href="../#projects">回到作品集</a>
+    </nav>
+  </div>
+</header>
+
+<main class="iea-main">
+  <div class="container">
+
+    <section class="iea-intro">
+      <p class="iea-eyebrow">DEMO — Industrial Excel AI (Preview)</p>
+      <h1>把公司在用的 Excel 上傳，看看裡面藏著什麼系統</h1>
+      <p class="iea-sub">
+        這是 AMAD Labs 正在開發中的分析工具預覽版。上傳一份 <code>.xlsx</code> 或
+        <code>.xlsm</code>，工具會用純結構化、決定性的方式（不執行任何巨集、不上傳到第三方 AI）
+        掃描出工作表、公式、命名範圍、隱藏工作表與 VBA 巨集的存在，
+        給你一份「這份 Excel 目前長什麼樣子」的技術總覽。
+      </p>
+      <p class="iea-note">
+        目前版本只做結構掃描，還不會推論業務邏輯或產生系統藍圖 — 那是下一階段。
+        檔案僅在記憶體中處理、分析完不會保留在伺服器上，且巨集只做靜態偵測、絕不會被執行。
+      </p>
+    </section>
+
+    <section class="iea-upload-card">
+      <div class="iea-dropzone" id="dropzone">
+        <input type="file" id="fileInput" accept=".xlsx,.xlsm" hidden>
+        <div class="iea-dropzone-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="currentColor" stroke-width="1.6">
+            <path d="M12 16V4M12 4L7 9M12 4l5 5"/>
+            <path d="M4 16v3a2 2 0 002 2h12a2 2 0 002-2v-3"/>
+          </svg>
+        </div>
+        <p class="iea-dropzone-text">拖曳檔案到這裡，或<button type="button" class="iea-browse-btn" id="browseBtn">選擇檔案</button></p>
+        <p class="iea-dropzone-hint">支援 .xlsx / .xlsm，單檔上限 15 MB</p>
+      </div>
+      <p class="iea-status" id="statusMsg" hidden></p>
+    </section>
+
+    <section class="iea-result" id="resultSection" hidden>
+      <div class="iea-result-head">
+        <h2 id="resultFilename"></h2>
+        <span class="iea-badge" id="resultFileType"></span>
+      </div>
+
+      <div class="iea-stat-grid">
+        <div class="iea-stat"><span class="iea-stat-value" id="statSheets">–</span><span class="iea-stat-label">工作表</span></div>
+        <div class="iea-stat"><span class="iea-stat-value" id="statFormulas">–</span><span class="iea-stat-label">公式數</span></div>
+        <div class="iea-stat"><span class="iea-stat-value" id="statHidden">–</span><span class="iea-stat-label">隱藏工作表</span></div>
+        <div class="iea-stat"><span class="iea-stat-value" id="statNamedRanges">–</span><span class="iea-stat-label">命名範圍</span></div>
+        <div class="iea-stat"><span class="iea-stat-value" id="statVba">–</span><span class="iea-stat-label">VBA 巨集</span></div>
+      </div>
+
+      <div class="iea-table-wrap">
+        <table class="iea-table" id="sheetsTable">
+          <thead>
+            <tr>
+              <th>工作表</th>
+              <th>狀態</th>
+              <th>列數</th>
+              <th>欄數</th>
+              <th>公式數</th>
+              <th>欄位名稱</th>
+            </tr>
+          </thead>
+          <tbody id="sheetsTableBody"></tbody>
+        </table>
+      </div>
+
+      <div class="iea-named-ranges" id="namedRangesBlock" hidden>
+        <h3>命名範圍</h3>
+        <ul id="namedRangesList"></ul>
+      </div>
+
+      <div class="iea-warnings" id="warningsBlock" hidden>
+        <h3>分析備註</h3>
+        <ul id="warningsList"></ul>
+      </div>
+    </section>
+
+  </div>
+</main>
+
+<footer class="site-footer">
+  <div class="container">
+    <p>© 2026 AMAD Labs. All rights reserved.</p>
+  </div>
+</footer>
+
+<script src="script.js"></script>
+</body>
+</html>
