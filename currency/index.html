@@ -35,8 +35,8 @@
     <div class="currency-card">
       <div class="currency-fields-grid">
         <div class="currency-field">
-          <label for="inputX">X</label>
-          <input type="number" id="inputX" inputmode="decimal" step="any" placeholder="輸入數值">
+          <label for="inputX">X(10000 遊戲幣的人民幣價格)</label>
+          <input type="number" id="inputX" inputmode="decimal" step="any" placeholder="例如 1.33">
         </div>
 
         <div class="currency-field">
@@ -56,27 +56,27 @@
 
         <div class="currency-field currency-field-full">
           <label for="inputReward">信用卡回饋 %</label>
-          <input type="number" id="inputReward" inputmode="decimal" step="any" placeholder="例如 2 代表 2%">
+          <input type="number" id="inputReward" inputmode="decimal" step="any" value="5">
         </div>
       </div>
 
       <div class="currency-formula">
-        比值 = 10000 ÷ X ÷ 人民幣兌台幣比值 ÷ 信用卡手續費倍數 ・
-        總金額 = 比值 × 總遊戲幣金額 ÷ 10000 ・
-        信用卡回饋 = 總金額 × 回饋 %
+        比值(每 1 台幣可換遊戲幣) = 10000 ÷ X ÷ 人民幣兌台幣比值 ÷ 信用卡手續費倍數 ・
+        總金額(台幣) = 總遊戲幣金額 ÷ 比值 ・
+        信用卡回饋(台幣) = 總金額 × 回饋 %
       </div>
 
       <div class="currency-results-grid">
         <div class="currency-result">
-          <span class="currency-result-label">比值</span>
+          <span class="currency-result-label">比值(遊戲幣/台幣)</span>
           <span class="currency-result-value" id="resultY">—</span>
         </div>
         <div class="currency-result">
-          <span class="currency-result-label">總金額</span>
+          <span class="currency-result-label">總金額(台幣)</span>
           <span class="currency-result-value" id="resultTotal">—</span>
         </div>
         <div class="currency-result currency-result-full">
-          <span class="currency-result-label">信用卡回饋</span>
+          <span class="currency-result-label">信用卡回饋(台幣)</span>
           <span class="currency-result-value" id="resultReward">—</span>
         </div>
       </div>
@@ -115,17 +115,19 @@
       resultY.textContent = "—";
     }
 
+    // Y is "game currency per 1 TWD spent" — so the TWD cost of a given
+    // amount of game currency is that amount divided by Y, not multiplied.
     var total = null;
-    if (y !== null && totalCurrency) {
-      total = (y * totalCurrency) / 10000;
-      resultTotal.textContent = "$" + total.toLocaleString("zh-Hant", { maximumFractionDigits: 2 });
+    if (y && totalCurrency) {
+      total = totalCurrency / y;
+      resultTotal.textContent = "NT$" + total.toLocaleString("zh-Hant", { maximumFractionDigits: 2 });
     } else {
       resultTotal.textContent = "—";
     }
 
     if (total !== null && reward) {
       var rewardAmount = total * (reward / 100);
-      resultReward.textContent = "$" + rewardAmount.toLocaleString("zh-Hant", { maximumFractionDigits: 2 });
+      resultReward.textContent = "NT$" + rewardAmount.toLocaleString("zh-Hant", { maximumFractionDigits: 2 });
     } else {
       resultReward.textContent = "—";
     }
