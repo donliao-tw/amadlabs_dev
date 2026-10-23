@@ -49,18 +49,28 @@
       </div>
 
       <div class="currency-field">
+        <label for="inputTotalCurrency">總遊戲幣金額</label>
+        <input type="number" id="inputTotalCurrency" inputmode="decimal" step="any" placeholder="例如 2600000">
+      </div>
+
+      <div class="currency-field">
         <label for="inputReward">信用卡回饋 %</label>
         <input type="number" id="inputReward" inputmode="decimal" step="any" placeholder="例如 2 代表 2%">
       </div>
 
       <div class="currency-formula">
         比值 = 10000 ÷ X ÷ 人民幣兌台幣比值 ÷ 信用卡手續費倍數<br>
-        信用卡回饋 = X × 回饋 %
+        總金額 = 比值 × 總遊戲幣金額 ÷ 10000<br>
+        信用卡回饋 = 總金額 × 回饋 %
       </div>
 
       <div class="currency-result">
         <span class="currency-result-label">比值</span>
         <span class="currency-result-value" id="resultY">—</span>
+      </div>
+      <div class="currency-result currency-result-secondary">
+        <span class="currency-result-label">總金額</span>
+        <span class="currency-result-value" id="resultTotal">—</span>
       </div>
       <div class="currency-result currency-result-secondary">
         <span class="currency-result-label">信用卡回饋</span>
@@ -80,32 +90,44 @@
   var inputX = document.getElementById("inputX");
   var inputRate = document.getElementById("inputRate");
   var inputFee = document.getElementById("inputFee");
+  var inputTotalCurrency = document.getElementById("inputTotalCurrency");
   var inputReward = document.getElementById("inputReward");
   var resultY = document.getElementById("resultY");
+  var resultTotal = document.getElementById("resultTotal");
   var resultReward = document.getElementById("resultReward");
 
   function recalc() {
     var x = parseFloat(inputX.value);
     var rate = parseFloat(inputRate.value);
     var fee = parseFloat(inputFee.value);
+    var totalCurrency = parseFloat(inputTotalCurrency.value);
     var reward = parseFloat(inputReward.value);
 
-    if (!x || !rate || !fee) {
-      resultY.textContent = "—";
-    } else {
-      var y = 10000 / x / rate / fee;
+    var y = null;
+    if (x && rate && fee) {
+      y = 10000 / x / rate / fee;
       resultY.textContent = y.toLocaleString("zh-Hant", { maximumFractionDigits: 4 });
+    } else {
+      resultY.textContent = "—";
     }
 
-    if (!x || !reward) {
-      resultReward.textContent = "—";
+    var total = null;
+    if (y !== null && totalCurrency) {
+      total = (y * totalCurrency) / 10000;
+      resultTotal.textContent = "$" + total.toLocaleString("zh-Hant", { maximumFractionDigits: 2 });
     } else {
-      var rewardAmount = x * (reward / 100);
+      resultTotal.textContent = "—";
+    }
+
+    if (total !== null && reward) {
+      var rewardAmount = total * (reward / 100);
       resultReward.textContent = "$" + rewardAmount.toLocaleString("zh-Hant", { maximumFractionDigits: 2 });
+    } else {
+      resultReward.textContent = "—";
     }
   }
 
-  [inputX, inputRate, inputFee, inputReward].forEach(function (el) {
+  [inputX, inputRate, inputFee, inputTotalCurrency, inputReward].forEach(function (el) {
     el.addEventListener("input", recalc);
   });
 </script>
