@@ -126,6 +126,10 @@
   color: var(--color-accent);
 }
 
+.currency-result-row2 .currency-result-value {
+  color: var(--color-accent-2);
+}
+
 .currency-result-full .currency-result-value {
   color: var(--color-accent-2);
 }

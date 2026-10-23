@@ -50,13 +50,13 @@
         </div>
 
         <div class="currency-field">
-          <label for="inputTotalCurrency">總遊戲幣金額</label>
-          <input type="number" id="inputTotalCurrency" inputmode="decimal" step="any" placeholder="例如 2600000">
+          <label for="inputTotalCurrency">總遊戲幣金額(萬)</label>
+          <input type="number" id="inputTotalCurrency" inputmode="decimal" step="any" placeholder="例如 260">
         </div>
 
         <div class="currency-field currency-field-full">
           <label for="inputReward">信用卡回饋 %</label>
-          <input type="number" id="inputReward" inputmode="decimal" step="any" value="5">
+          <input type="number" id="inputReward" inputmode="decimal" step="any" value="2.5">
         </div>
       </div>
 
@@ -64,24 +64,24 @@
         比值(每 1 台幣可換遊戲幣) = 10000 ÷ X ÷ 人民幣兌台幣比值 ÷ 信用卡手續費倍數 ・
         總金額(台幣) = 總遊戲幣金額 ÷ 比值 ・
         信用卡回饋(台幣) = 總金額 × 回饋 % ・
-        扣回饋後比值 = 總遊戲幣金額 ÷ (總金額 − 信用卡回饋)
+        折扣後比值 = 總遊戲幣金額 ÷ (總金額 − 信用卡回饋)
       </div>
 
       <div class="currency-results-grid">
-        <div class="currency-result">
-          <span class="currency-result-label">比值(遊戲幣/台幣)</span>
-          <span class="currency-result-value" id="resultY">—</span>
-        </div>
-        <div class="currency-result">
+        <div class="currency-result currency-result-row1">
           <span class="currency-result-label">總金額(台幣)</span>
           <span class="currency-result-value" id="resultTotal">—</span>
         </div>
-        <div class="currency-result">
+        <div class="currency-result currency-result-row1">
           <span class="currency-result-label">信用卡回饋(台幣)</span>
           <span class="currency-result-value" id="resultReward">—</span>
         </div>
-        <div class="currency-result">
-          <span class="currency-result-label">扣回饋後比值</span>
+        <div class="currency-result currency-result-row2">
+          <span class="currency-result-label">比值(遊戲幣/台幣)</span>
+          <span class="currency-result-value" id="resultY">—</span>
+        </div>
+        <div class="currency-result currency-result-row2">
+          <span class="currency-result-label">折扣後比值</span>
           <span class="currency-result-value" id="resultNetY">—</span>
         </div>
       </div>
@@ -110,7 +110,8 @@
     var x = parseFloat(inputX.value);
     var rate = parseFloat(inputRate.value);
     var fee = parseFloat(inputFee.value);
-    var totalCurrency = parseFloat(inputTotalCurrency.value);
+    // Field is entered in 萬 (ten-thousands), e.g. 260 means 2,600,000.
+    var totalCurrency = parseFloat(inputTotalCurrency.value) * 10000;
     var reward = parseFloat(inputReward.value);
 
     var y = null;
