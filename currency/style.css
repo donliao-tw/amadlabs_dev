@@ -101,3 +101,18 @@
   font-size: 2.2rem;
   color: var(--color-accent);
 }
+
+.currency-result-secondary {
+  border-top: none;
+  padding-top: 0;
+  margin-top: 4px;
+}
+
+.currency-result-secondary .currency-result-label {
+  font-size: 0.95rem;
+}
+
+.currency-result-secondary .currency-result-value {
+  font-size: 1.5rem;
+  color: var(--color-accent-2);
+}

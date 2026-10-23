@@ -43,13 +43,28 @@
         <input type="number" id="inputRate" inputmode="decimal" step="any" value="4.69">
       </div>
 
+      <div class="currency-field">
+        <label for="inputFee">信用卡手續費倍數</label>
+        <input type="number" id="inputFee" inputmode="decimal" step="any" value="1.045">
+      </div>
+
+      <div class="currency-field">
+        <label for="inputReward">信用卡回饋 %</label>
+        <input type="number" id="inputReward" inputmode="decimal" step="any" placeholder="例如 2 代表 2%">
+      </div>
+
       <div class="currency-formula">
-        Y = 10000 ÷ X ÷ 人民幣兌台幣比值 ÷ 1.045
+        比值 = 10000 ÷ X ÷ 人民幣兌台幣比值 ÷ 信用卡手續費倍數<br>
+        信用卡回饋 = X × 回饋 %
       </div>
 
       <div class="currency-result">
-        <span class="currency-result-label">Y</span>
+        <span class="currency-result-label">比值</span>
         <span class="currency-result-value" id="resultY">—</span>
+      </div>
+      <div class="currency-result currency-result-secondary">
+        <span class="currency-result-label">信用卡回饋</span>
+        <span class="currency-result-value" id="resultReward">—</span>
       </div>
     </div>
   </div>
@@ -62,24 +77,37 @@
 </footer>
 
 <script>
-  var CONST_DIVISOR = 1.045;
   var inputX = document.getElementById("inputX");
   var inputRate = document.getElementById("inputRate");
+  var inputFee = document.getElementById("inputFee");
+  var inputReward = document.getElementById("inputReward");
   var resultY = document.getElementById("resultY");
+  var resultReward = document.getElementById("resultReward");
 
   function recalc() {
     var x = parseFloat(inputX.value);
     var rate = parseFloat(inputRate.value);
-    if (!x || !rate) {
+    var fee = parseFloat(inputFee.value);
+    var reward = parseFloat(inputReward.value);
+
+    if (!x || !rate || !fee) {
       resultY.textContent = "—";
-      return;
+    } else {
+      var y = 10000 / x / rate / fee;
+      resultY.textContent = y.toLocaleString("zh-Hant", { maximumFractionDigits: 4 });
     }
-    var y = 10000 / x / rate / CONST_DIVISOR;
-    resultY.textContent = y.toLocaleString("zh-Hant", { maximumFractionDigits: 4 });
+
+    if (!x || !reward) {
+      resultReward.textContent = "—";
+    } else {
+      var rewardAmount = x * (reward / 100);
+      resultReward.textContent = "$" + rewardAmount.toLocaleString("zh-Hant", { maximumFractionDigits: 2 });
+    }
   }
 
-  inputX.addEventListener("input", recalc);
-  inputRate.addEventListener("input", recalc);
+  [inputX, inputRate, inputFee, inputReward].forEach(function (el) {
+    el.addEventListener("input", recalc);
+  });
 </script>
 
 </body>
