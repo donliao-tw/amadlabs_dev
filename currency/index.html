@@ -63,7 +63,8 @@
       <div class="currency-formula">
         比值(每 1 台幣可換遊戲幣) = 10000 ÷ X ÷ 人民幣兌台幣比值 ÷ 信用卡手續費倍數 ・
         總金額(台幣) = 總遊戲幣金額 ÷ 比值 ・
-        信用卡回饋(台幣) = 總金額 × 回饋 %
+        信用卡回饋(台幣) = 總金額 × 回饋 % ・
+        扣回饋後比值 = 總遊戲幣金額 ÷ (總金額 − 信用卡回饋)
       </div>
 
       <div class="currency-results-grid">
@@ -75,9 +76,13 @@
           <span class="currency-result-label">總金額(台幣)</span>
           <span class="currency-result-value" id="resultTotal">—</span>
         </div>
-        <div class="currency-result currency-result-full">
+        <div class="currency-result">
           <span class="currency-result-label">信用卡回饋(台幣)</span>
           <span class="currency-result-value" id="resultReward">—</span>
+        </div>
+        <div class="currency-result">
+          <span class="currency-result-label">扣回饋後比值</span>
+          <span class="currency-result-value" id="resultNetY">—</span>
         </div>
       </div>
     </div>
@@ -99,6 +104,7 @@
   var resultY = document.getElementById("resultY");
   var resultTotal = document.getElementById("resultTotal");
   var resultReward = document.getElementById("resultReward");
+  var resultNetY = document.getElementById("resultNetY");
 
   function recalc() {
     var x = parseFloat(inputX.value);
@@ -125,11 +131,24 @@
       resultTotal.textContent = "—";
     }
 
+    var rewardAmount = null;
     if (total !== null && reward) {
-      var rewardAmount = total * (reward / 100);
+      rewardAmount = total * (reward / 100);
       resultReward.textContent = "NT$" + rewardAmount.toLocaleString("zh-Hant", { maximumFractionDigits: 2 });
     } else {
       resultReward.textContent = "—";
+    }
+
+    // Same "game currency per TWD" ratio, but against the net cost after
+    // the cashback comes back — the effective rate you actually paid.
+    if (total !== null && rewardAmount !== null && totalCurrency) {
+      var netTotal = total - rewardAmount;
+      var netY = netTotal ? totalCurrency / netTotal : null;
+      resultNetY.textContent = netY
+        ? netY.toLocaleString("zh-Hant", { maximumFractionDigits: 4 })
+        : "—";
+    } else {
+      resultNetY.textContent = "—";
     }
   }
 
