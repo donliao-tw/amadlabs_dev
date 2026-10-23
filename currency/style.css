@@ -1,67 +1,80 @@
 .currency-main {
-  padding: 64px 0 96px;
+  padding: 28px 0 32px;
   min-height: calc(100vh - 64px);
+  display: flex;
+  align-items: center;
+}
+
+.currency-main .container {
+  width: 100%;
 }
 
 .currency-intro {
   text-align: center;
   max-width: 480px;
-  margin: 0 auto 40px;
+  margin: 0 auto 20px;
 }
 
 .currency-eyebrow {
   color: var(--color-accent);
   font-family: var(--font-display);
-  font-size: 0.85rem;
+  font-size: 0.8rem;
   font-weight: 600;
   letter-spacing: 0.04em;
-  margin: 0 0 10px;
+  margin: 0 0 6px;
 }
 
 .currency-intro h1 {
   font-family: var(--font-display);
-  font-size: 2rem;
-  margin: 0 0 10px;
+  font-size: 1.6rem;
+  margin: 0 0 6px;
 }
 
 .currency-sub {
   color: var(--color-text-muted);
   margin: 0;
+  font-size: 0.9rem;
 }
 
 .currency-card {
-  max-width: 420px;
+  max-width: 520px;
   margin: 0 auto;
   background: var(--color-surface);
   border: 1px solid var(--color-border);
   border-radius: 16px;
-  padding: 32px;
+  padding: 24px;
   box-shadow: var(--shadow-lg);
 }
 
-.currency-field {
-  margin-bottom: 20px;
+.currency-fields-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px 16px;
+}
+
+.currency-field-full {
+  grid-column: 1 / -1;
 }
 
 .currency-field label {
   display: block;
   font-family: var(--font-display);
-  font-size: 0.85rem;
+  font-size: 0.8rem;
   font-weight: 600;
   color: var(--color-text);
-  margin-bottom: 8px;
+  margin-bottom: 6px;
 }
 
 .currency-field input {
   width: 100%;
   box-sizing: border-box;
-  padding: 12px 14px;
+  padding: 10px 12px;
   border-radius: 10px;
   border: 1px solid var(--color-border);
   background: var(--color-bg-alt);
   color: var(--color-text);
   font-family: var(--font-mono, var(--font-display));
-  font-size: 1.05rem;
+  font-size: 1rem;
 }
 
 .currency-field input:focus {
@@ -72,47 +85,54 @@
 .currency-formula {
   text-align: center;
   color: var(--color-text-muted);
-  font-size: 0.85rem;
-  margin: 24px 0;
-  padding: 12px;
+  font-size: 0.76rem;
+  line-height: 1.6;
+  margin: 16px 0;
+  padding: 10px 12px;
   border-radius: 10px;
   background: var(--color-bg-alt);
 }
 
+.currency-results-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px 16px;
+  padding-top: 14px;
+  border-top: 1px solid var(--color-border);
+}
+
+.currency-result-full {
+  grid-column: 1 / -1;
+}
+
 .currency-result {
   display: flex;
-  align-items: baseline;
-  justify-content: center;
-  gap: 10px;
-  padding-top: 8px;
-  border-top: 1px solid var(--color-border);
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
 }
 
 .currency-result-label {
   font-family: var(--font-display);
   font-weight: 700;
   color: var(--color-text-muted);
-  font-size: 1.1rem;
+  font-size: 0.85rem;
 }
 
 .currency-result-value {
   font-family: var(--font-display);
   font-weight: 800;
-  font-size: 2.2rem;
+  font-size: 1.6rem;
   color: var(--color-accent);
 }
 
-.currency-result-secondary {
-  border-top: none;
-  padding-top: 0;
-  margin-top: 4px;
-}
-
-.currency-result-secondary .currency-result-label {
-  font-size: 0.95rem;
-}
-
-.currency-result-secondary .currency-result-value {
-  font-size: 1.5rem;
+.currency-result-full .currency-result-value {
   color: var(--color-accent-2);
+}
+
+@media (max-width: 420px) {
+  .currency-fields-grid,
+  .currency-results-grid {
+    grid-template-columns: 1fr;
+  }
 }
