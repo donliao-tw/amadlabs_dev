@@ -560,10 +560,13 @@ a:hover { text-decoration: underline; }
   /* Expanding on click grows real layout (width/padding/font-size), not a
      transform: scale() — scaling text via a compositor transform renders
      it as a stretched bitmap and never comes out crisp. Growing the box
-     for real keeps every glyph laid out (and rasterized) at its true size. */
-  transition: transform 0.55s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.55s ease,
-    width 0.55s cubic-bezier(0.22, 1, 0.36, 1), padding 0.55s cubic-bezier(0.22, 1, 0.36, 1),
-    font-size 0.55s cubic-bezier(0.22, 1, 0.36, 1);
+     for real keeps every glyph laid out (and rasterized) at its true size.
+     Only transform/opacity are transitioned smoothly (GPU-composited,
+     no layout cost); width/padding/font-size intentionally have NO
+     transition — animating them continuously reflows/rewraps the text
+     every frame, which reads as violent jitter rather than a smooth
+     grow, so they just snap to the final size instantly instead. */
+  transition: transform 0.55s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.55s ease;
 }
 
 .cat-card.is-active {
@@ -575,8 +578,15 @@ a:hover { text-decoration: underline; }
   z-index: 10;
   cursor: zoom-out;
   width: min(630px, calc(100vw - 140px));
-  padding: 40px;
+  padding: 42px;
   font-size: 1.5rem;
+}
+
+/* Suppresses the transform transition for one-frame instant swaps driven
+   from JS (e.g. dropping the fake scale() right as the real size kicks
+   in) so that swap itself never animates. */
+.cat-card.is-flip-instant {
+  transition: none !important;
 }
 
 .cat-nav-btn {
@@ -643,10 +653,19 @@ a:hover { text-decoration: underline; }
 
 .cat-question {
   font-family: var(--font-display);
-  font-size: 1.2em;
+  /* Both font-size AND the available text width must stay frozen between
+     collapsed/expanded — if either changes, the line wraps differently
+     (more width or bigger text both change how many characters fit per
+     line) and the break visibly jumps. font-size is pinned to rem (not
+     em, so it ignores the card's expanded font-size), and max-width pins
+     the wrapping box itself to the collapsed card's content width (420px
+     card − 2×28px padding = 364px) instead of following the card's
+     width out to 630px when expanded. */
+  font-size: 1.2rem;
+  max-width: min(364px, 100%);
+  margin: 0 auto 18px;
   font-weight: 700;
   text-align: center;
-  margin: 0 0 18px;
   text-wrap: balance;
   /* Fixed light color, not the theme text token — the card is a dark glass
      surface regardless of site light/dark mode. */
@@ -826,6 +845,85 @@ a:hover { text-decoration: underline; }
 .avatar-btn:focus-visible {
   border-color: var(--color-accent);
   color: var(--color-accent);
+}
+
+/* "Apps" launcher — icon-only (no label) grid-dots button that opens a
+   dropdown of small standalone tools/apps. */
+.icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-text-muted);
+  cursor: pointer;
+  transition: border-color 0.15s ease, color 0.15s ease;
+}
+
+.icon-btn:hover,
+.icon-btn:focus-visible,
+.nav-dropdown.open .icon-btn {
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+}
+
+.nav-dropdown {
+  position: relative;
+}
+
+.nav-dropdown-menu {
+  position: absolute;
+  top: calc(100% + 10px);
+  right: 0;
+  width: 260px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  box-shadow: var(--shadow-lg);
+  padding: 8px;
+  z-index: 110;
+}
+
+.nav-dropdown-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px;
+  border-radius: 8px;
+  color: var(--color-text);
+}
+
+.nav-dropdown-item:hover {
+  background: var(--color-bg-alt);
+  text-decoration: none;
+}
+
+.nav-dropdown-item svg {
+  flex-shrink: 0;
+  color: var(--color-accent);
+}
+
+.nav-dropdown-item strong {
+  display: block;
+  font-family: var(--font-display);
+  font-size: 0.9rem;
+}
+
+.nav-dropdown-item small {
+  display: block;
+  color: var(--color-text-muted);
+  font-size: 0.78rem;
+  margin-top: 2px;
+}
+
+.nav-dropdown-note {
+  margin: 8px 6px 2px;
+  color: var(--color-text-muted);
+  font-size: 0.78rem;
+  text-align: center;
 }
 
 .theme-panel {

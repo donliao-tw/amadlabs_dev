@@ -1,0 +1,461 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<title>Three.js Ring Carousel Test</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #05060a; overflow: hidden; }
+  .debug-note {
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    z-index: 10;
+    text-align: center;
+    color: #9fb0c9;
+    font: 13px/1.6 monospace;
+    padding: 14px 24px;
+    background: linear-gradient(#05060a, rgba(5,6,10,0));
+    pointer-events: none;
+  }
+  #stage { position: fixed; inset: 0; bottom: 260px; }
+  .hint {
+    position: fixed;
+    top: 44px; left: 0; right: 0;
+    text-align: center;
+    color: #6b7690;
+    font: 13px monospace;
+    z-index: 10;
+  }
+
+  /* Real HTML, not baked into the 3D texture — text here is always
+     native/crisp and doesn't need redrawing for language switches. */
+  #detailPanel {
+    position: fixed;
+    left: 0; right: 0; bottom: 0;
+    height: 260px;
+    overflow-y: auto;
+    background: linear-gradient(#05060a00, #05060a 20%);
+    padding: 32px 24px 24px;
+    box-sizing: border-box;
+  }
+  #detailPanel .inner {
+    max-width: 900px;
+    margin: 0 auto;
+  }
+  #detailPanel h2 {
+    color: #f5f7fa;
+    font: 700 1.3rem/1.4 -apple-system, "Segoe UI", "Microsoft JhengHei", sans-serif;
+    text-align: center;
+    margin: 0 0 20px;
+  }
+  #detailPanel .chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    justify-content: center;
+  }
+  #detailPanel .chip {
+    width: 260px;
+    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 12px;
+    padding: 14px 16px;
+  }
+  #detailPanel .chip strong {
+    display: block;
+    color: #f5f7fa;
+    font: 700 0.9rem/1.4 -apple-system, "Segoe UI", "Microsoft JhengHei", sans-serif;
+    margin-bottom: 4px;
+  }
+  #detailPanel .chip span {
+    display: block;
+    color: rgba(245,247,250,0.68);
+    font: 0.82rem/1.5 -apple-system, "Segoe UI", "Microsoft JhengHei", sans-serif;
+  }
+</style>
+</head>
+<body>
+
+<p class="debug-note">Three.js 環形輪播 — 拖曳或用左右鍵旋轉;圖示/標題在 3D 卡片上,細項說明是下方真正的 HTML</p>
+<div id="stage"></div>
+<p class="hint">← → 或拖曳滑鼠旋轉</p>
+<div id="detailPanel"><div class="inner">
+  <h2 id="detailQuestion"></h2>
+  <div class="chips" id="detailChips"></div>
+</div></div>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+<script type="module">
+import * as THREE from "three";
+import { Reflector } from "three/addons/objects/Reflector.js";
+import { EffectComposer } from "three/addons/postprocessing/EffectComposer.js";
+import { RenderPass } from "three/addons/postprocessing/RenderPass.js";
+import { BokehPass } from "three/addons/postprocessing/BokehPass.js";
+import GUI from "https://cdn.jsdelivr.net/npm/lil-gui@0.19/+esm";
+
+var CARDS = [
+  {
+    q: "資料散落各地?想找一份東西要翻好幾個地方?",
+    color: "#5b8def",
+    items: [
+      { t: "告別 Excel 地獄", d: "報表、對帳表散落在好幾份 Excel,複製貼上到眼花?整合成一套系統,一次輸入到處同步。" },
+      { t: "系統互相打通", d: "會計軟體、ERP 各用各的,同一筆資料打三次?幫你把系統串起來,一個地方輸入到處同步。" },
+      { t: "資料雲端化備份", d: "重要資料只存在某台電腦或某人隨身碟?搬到雲端,安全備份、隨時看得到。" },
+    ],
+  },
+  {
+    q: "月底才知道業績?合約、庫存期限老是忘記?",
+    color: "#8fb0ff",
+    items: [
+      { t: "老闆看得懂的即時報表", d: "月底要等內勤整理一整天才知道業績?做儀表板,即時看得到,不用等人工彙整。" },
+      { t: "單據自動辨識輸入", d: "發票、出貨單一張一張手動打很花時間又容易錯?用 AI 辨識掃描單據,自動幫你填進系統。" },
+      { t: "自動寄送報表/提醒通知", d: "合約快到期、庫存快見底常常忘記?系統自動寄信/發通知提醒你。" },
+    ],
+  },
+  {
+    q: "客戶訊息回不完?半夜假日還要顧著手機?",
+    color: "#6ad0c9",
+    items: [
+      { t: "AI 智能客服", d: "客戶一直問一樣的問題、電話接不完?AI 客服 24 小時先擋第一輪,員工只處理真正需要人處理的事。" },
+      { t: "LINE 官方帳號機器人", d: "客戶在 LINE 問東問西要隨時待命回?機器人自動回覆常見問題、接受預約或下單。" },
+      { t: "企業官網/形象網站", d: "客戶想查公司結果沒有網站,或舊網站又醜又不能手機看?做一個看起來專業的官網。" },
+      { t: "讓客戶在 Google 找得到你", d: "官網做好了但搜尋都找不到,被同業擋在前面?基本 SEO 優化增加曝光。" },
+    ],
+  },
+  {
+    q: "同一張單子要打兩三次?流程卡來卡去?",
+    color: "#f2a65a",
+    items: [
+      { t: "表單線上化", d: "業務用紙本、LINE 傳單子,內勤要重打一次?搬到線上,一次輸入不用重複打字。" },
+      { t: "預約/排程系統", d: "電話、LINE、現場都在約時間常搞混?線上預約系統,客戶自己選時間不撞期。" },
+      { t: "庫存/進銷存管理系統", d: "庫存夠不夠都憑印象或翻 Excel?系統即時準確,快沒貨自動提醒。" },
+      { t: "多分店/多據點資料整合", d: "每家分店各自記帳,總部要等回報才知道狀況?整合起來即時看得到。" },
+    ],
+  },
+  {
+    q: "重複的工作做不完,想加人又加不起?",
+    color: "#e07a9e",
+    items: [
+      { t: "用 AI 做原本要很多人做的事", d: "資料分析、文件整理這些重複工作交給 AI 先做一輪,同樣人力做更多事,不用一直加人。" },
+      { t: "網路資料自動蒐集(爬蟲)", d: "同業價格、競品動態每次要人工一家家查?自動蒐集整理,定期更新給你看。" },
+    ],
+  },
+];
+
+var stage = document.getElementById("stage");
+var W = window.innerWidth, H = stage.clientHeight;
+
+var scene = new THREE.Scene();
+scene.background = new THREE.Color(0x05060a);
+// Card material is double-sided (see below), so cards never actually get
+// backface-culled at any angle regardless of how the knobs below are set.
+
+// ---- Live-tunable params, all wired to the on-screen panel (bottom
+// right) so you can drag them yourself instead of waiting on a round
+// trip each time. ----
+var params = {
+  // Locked in from the live panel — this combination was confirmed as
+  // the good one (blur/depth-of-field ended up off, at 0/0).
+  ringRadius: 2.3,
+  stepAngleDeg: 59,
+  camX: 0,
+  camY: -0.1,
+  camZ: 6,
+  lookAtZ: 0.2,
+  fov: 45,
+  opacityFalloff: 0.09,
+  aperture: 0,
+  maxblur: 0,
+};
+
+var camera = new THREE.PerspectiveCamera(params.fov, W / H, 0.1, 100);
+camera.position.set(params.camX, params.camY, params.camZ);
+camera.lookAt(0, 0, params.lookAtZ);
+
+var renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.setSize(W, H);
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+stage.appendChild(renderer.domElement);
+
+// Lighting: mostly relies on emissive/unlit card textures, but a soft key
+// light gives the floor reflection and card edges something to catch.
+scene.add(new THREE.AmbientLight(0xffffff, 0.5));
+var key = new THREE.DirectionalLight(0xffffff, 0.8);
+key.position.set(2, 4, 5);
+scene.add(key);
+
+// ---- Card texture: drawn on a 2D canvas so text stays crisp at the
+// texture's native resolution (2x the plane's rendered pixel size, so it
+// never has to be upscaled) rather than relying on WebGL to render text. ----
+function roundRect(ctx, x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + w, y, x + w, y + h, r);
+  ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r);
+  ctx.arcTo(x, y, x + w, y, r);
+  ctx.closePath();
+}
+function wrapText(ctx, text, cx, cy, maxWidth, lineHeight) {
+  var chars = text.split("");
+  var lines = [];
+  var line = "";
+  chars.forEach(function (ch) {
+    var test = line + ch;
+    if (ctx.measureText(test).width > maxWidth && line) {
+      lines.push(line);
+      line = ch;
+    } else {
+      line = test;
+    }
+  });
+  if (line) lines.push(line);
+  var startY = cy - ((lines.length - 1) * lineHeight) / 2;
+  lines.forEach(function (l, i) { ctx.fillText(l, cx, startY + i * lineHeight); });
+}
+function makeCardTexture(card) {
+  var w = 640, h = 900;
+  var canvas = document.createElement("canvas");
+  canvas.width = w; canvas.height = h;
+  var ctx = canvas.getContext("2d");
+
+  roundRect(ctx, 0, 0, w, h, 36);
+  var grad = ctx.createLinearGradient(0, 0, 0, h);
+  grad.addColorStop(0, "#232a3d");
+  grad.addColorStop(1, "#12151f");
+  ctx.fillStyle = grad;
+  ctx.fill();
+  ctx.strokeStyle = "rgba(255,255,255,0.35)";
+  ctx.lineWidth = 4;
+  ctx.stroke();
+
+  ctx.fillStyle = card.color;
+  ctx.beginPath();
+  ctx.arc(w / 2, 210, 78, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = "rgba(255,255,255,0.9)";
+  ctx.beginPath();
+  ctx.arc(w / 2, 175, 30, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.fillStyle = "#f5f7fa";
+  ctx.font = "700 42px 'Microsoft JhengHei', 'PingFang TC', sans-serif";
+  ctx.textAlign = "center";
+  wrapText(ctx, card.q, w / 2, 400, w - 110, 58);
+
+  var tex = new THREE.CanvasTexture(canvas);
+  tex.anisotropy = renderer.capabilities.getMaxAnisotropy();
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
+}
+
+// ---- Layout: a real ring, viewed from just outside its rim (per your
+// sketch) rather than from far away on its central axis. Cards sit on a
+// true circle with outward-facing normals (like the first attempt), but
+// the angle between NEIGHBOURING cards is much smaller than a full
+// 360°/N spread (this is the fix — 72° apart was so wide that even the
+// very next card was already facing away from the camera and got
+// backface-culled; ~30° apart keeps the near 2-3 on each side turned
+// enough toward the camera to stay visible, curving away realistically
+// beyond that). Only 5 cards exist, so the "ring" is really just the
+// near arc of a much bigger imaginary circle.
+var N = CARDS.length;
+var ring = new THREE.Group();
+scene.add(ring);
+
+var meshes = CARDS.map(function (card, i) {
+  var geo = new THREE.PlaneGeometry(2.2, 3.0);
+  // MeshBasicMaterial (unlit) — shows the texture at its true drawn
+  // brightness regardless of scene lighting. MeshStandardMaterial (PBR)
+  // was rendering everything dim/grey since the light rig here is too
+  // weak/unrealistic for physically-based shading to look right.
+  var mat = new THREE.MeshBasicMaterial({
+    map: makeCardTexture(card),
+    transparent: true,
+    side: THREE.DoubleSide,
+  });
+  var mesh = new THREE.Mesh(geo, mat);
+  mesh.userData.index = i;
+  ring.add(mesh);
+  return mesh;
+});
+
+// ---- Floor reflection (real mirror-plane reflection, not a faked flip) ----
+var floorGeo = new THREE.CircleGeometry(20, 48);
+var floor = new Reflector(floorGeo, {
+  clipBias: 0.003,
+  textureWidth: window.innerWidth * window.devicePixelRatio,
+  textureHeight: window.innerHeight * window.devicePixelRatio,
+  color: 0x1a1e28,
+});
+floor.rotation.x = -Math.PI / 2;
+floor.position.y = -1.55;
+scene.add(floor);
+// Fade the reflection out with distance using a radial gradient mask baked
+// as the reflector's opacity via a second, faded dark disc on top of it.
+var fadeGeo = new THREE.CircleGeometry(20, 48);
+var fadeCanvas = document.createElement("canvas");
+fadeCanvas.width = fadeCanvas.height = 256;
+var fctx = fadeCanvas.getContext("2d");
+var rg = fctx.createRadialGradient(128, 128, 20, 128, 128, 128);
+rg.addColorStop(0, "rgba(5,6,10,0)");
+rg.addColorStop(1, "rgba(5,6,10,1)");
+fctx.fillStyle = rg;
+fctx.fillRect(0, 0, 256, 256);
+var fadeMat = new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(fadeCanvas), transparent: true });
+var fadeMesh = new THREE.Mesh(fadeGeo, fadeMat);
+fadeMesh.rotation.x = -Math.PI / 2;
+fadeMesh.position.y = -1.54;
+scene.add(fadeMesh);
+
+// ---- Depth of field: real Bokeh post-process, focused on the front card ----
+var composer = new EffectComposer(renderer);
+composer.addPass(new RenderPass(scene, camera));
+var bokeh = new BokehPass(scene, camera, {
+  focus: camera.position.z,
+  aperture: params.aperture,
+  maxblur: params.maxblur,
+});
+composer.addPass(bokeh);
+
+// ---- Interaction: drag / arrow keys / wrap so a target card becomes
+// "active" (front and center); every card's position/rotation is
+// recomputed each frame from its signed offset to a smoothly-eased
+// activeFloat, so dragging scrubs continuously instead of jumping. ----
+var active = 0;
+var targetActive = 0;
+var activeFloat = 0;
+
+// Real DOM, updated whenever the active card changes — text here never
+// needs a texture redraw and stays crisp/selectable/i18n-friendly.
+var detailQuestion = document.getElementById("detailQuestion");
+var detailChips = document.getElementById("detailChips");
+function updateDetailPanel(i) {
+  var card = CARDS[i];
+  detailQuestion.textContent = card.q;
+  detailChips.innerHTML = "";
+  card.items.forEach(function (item) {
+    var el = document.createElement("div");
+    el.className = "chip";
+    var strong = document.createElement("strong");
+    strong.textContent = item.t;
+    var span = document.createElement("span");
+    span.textContent = item.d;
+    el.appendChild(strong);
+    el.appendChild(span);
+    detailChips.appendChild(el);
+  });
+}
+
+function goTo(i) {
+  active = ((i % N) + N) % N;
+  targetActive = active;
+  // Take the shorter way around when wrapping (e.g. from the last card
+  // to the first should count as +1, not -(N-1)).
+  var diff = targetActive - activeFloat;
+  if (diff > N / 2) targetActive -= N;
+  else if (diff < -N / 2) targetActive += N;
+  updateDetailPanel(active);
+}
+updateDetailPanel(active);
+
+function layoutCards() {
+  var stepAngle = (params.stepAngleDeg * Math.PI) / 180;
+  meshes.forEach(function (mesh, i) {
+    var d = i - activeFloat;
+    // Shortest signed distance around the loop.
+    if (d > N / 2) d -= N;
+    else if (d < -N / 2) d += N;
+    var theta = d * stepAngle;
+    // True circle: position on the ring, normal pointing radially outward
+    // (rotation.y = theta turns the plane's default +Z-facing normal to
+    // point along (sinθ, 0, cosθ), the same direction as its position on
+    // the circle) — this is what makes it curve rather than fan flat.
+    mesh.position.x = Math.sin(theta) * params.ringRadius;
+    mesh.position.z = Math.cos(theta) * params.ringRadius - params.ringRadius;
+    mesh.rotation.y = theta;
+    mesh.material.opacity = 1 - Math.min(1, Math.abs(d) * params.opacityFalloff);
+    mesh.renderOrder = 100 - Math.round(Math.abs(d) * 10);
+  });
+}
+
+var isDragging = false;
+var dragStartX = 0;
+var dragStartActive = 0;
+renderer.domElement.addEventListener("pointerdown", function (e) {
+  isDragging = true;
+  dragStartX = e.clientX;
+  dragStartActive = targetActive;
+});
+window.addEventListener("pointermove", function (e) {
+  if (!isDragging) return;
+  var dx = e.clientX - dragStartX;
+  targetActive = dragStartActive - dx * 0.006;
+});
+window.addEventListener("pointerup", function () {
+  if (!isDragging) return;
+  isDragging = false;
+  goTo(Math.round(targetActive));
+});
+window.addEventListener("keydown", function (e) {
+  if (e.key === "ArrowLeft") goTo(active - 1);
+  else if (e.key === "ArrowRight") goTo(active + 1);
+});
+
+window.addEventListener("resize", function () {
+  W = window.innerWidth; H = stage.clientHeight;
+  camera.aspect = W / H;
+  camera.updateProjectionMatrix();
+  renderer.setSize(W, H);
+  composer.setSize(W, H);
+});
+
+function animate() {
+  requestAnimationFrame(animate);
+
+  // Live params → camera/bokeh, so the panel's sliders take effect
+  // immediately without needing a reload.
+  camera.position.set(params.camX, params.camY, params.camZ);
+  camera.lookAt(0, 0, params.lookAtZ);
+  if (camera.fov !== params.fov) {
+    camera.fov = params.fov;
+    camera.updateProjectionMatrix();
+  }
+  bokeh.uniforms["aperture"].value = params.aperture;
+  bokeh.uniforms["maxblur"].value = params.maxblur;
+
+  activeFloat += (targetActive - activeFloat) * 0.12;
+  layoutCards();
+
+  // Focus the bokeh pass on the currently-active (nearest/sharpest) card.
+  var wp = new THREE.Vector3();
+  meshes[active].getWorldPosition(wp);
+  bokeh.uniforms["focus"].value = camera.position.distanceTo(wp);
+
+  composer.render();
+}
+animate();
+
+// ---- Live control panel ----
+var gui = new GUI({ title: "調整參數" });
+gui.add(params, "ringRadius", 1, 12, 0.1).name("圓環半徑");
+gui.add(params, "stepAngleDeg", 5, 80, 1).name("卡片間角度");
+gui.add(params, "camX", -6, 6, 0.1).name("鏡頭 X");
+gui.add(params, "camY", -3, 6, 0.05).name("鏡頭 Y(高度)");
+gui.add(params, "camZ", 2, 30, 0.1).name("鏡頭 Z(距離)");
+gui.add(params, "lookAtZ", -10, 5, 0.1).name("鏡頭看向 Z");
+gui.add(params, "fov", 20, 90, 1).name("視野角度 FOV");
+gui.add(params, "opacityFalloff", 0, 0.3, 0.01).name("側邊卡片透明度衰減");
+gui.add(params, "aperture", 0, 0.02, 0.0002).name("景深模糊強度");
+gui.add(params, "maxblur", 0, 0.05, 0.001).name("最大模糊量");
+</script>
+
+</body>
+</html>

@@ -28,6 +28,47 @@
       <a href="#about" data-i18n="nav.about">關於我們</a>
       <a href="#contact" data-i18n="nav.contact">聯絡我們</a>
       <button class="lang-toggle" id="langToggle" data-i18n="nav.langToggle">EN</button>
+
+      <div class="nav-dropdown" id="appsDropdown">
+        <button class="icon-btn" id="appsBtn" aria-label="功能" aria-haspopup="true" aria-expanded="false" title="功能">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
+            <circle cx="5" cy="5" r="2"></circle>
+            <circle cx="12" cy="5" r="2"></circle>
+            <circle cx="19" cy="5" r="2"></circle>
+            <circle cx="5" cy="12" r="2"></circle>
+            <circle cx="12" cy="12" r="2"></circle>
+            <circle cx="19" cy="12" r="2"></circle>
+            <circle cx="5" cy="19" r="2"></circle>
+            <circle cx="12" cy="19" r="2"></circle>
+            <circle cx="19" cy="19" r="2"></circle>
+          </svg>
+        </button>
+        <div class="nav-dropdown-menu" id="appsMenu" hidden>
+          <a href="iea/" class="nav-dropdown-item">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+              <rect x="3" y="4" width="18" height="14" rx="2"></rect>
+              <path d="M3 9h18"></path>
+              <path d="M8 4v14"></path>
+            </svg>
+            <span>
+              <strong data-i18n="apps.iea.title">Industrial Excel AI</strong>
+              <small data-i18n="apps.iea.desc">掃描 Excel 結構的小工具</small>
+            </span>
+          </a>
+          <a href="currency/" class="nav-dropdown-item">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+              <path d="M7 10h11l-3.5-3.5"></path>
+              <path d="M17 14H6l3.5 3.5"></path>
+            </svg>
+            <span>
+              <strong data-i18n="apps.currency.title">幣值換算</strong>
+              <small data-i18n="apps.currency.desc">輸入 X 自動算出 Y</small>
+            </span>
+          </a>
+          <p class="nav-dropdown-note" data-i18n="apps.more">更多小工具陸續推出</p>
+        </div>
+      </div>
+
       <button class="avatar-btn" id="avatarBtn" aria-label="個人設定" title="個人設定">
         <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
           <circle cx="12" cy="8" r="3.4"></circle>

@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>幣值換算 | AMAD Labs</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../assets/css/style.css">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header class="site-header">
+  <div class="container header-inner">
+    <a href="../" class="logo">
+      <span class="logo-mark" aria-hidden="true">A</span>
+      <span>AMAD Labs</span>
+    </a>
+    <nav class="site-nav">
+      <a href="../">回到首頁</a>
+    </nav>
+  </div>
+</header>
+
+<main class="currency-main">
+  <div class="container">
+    <section class="currency-intro">
+      <p class="currency-eyebrow">小工具</p>
+      <h1>幣值換算</h1>
+      <p class="currency-sub">輸入 X，自動算出 Y。</p>
+    </section>
+
+    <div class="currency-card">
+      <div class="currency-field">
+        <label for="inputX">X</label>
+        <input type="number" id="inputX" inputmode="decimal" step="any" placeholder="輸入數值">
+      </div>
+
+      <div class="currency-field">
+        <label for="inputRate">人民幣兌台幣比值</label>
+        <input type="number" id="inputRate" inputmode="decimal" step="any" value="4.69">
+      </div>
+
+      <div class="currency-formula">
+        Y = 10000 ÷ X ÷ 人民幣兌台幣比值 ÷ 1.045
+      </div>
+
+      <div class="currency-result">
+        <span class="currency-result-label">Y</span>
+        <span class="currency-result-value" id="resultY">—</span>
+      </div>
+    </div>
+  </div>
+</main>
+
+<footer class="site-footer">
+  <div class="container">
+    <p>© 2026 AMAD Labs. All rights reserved.</p>
+  </div>
+</footer>
+
+<script>
+  var CONST_DIVISOR = 1.045;
+  var inputX = document.getElementById("inputX");
+  var inputRate = document.getElementById("inputRate");
+  var resultY = document.getElementById("resultY");
+
+  function recalc() {
+    var x = parseFloat(inputX.value);
+    var rate = parseFloat(inputRate.value);
+    if (!x || !rate) {
+      resultY.textContent = "—";
+      return;
+    }
+    var y = 10000 / x / rate / CONST_DIVISOR;
+    resultY.textContent = y.toLocaleString("zh-Hant", { maximumFractionDigits: 4 });
+  }
+
+  inputX.addEventListener("input", recalc);
+  inputRate.addEventListener("input", recalc);
+</script>
+
+</body>
+</html>

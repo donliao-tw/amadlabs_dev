@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<title>Swiper Coverflow Test</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/swiper@11/swiper-bundle.min.css">
+<script>document.write('<link rel="stylesheet" href="../assets/css/style.css?v=' + Date.now() + '">');</script>
+<style>
+  body { padding-top: 40px; }
+  .debug-note {
+    max-width: 640px;
+    margin: 0 auto 32px;
+    text-align: center;
+    color: var(--color-text-muted);
+    font: 13px/1.6 monospace;
+  }
+
+  /* ---- Swiper coverflow wiring ---- */
+  .cat-swiper {
+    padding: 20px 0 70px;
+    /* Fixed height, tall enough for the active card (illustration +
+       question + chips). Without this, the wrapper's height changes
+       every time chips show/hide on a different active slide, which
+       drags the vertically-centered nav arrows/pagination around with
+       it — they visibly jump to a different spot per card. */
+    height: 640px;
+  }
+  .cat-swiper .swiper-wrapper {
+    align-items: flex-start;
+  }
+  .cat-swiper .swiper-slide {
+    width: 300px;
+    display: flex;
+    justify-content: center;
+    /* Top-align every slide (not vertically centered) so the illustration
+       sits at the same height on every card regardless of whether the
+       active card's chip area is currently showing — otherwise a taller
+       active slide shifts its own content up relative to its neighbours,
+       which reads as an extra, unintended tilt. */
+    align-items: flex-start;
+  }
+  /* Card sizing is plain CSS width/padding/font-size — real layout, not a
+     transform: scale(). Swiper's own coverflow transform (rotate/scale)
+     is applied to the .swiper-slide wrapper for the 3D tilt on side
+     cards; it never touches this card's own box, so this card's text is
+     always laid out and rasterized at its true size regardless of what
+     the 3D effect is doing around it. */
+  .cat-swiper .cat-card {
+    position: static;
+    left: auto;
+    top: auto;
+    width: 280px;
+    padding: 20px;
+    font-size: 0.88rem;
+  }
+  .cat-swiper .cat-illustration svg {
+    width: 100px;
+    margin: 0 auto;
+    display: block;
+  }
+  .cat-swiper .swiper-slide-active .cat-card {
+    width: 360px;
+    padding: 28px;
+    font-size: 1rem;
+    z-index: 5;
+  }
+  .cat-swiper .cat-question {
+    max-width: none;
+    margin-bottom: 0;
+  }
+
+  /* Chips: not just hidden but removed from layout on inactive slides —
+     otherwise every card reserves the same tall height as the active
+     one even though its chips are invisible, which is what was making
+     every card (not just the active one) look far too long. Reveals
+     automatically on whichever slide Swiper marks active, no click. */
+  .cat-swiper .cat-chips {
+    display: none;
+    position: static;
+    transform: none;
+    width: auto;
+    max-width: none;
+    gap: 8px;
+  }
+  .cat-swiper .swiper-slide-active .cat-chips {
+    display: flex;
+    margin-top: 14px;
+    animation: catChipsIn 0.35s ease both;
+  }
+  @keyframes catChipsIn {
+    from { opacity: 0; transform: translateY(8px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  .cat-swiper .chip {
+    opacity: 1;
+    transform: none;
+    width: 100%;
+    padding: 9px 12px;
+  }
+  .cat-swiper .chip strong { font-size: 0.85em; }
+  .cat-swiper .chip span { font-size: 0.78em; line-height: 1.4; }
+  .cat-swiper .cat-expand-btn {
+    display: none;
+  }
+
+  .cat-swiper .swiper-button-next,
+  .cat-swiper .swiper-button-prev {
+    color: var(--color-accent-2);
+  }
+  .cat-swiper .swiper-pagination-bullet-active {
+    background: var(--color-accent-2);
+  }
+</style>
+</head>
+<body>
+
+<p class="debug-note">
+  改用 Swiper.js 的 3D Coverflow 效果套件重做整個輪播:不再有「點擊放大」，
+  切到哪張卡片就自動淡入它的子卡片；中間卡片本來就比較大（純 CSS 版面，不是 transform scale）；
+  旁邊卡片交給 Swiper 處理立體傾斜。
+</p>
+
+<section id="services" class="section snap-section" style="min-height:auto;">
+  <div class="container">
+    <h2 class="section-title">我們能幫你做什麼</h2>
+    <p class="section-subtitle">看看有沒有講到你的痛點</p>
+
+    <div class="swiper cat-swiper">
+      <div class="swiper-wrapper">
+
+        <div class="swiper-slide">
+          <article class="cat-card">
+            <div class="cat-illustration" aria-hidden="true">
+              <svg viewBox="0 0 200 140" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <rect x="20" y="112" width="160" height="7" rx="3.5" fill="var(--color-border)"/>
+                <rect x="76" y="66" width="48" height="50" rx="22" fill="var(--color-accent)"/>
+                <circle cx="100" cy="50" r="16" fill="var(--color-accent)"/>
+              </svg>
+            </div>
+            <h3 class="cat-question">資料散落各地?想找一份東西要翻好幾個地方?</h3>
+            <div class="cat-chips">
+                <div class="chip"><strong>告別 Excel 地獄</strong><span>報表、對帳表散落在好幾份 Excel,複製貼上到眼花?整合成一套系統,一次輸入到處同步。</span></div>
+                <div class="chip"><strong>系統互相打通</strong><span>會計軟體、ERP 各用各的,同一筆資料打三次?幫你把系統串起來,一個地方輸入到處同步。</span></div>
+                <div class="chip"><strong>資料雲端化備份</strong><span>重要資料只存在某台電腦或某人隨身碟?搬到雲端,安全備份、隨時看得到。</span></div>
+            </div>
+          </article>
+        </div>
+
+        <div class="swiper-slide">
+          <article class="cat-card">
+            <div class="cat-illustration" aria-hidden="true">
+              <svg viewBox="0 0 200 140" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <rect x="20" y="112" width="160" height="7" rx="3.5" fill="var(--color-border)"/>
+                <rect x="52" y="66" width="38" height="48" rx="18" fill="var(--color-accent)"/>
+                <circle cx="71" cy="52" r="15" fill="var(--color-accent)"/>
+              </svg>
+            </div>
+            <h3 class="cat-question">月底才知道業績?合約、庫存期限老是忘記?</h3>
+            <div class="cat-chips">
+                <div class="chip"><strong>老闆看得懂的即時報表</strong><span>月底要等內勤整理一整天才知道業績?做儀表板,即時看得到,不用等人工彙整。</span></div>
+                <div class="chip"><strong>單據自動辨識輸入</strong><span>發票、出貨單一張一張手動打很花時間又容易錯?用 AI 辨識掃描單據,自動幫你填進系統。</span></div>
+                <div class="chip"><strong>自動寄送報表/提醒通知</strong><span>合約快到期、庫存快見底常常忘記?系統自動寄信/發通知提醒你。</span></div>
+            </div>
+          </article>
+        </div>
+
+        <div class="swiper-slide">
+          <article class="cat-card">
+            <div class="cat-illustration" aria-hidden="true">
+              <svg viewBox="0 0 200 140" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <rect x="20" y="112" width="160" height="7" rx="3.5" fill="var(--color-border)"/>
+                <rect x="80" y="66" width="40" height="50" rx="18" fill="var(--color-accent)"/>
+                <circle cx="100" cy="50" r="16" fill="var(--color-accent)"/>
+              </svg>
+            </div>
+            <h3 class="cat-question">客戶訊息回不完?半夜假日還要顧著手機?</h3>
+            <div class="cat-chips">
+                <div class="chip"><strong>AI 智能客服</strong><span>客戶一直問一樣的問題、電話接不完?AI 客服 24 小時先擋第一輪,員工只處理真正需要人處理的事。</span></div>
+                <div class="chip"><strong>LINE 官方帳號機器人</strong><span>客戶在 LINE 問東問西要隨時待命回?機器人自動回覆常見問題、接受預約或下單。</span></div>
+                <div class="chip"><strong>企業官網/形象網站</strong><span>客戶想查公司結果沒有網站,或舊網站又醜又不能手機看?做一個看起來專業的官網。</span></div>
+                <div class="chip"><strong>讓客戶在 Google 找得到你</strong><span>官網做好了但搜尋都找不到,被同業擋在前面?基本 SEO 優化增加曝光。</span></div>
+            </div>
+          </article>
+        </div>
+
+        <div class="swiper-slide">
+          <article class="cat-card">
+            <div class="cat-illustration" aria-hidden="true">
+              <svg viewBox="0 0 200 140" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <rect x="20" y="112" width="160" height="7" rx="3.5" fill="var(--color-border)"/>
+                <path d="M22 78h34a8 8 0 018 8v6a8 8 0 01-8 8H22z" fill="var(--color-text-muted)" opacity="0.85"/>
+                <rect x="86" y="52" width="28" height="34" rx="3" fill="var(--color-accent)"/>
+              </svg>
+            </div>
+            <h3 class="cat-question">同一張單子要打兩三次?流程卡來卡去?</h3>
+            <div class="cat-chips">
+                <div class="chip"><strong>表單線上化</strong><span>業務用紙本、LINE 傳單子,內勤要重打一次?搬到線上,一次輸入不用重複打字。</span></div>
+                <div class="chip"><strong>預約/排程系統</strong><span>電話、LINE、現場都在約時間常搞混?線上預約系統,客戶自己選時間不撞期。</span></div>
+                <div class="chip"><strong>庫存/進銷存管理系統</strong><span>庫存夠不夠都憑印象或翻 Excel?系統即時準確,快沒貨自動提醒。</span></div>
+                <div class="chip"><strong>多分店/多據點資料整合</strong><span>每家分店各自記帳,總部要等回報才知道狀況?整合起來即時看得到。</span></div>
+            </div>
+          </article>
+        </div>
+
+        <div class="swiper-slide">
+          <article class="cat-card">
+            <div class="cat-illustration" aria-hidden="true">
+              <svg viewBox="0 0 200 140" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <rect x="20" y="112" width="160" height="7" rx="3.5" fill="var(--color-border)"/>
+                <rect x="48" y="66" width="38" height="48" rx="18" fill="var(--color-accent)"/>
+                <circle cx="67" cy="52" r="15" fill="var(--color-accent)"/>
+              </svg>
+            </div>
+            <h3 class="cat-question">重複的工作做不完,想加人又加不起?</h3>
+            <div class="cat-chips">
+                <div class="chip"><strong>用 AI 做原本要很多人做的事</strong><span>資料分析、文件整理這些重複工作交給 AI 先做一輪,同樣人力做更多事,不用一直加人。</span></div>
+                <div class="chip"><strong>網路資料自動蒐集(爬蟲)</strong><span>同業價格、競品動態每次要人工一家家查?自動蒐集整理,定期更新給你看。</span></div>
+            </div>
+          </article>
+        </div>
+
+      </div>
+
+      <div class="swiper-pagination"></div>
+      <div class="swiper-button-prev"></div>
+      <div class="swiper-button-next"></div>
+    </div>
+  </div>
+</section>
+
+<script src="https://cdn.jsdelivr.net/npm/swiper@11/swiper-bundle.min.js"></script>
+<script>
+  new Swiper(".cat-swiper", {
+    effect: "coverflow",
+    grabCursor: true,
+    centeredSlides: true,
+    slidesPerView: "auto",
+    loop: true,
+    coverflowEffect: {
+      // Negative rotate = the "drum/ring" look (near edge tilts toward
+      // the viewer, cards feel like they're mounted on the inside of a
+      // cylinder facing outward) instead of the default coverflow
+      // "book-flip" look (far edge recedes, feels concave/caving in).
+      rotate: -38,
+      stretch: 0,
+      depth: 260,
+      modifier: 1,
+      slideShadows: false,
+    },
+    pagination: { el: ".swiper-pagination", clickable: true },
+    navigation: { nextEl: ".swiper-button-next", prevEl: ".swiper-button-prev" },
+    keyboard: { enabled: true },
+  });
+</script>
+
+</body>
+</html>

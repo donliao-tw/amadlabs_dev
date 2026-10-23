@@ -691,5 +691,32 @@
         });
       });
     }
+
+    var appsDropdown = document.getElementById("appsDropdown");
+    var appsBtn = document.getElementById("appsBtn");
+    var appsMenu = document.getElementById("appsMenu");
+    if (appsDropdown && appsBtn && appsMenu) {
+      var closeAppsMenu = function () {
+        appsMenu.hidden = true;
+        appsDropdown.classList.remove("open");
+        appsBtn.setAttribute("aria-expanded", "false");
+      };
+      appsBtn.addEventListener("click", function (e) {
+        e.stopPropagation();
+        var willOpen = appsMenu.hidden;
+        closeAppsMenu();
+        if (willOpen) {
+          appsMenu.hidden = false;
+          appsDropdown.classList.add("open");
+          appsBtn.setAttribute("aria-expanded", "true");
+        }
+      });
+      document.addEventListener("click", function (e) {
+        if (!appsDropdown.contains(e.target)) closeAppsMenu();
+      });
+      document.addEventListener("keydown", function (e) {
+        if (e.key === "Escape") closeAppsMenu();
+      });
+    }
   });
 })();
