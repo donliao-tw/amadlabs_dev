@@ -30,13 +30,8 @@
   margin: 0 0 6px;
 }
 
-.currency-sub {
-  color: var(--color-text-muted);
-  margin: 0;
-  font-size: 0.9rem;
-}
-
 .currency-card {
+  position: relative;
   max-width: 520px;
   margin: 0 auto;
   background: var(--color-surface);
@@ -44,6 +39,51 @@
   border-radius: 16px;
   padding: 24px;
   box-shadow: var(--shadow-lg);
+}
+
+.currency-card-head {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+}
+
+.currency-help-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: 1px solid var(--color-border);
+  background: var(--color-bg-alt);
+  color: var(--color-text-muted);
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+
+.currency-help-btn:hover,
+.currency-help-btn[aria-expanded="true"] {
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+}
+
+.currency-help-popup {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  width: 260px;
+  text-align: left;
+  color: var(--color-text-muted);
+  font-size: 0.76rem;
+  line-height: 1.7;
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: var(--color-bg-alt);
+  border: 1px solid var(--color-border);
+  box-shadow: var(--shadow-lg);
+  z-index: 5;
 }
 
 .currency-fields-grid {
@@ -80,17 +120,6 @@
 .currency-field input:focus {
   outline: none;
   border-color: var(--color-accent);
-}
-
-.currency-formula {
-  text-align: center;
-  color: var(--color-text-muted);
-  font-size: 0.76rem;
-  line-height: 1.6;
-  margin: 16px 0;
-  padding: 10px 12px;
-  border-radius: 10px;
-  background: var(--color-bg-alt);
 }
 
 .currency-results-grid {

@@ -29,10 +29,19 @@
     <section class="currency-intro">
       <p class="currency-eyebrow">小工具</p>
       <h1>幣值換算</h1>
-      <p class="currency-sub">輸入 X，自動算出 Y。</p>
     </section>
 
     <div class="currency-card">
+      <div class="currency-card-head">
+        <button type="button" class="currency-help-btn" id="helpBtn" aria-label="顯示計算公式" aria-expanded="false" title="顯示計算公式">?</button>
+        <div class="currency-help-popup" id="helpPopup" hidden>
+          比值(每 1 台幣可換遊戲幣) = 10000 ÷ X ÷ 人民幣兌台幣比值 ÷ 信用卡手續費倍數<br>
+          總金額(台幣) = 總遊戲幣金額 ÷ 比值<br>
+          信用卡回饋(台幣) = 總金額 × 回饋 %<br>
+          折扣後比值 = 總遊戲幣金額 ÷ (總金額 − 信用卡回饋)
+        </div>
+      </div>
+
       <div class="currency-fields-grid">
         <div class="currency-field">
           <label for="inputX">X(10000 遊戲幣的人民幣價格)</label>
@@ -58,13 +67,6 @@
           <label for="inputReward">信用卡回饋 %</label>
           <input type="number" id="inputReward" inputmode="decimal" step="any" value="2.5">
         </div>
-      </div>
-
-      <div class="currency-formula">
-        比值(每 1 台幣可換遊戲幣) = 10000 ÷ X ÷ 人民幣兌台幣比值 ÷ 信用卡手續費倍數 ・
-        總金額(台幣) = 總遊戲幣金額 ÷ 比值 ・
-        信用卡回饋(台幣) = 總金額 × 回饋 % ・
-        折扣後比值 = 總遊戲幣金額 ÷ (總金額 − 信用卡回饋)
       </div>
 
       <div class="currency-results-grid">
@@ -96,6 +98,18 @@
 </footer>
 
 <script>
+  var helpBtn = document.getElementById("helpBtn");
+  var helpPopup = document.getElementById("helpPopup");
+  helpBtn.addEventListener("click", function (e) {
+    e.stopPropagation();
+    var willOpen = helpPopup.hidden;
+    helpPopup.hidden = !willOpen;
+    helpBtn.setAttribute("aria-expanded", willOpen ? "true" : "false");
+  });
+  document.addEventListener("click", function (e) {
+    if (!helpPopup.hidden && e.target !== helpBtn) helpPopup.hidden = true;
+  });
+
   var inputX = document.getElementById("inputX");
   var inputRate = document.getElementById("inputRate");
   var inputFee = document.getElementById("inputFee");
