@@ -7,45 +7,34 @@
 <title>報刀與庫存系統 Demo | AMAD Labs</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="../assets/css/style.css">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
 
-<header class="site-header">
-  <div class="container header-inner">
-    <a href="../" class="logo">
-      <span class="logo-mark" aria-hidden="true">A</span>
-      <span>AMAD Labs</span>
-    </a>
-    <label class="hs-operator">
-      <span>目前操作人員</span>
-      <select id="operator" aria-label="目前操作人員"></select>
-    </label>
-  </div>
-</header>
-
-<main class="hs-main">
-  <div class="hs-wrap">
-    <div class="hs-title">
-      <h1>報刀與庫存系統 <span class="hs-tag">DEMO</span></h1>
-      <p>示範資料，存在這台瀏覽器裡，不會上傳。右上角切換操作人員可看到權限差異。</p>
+<div class="app">
+  <aside class="side">
+    <div class="brand">
+      <span class="brand-mark" aria-hidden="true">A</span>
+      <div><b>報刀與庫存</b><small>AMAD Labs · DEMO</small></div>
     </div>
+    <nav class="nav" id="nav" aria-label="主選單"></nav>
+    <div class="who">
+      <label for="operator">操作人員</label>
+      <select id="operator"></select>
+      <span class="role-chip" id="roleChip"></span>
+    </div>
+  </aside>
 
-    <nav class="hs-tabs" id="tabs" role="tablist">
-      <button role="tab" data-tab="report">報刀</button>
-      <button role="tab" data-tab="stock">庫存</button>
-      <button role="tab" data-tab="trace">批號追溯</button>
-      <button role="tab" data-tab="settings">設定</button>
-    </nav>
-
+  <main class="main">
+    <header class="page-head" id="pageHead"></header>
     <div id="view"></div>
-  </div>
-</main>
+  </main>
+</div>
 
+<nav class="bottomnav" id="bottomnav" aria-label="主選單"></nav>
 <dialog id="dlg"></dialog>
-<div id="toast" class="hs-toast" role="status" hidden></div>
+<div id="toast" class="toast" role="status" hidden></div>
 
 <script src="logic.js"></script>
 <script src="app.js"></script>
