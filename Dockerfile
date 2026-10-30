@@ -5,4 +5,5 @@ COPY assets/ /usr/share/nginx/html/assets/
 COPY i18n/ /usr/share/nginx/html/i18n/
 COPY iea/ /usr/share/nginx/html/iea/
 COPY currency/ /usr/share/nginx/html/currency/
+COPY hs-service-demo/ /usr/share/nginx/html/hs-service-demo/
 COPY deploy/nginx.container.conf /etc/nginx/conf.d/default.conf
