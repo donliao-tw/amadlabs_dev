@@ -5,7 +5,7 @@
   var S = L.load();
   var tab = "report";
   var stockView = "plates";
-  var boxLoc = "co";
+  var boxLoc = "all";
   var repFilter = "all";
   var traceQ = "";
   var D = newDraft();
@@ -70,8 +70,12 @@
       return '<option value="' + esc(o.v) + '"' + (o.v === selected ? " selected" : "") + (o.disabled ? " disabled" : "") + ">" + esc(o.t) + "</option>";
     }).join("");
   }
+  function locLabel(l) { return l.name + "（" + TYPE[l.type] + (l.type === "company" ? "・可立即調動" : "") + "）"; }
   function locOptions(list, selected) {
-    return options(list.map(function (l) { return { v: l.id, t: l.name + "（" + TYPE[l.type] + "）" }; }), selected);
+    return options(list.map(function (l) { return { v: l.id, t: locLabel(l) }; }), selected);
+  }
+  function locBadge(l) {
+    return '<span class="loc-badge ' + l.type + '">' + TYPE[l.type] + (l.type === "company" ? "・可立即調動" : "") + "</span>";
   }
   function expBadge(exp) {
     var d = L.expDays(exp);
@@ -90,23 +94,49 @@
     return '<div class="card"><div class="empty">目前身分是「' + esc(S.operator) + "」，沒有「" + esc(what) + "」的權限。到「設定」由管理員調整。</div></div>";
   }
 
-  // ---------------- racks (PLC lamp panel / seat map) ----------------
-  function seatsHtml(q, used, attrs, interactive, mode) {
-    var cap = L.SEAT_CAP, vis = Math.min(q, cap), sel = Math.min(used, vis), lit = vis - sel, out = "";
-    for (var k = 0; k < cap; k++) {
-      if (mode === "pick") {
-        if (k < lit) out += '<button type="button" class="seat on" data-act="seat-add" ' + attrs + (interactive ? "" : " disabled") + ' aria-label="選用"></button>';
-        else if (k < vis) out += '<button type="button" class="seat sel" data-act="seat-sub" ' + attrs + ' aria-label="取消選用"></button>';
-        else out += '<span class="seat"></span>';
-      } else {
-        if (k < vis) out += '<button type="button" class="seat on" data-act="seat-take" ' + attrs + (interactive ? "" : " disabled") + ' aria-label="減少一支"></button>';
-        else out += '<button type="button" class="seat" data-act="seat-put" ' + attrs + (interactive ? "" : " disabled") + ' aria-label="增加一支"></button>';
+  // ---------------- screw boxes: a physical rack drawn as a lamp grid ----------------
+  // One slot per hole. Sizes run left to right (a size can span several columns),
+  // screw types stack as row bands. Lit = in stock; amber = picked for this 報刀.
+  function boxGridHtml(box, mode, o) {
+    o = o || {};
+    var cols = box.labels.length, out = "";
+    L.boxBands(S, box).forEach(function (band) {
+      var total = 0;
+      band.groups.forEach(function (g) { total += g.qty; });
+      var grid = [];
+      for (var r = 0; r < band.rows; r++) grid.push(new Array(cols));
+      band.groups.forEach(function (g) {
+        var used = o.used ? o.used(g.sku) : 0;
+        var vis = Math.min(g.qty, g.cap), sel = Math.min(used, vis), lit = vis - sel;
+        g.cols.forEach(function (ci, k) {
+          for (var r = 0; r < band.rows; r++) {
+            var idx = k * band.rows + r;
+            grid[r][ci] = { st: idx < lit ? "on" : idx < vis ? "sel" : "off", g: g };
+          }
+        });
+      });
+      var cells = "";
+      for (var r2 = 0; r2 < band.rows; r2++) {
+        for (var c = 0; c < cols; c++) {
+          var cell = grid[r2][c], st = cell.st, g2 = cell.g;
+          if (o.thumb) { cells += '<i class="slot ' + st + '"></i>'; continue; }
+          var attrs = ' data-box="' + esc(box.id) + '" data-series="' + esc(band.series) + '" data-len="' + g2.len + '" data-sku="' + esc(g2.sku || "") +
+            '" data-lot="' + esc(box.lot) + '" title="' + esc(band.series + " · " + g2.len + " mm") + '"';
+          var act = null;
+          if (mode === "pick") act = st === "on" ? "seat-add" : st === "sel" ? "seat-sub" : null;
+          else act = st === "on" ? "seat-take" : "seat-put";
+          var enabled = o.interactive !== false && !(mode === "pick" && !g2.sku);
+          cells += act ? '<button type="button" class="slot ' + st + '" data-act="' + act + '"' + attrs + (enabled ? "" : " disabled") + "></button>" : '<span class="slot ' + st + '"></span>';
+        }
       }
-    }
-    return out;
+      out += '<div class="bband"><div class="bband-h"><b>' + esc(band.series) + "</b><span>" + total + " 支</span></div>" +
+        (o.thumb ? "" : '<div class="bgrid" style="--cols:' + cols + '">' + box.labels.map(function (n) { return '<span class="blabel">' + n + "</span>"; }).join("") + "</div>") +
+        '<div class="bgrid' + (o.thumb ? " thumb" : "") + '" style="--cols:' + cols + '">' + cells + "</div></div>";
+    });
+    return '<div class="boxscroll">' + out + "</div>";
   }
   function legend(mode) {
-    return '<div class="legend"><span><i class="seat on"></i>有貨</span>' + (mode === "pick" ? '<span><i class="seat sel"></i>這張報刀選用</span>' : "") + '<span><i class="seat"></i>空位</span></div>';
+    return '<div class="legend"><span><i class="slot on"></i>有貨</span>' + (mode === "pick" ? '<span><i class="slot sel"></i>這張報刀選用</span>' : "") + '<span><i class="slot"></i>空位</span></div>';
   }
 
   // ---------------- 報刀 ----------------
@@ -116,7 +146,7 @@
   }
   function newDraft() {
     var h = firstHospital();
-    return { date: L.ymd(new Date()), hospital: h, doctor: "", loc: h, note: "", main: [], screws: [], sp: { series: "", lot: "" } };
+    return { date: L.ymd(new Date()), hospital: h, doctor: "", loc: h, note: "", main: [], screws: [], sp: { box: "" } };
   }
   function usedInDraft(sku, lot) {
     var n = 0;
@@ -139,28 +169,13 @@
       '<button type="button" class="btn btn-sm" data-act="rm-main" data-i="' + i + '">移除</button></div>';
   }
 
+  function boxesAt(loc) { return S.boxes.filter(function (b) { return b.loc === loc; }); }
+
   function screwPickerHtml() {
-    var all = L.screwSeries(S).filter(function (se) {
-      return se.lens.some(function (len) { return L.totalQty(S, D.loc, se.sku[len]) > 0; });
-    });
-    if (!all.length) return '<div class="empty">這個扣庫來源沒有骨釘庫存。</div>';
-    if (!all.some(function (s) { return s.series === D.sp.series; })) D.sp.series = all[0].series;
-    var se = all.filter(function (s) { return s.series === D.sp.series; })[0];
-
-    var lotExp = {}, lots = [];
-    se.lens.forEach(function (len) {
-      L.lines(S, D.loc, se.sku[len]).forEach(function (l) { if (!lotExp[l.lot]) { lotExp[l.lot] = l.exp; lots.push(l.lot); } });
-    });
-    if (lots.indexOf(D.sp.lot) < 0) D.sp.lot = lots.filter(function (x) { return !L.isExpired(lotExp[x]); })[0] || lots[0];
-    var expired = L.isExpired(lotExp[D.sp.lot]);
-
-    var cols = se.lens.map(function (len) {
-      var sku = se.sku[len], line = L.findLine(S, D.loc, sku, D.sp.lot), q = line ? line.qty : 0, used = usedInDraft(sku, D.sp.lot);
-      var left = q - used;
-      return '<div class="rcol' + (left > 0 && left <= 2 ? " low" : "") + '">' +
-        seatsHtml(q, used, 'data-sku="' + esc(sku) + '"', !expired, "pick") +
-        '<span class="len">' + len + '</span><span class="cnt">剩 ' + Math.max(0, left) + "</span></div>";
-    }).join("");
+    var boxes = boxesAt(D.loc);
+    if (!boxes.length) return '<div class="empty">這個扣庫來源沒有骨釘盒。</div>';
+    if (!boxes.some(function (b) { return b.id === D.sp.box; })) D.sp.box = boxes[0].id;
+    var box = L.box(S, D.sp.box), expired = L.isExpired(box.exp);
 
     var chips = D.screws.map(function (e, idx) {
       return '<span class="chip' + (e.scrap ? " scrap" : "") + '">' + esc(pName(e.sku)) + " ×" + e.qty + (e.scrap ? " 報廢" : "") +
@@ -169,13 +184,11 @@
         '<button type="button" data-act="dec-screw" data-idx="' + idx + '" title="減少">−</button></span>';
     }).join("");
 
-    return '<div class="grid" style="margin-bottom:12px">' +
-      '<label class="field">骨釘種類<select data-bind="sp-series">' + options(all.map(function (s) { return { v: s.series, t: s.series + " 骨釘" }; }), D.sp.series) + "</select></label>" +
-      '<label class="field">骨釘盒（批號）<select data-bind="sp-lot">' + options(lots.map(function (x) {
-        return { v: x, t: x + "｜效期 " + lotExp[x] + (L.isExpired(lotExp[x]) ? "（已過期）" : ""), disabled: L.isExpired(lotExp[x]) };
-      }), D.sp.lot) + "</select></label></div>" +
-      '<div class="rack"><div class="rack-h"><b>' + esc(se.series) + " 骨釘盒</b><span>批號 " + esc(D.sp.lot) + "　點亮燈選用，點橘燈取消</span></div>" +
-      '<div class="rack-cols">' + cols + "</div>" + legend("pick") + "</div>" +
+    return '<div class="grid" style="margin-bottom:12px"><label class="field">骨釘盒<select data-bind="sp-box">' +
+      options(boxes.map(function (b) { return { v: b.id, t: b.name + "｜批號 " + b.lot + "｜共 " + L.boxTotal(S, b) + " 支" + (L.isExpired(b.exp) ? "（已過期）" : "") }; }), D.sp.box) + "</select></label></div>" +
+      '<div class="rack"><div class="rack-h"><b>' + esc(box.name) + "</b><span>批號 " + esc(box.lot) + "｜效期 " + esc(box.exp) + "　點亮燈選用，點橘燈取消</span></div>" +
+      boxGridHtml(box, "pick", { interactive: !expired, used: function (sku) { return sku ? usedInDraft(sku, box.lot) : 0; } }) +
+      legend("pick") + "</div>" +
       '<div class="chips">' + (chips || '<span class="muted">尚未選用骨釘</span>') + "</div>";
   }
 
@@ -326,6 +339,11 @@
   }
 
   // ---------------- 庫存 ----------------
+  var TYPE_ORDER = { company: 0, hospital: 1, rep: 2 };
+  var TYPE_SHORT = { company: "可調動", hospital: "寄庫", rep: "隨身" };
+  function sortedLocs() {
+    return S.locations.slice().sort(function (a, b) { return TYPE_ORDER[a.type] - TYPE_ORDER[b.type]; });
+  }
   function stockValue(loc) {
     var v = 0;
     S.lots.forEach(function (l) {
@@ -335,10 +353,15 @@
     });
     return v;
   }
+  function qtyOfType(type) {
+    var n = 0;
+    S.lots.forEach(function (l) { var loc = L.location(S, l.loc); if (loc && loc.type === type) n += l.qty; });
+    return n;
+  }
 
   function renderStock() {
     if (!can("stock_view")) return noPerm("查看庫存");
-    var priceOn = can("view_price"), edit = can("stock_edit");
+    var priceOn = can("view_price"), edit = can("stock_edit"), cfg = can("settings_edit");
     var warn = 0, exp = 0, alerts = [];
     S.lots.forEach(function (l) {
       if (l.qty <= 0) return;
@@ -348,28 +371,33 @@
     alerts.sort(function (a, b) { return a.exp < b.exp ? -1 : 1; });
 
     var stats = '<div class="readouts">' +
+      '<div class="readout"><small>公司倉・可立即調動</small><b>' + qtyOfType("company") + '</b><i class="led"></i></div>' +
+      '<div class="readout"><small>醫院寄庫・放在醫院</small><b>' + qtyOfType("hospital") + '</b><i class="led off"></i></div>' +
+      '<div class="readout"><small>業務移動庫存・隨身</small><b>' + qtyOfType("rep") + '</b><i class="led off"></i></div>' +
       (priceOn ? '<div class="readout"><small>庫存總金額</small><b>' + money(stockValue(null)) + '</b><i class="led"></i></div>' : "") +
       '<div class="readout"><small>90 天內到期（批號列）</small><b>' + warn + '</b><i class="led ' + (warn ? "amber" : "") + '"></i></div>' +
       '<div class="readout"><small>已過期仍有庫存</small><b>' + exp + '</b><i class="led ' + (exp ? "red" : "") + '"></i></div></div>';
 
-    var alertHtml = alerts.length ? card("ALERT", "效期警示", '<div class="table-wrap" style="max-height:220px"><table class="table"><thead><tr><th>庫位</th><th>型號</th><th>品名</th><th>批號</th><th>效期</th><th class="num">數量</th></tr></thead><tbody>' +
+    var alertHtml = alerts.length ? card("ALERT", "效期警示", '<div class="table-wrap" style="max-height:220px"><table class="table"><thead><tr><th>位置</th><th>型號</th><th>品名</th><th>批號</th><th>效期</th><th class="num">數量</th></tr></thead><tbody>' +
       alerts.slice(0, 40).map(function (l) {
-        return "<tr><td>" + esc(L.locName(S, l.loc)) + '</td><td class="code">' + esc(l.sku) + "</td><td>" + esc(pName(l.sku)) + '</td><td class="code">' + esc(l.lot) + "</td><td>" + esc(l.exp) + " " + expBadge(l.exp) + '</td><td class="num">' + l.qty + "</td></tr>";
+        var loc = L.location(S, l.loc);
+        return "<tr><td>" + esc(L.locName(S, l.loc)) + " " + (loc ? locBadge(loc) : "") + '</td><td class="code">' + esc(l.sku) + "</td><td>" + esc(pName(l.sku)) + '</td><td class="code">' + esc(l.lot) + "</td><td>" + esc(l.exp) + " " + expBadge(l.exp) + '</td><td class="num">' + l.qty + "</td></tr>";
       }).join("") + "</tbody></table></div>") : "";
 
     var bar = '<div class="row" style="justify-content:space-between"><div class="seg">' +
       '<button data-act="stock-view" data-v="plates" aria-pressed="' + (stockView === "plates") + '">骨板庫存</button>' +
       '<button data-act="stock-view" data-v="boxes" aria-pressed="' + (stockView === "boxes") + '">骨釘盒</button></div>' +
-      '<div class="row"><button class="btn btn-sm" data-act="open-inbound"' + (edit ? "" : ' disabled title="沒有庫存異動權限"') + ">＋ 入庫</button>" +
+      '<div class="row">' + (stockView === "boxes" ? '<button class="btn btn-sm" data-act="new-box"' + (cfg ? "" : ' disabled title="沒有設定權限"') + ">＋ 新增骨釘盒</button>" : "") +
+      '<button class="btn btn-sm" data-act="open-inbound"' + (edit ? "" : ' disabled title="沒有庫存異動權限"') + ">＋ 入庫</button>" +
       '<button class="btn btn-sm" data-act="open-transfer"' + (edit ? "" : " disabled") + ">調撥</button></div></div>";
 
     return stats + alertHtml + card("STOCK", stockView === "plates" ? "骨板庫存矩陣" : "骨釘盒", stockView === "plates" ? platesMatrix() : boxesView(), bar);
   }
 
   function platesMatrix() {
-    var locs = S.locations, priceOn = can("view_price");
+    var locs = sortedLocs(), priceOn = can("view_price");
     var head = '<tr><th class="sticky">型號</th><th>品名</th>' + (priceOn ? '<th class="num">單價</th>' : "") +
-      locs.map(function (l) { return '<th class="num" title="' + esc(TYPE[l.type]) + '">' + esc(l.name) + "</th>"; }).join("") +
+      locs.map(function (l) { return '<th class="num lt-' + l.type + '">' + esc(l.name) + "<small>" + TYPE_SHORT[l.type] + "</small></th>"; }).join("") +
       '<th class="num">合計</th>' + (priceOn ? '<th class="num">金額</th>' : "") + "</tr>";
     var body = "", lastGroup = null, colspan = 2 + locs.length + 1 + (priceOn ? 2 : 0);
     L.plates(S).forEach(function (p) {
@@ -381,38 +409,87 @@
           return '<td class="num"><button class="qtybtn' + (q ? " has" : "") + '" data-act="open-lot" data-loc="' + esc(l.id) + '" data-sku="' + esc(p.sku) + '">' + (q || "·") + "</button></td>";
         }).join("") + '<td class="num"><b>' + total + "</b></td>" + (priceOn ? '<td class="num">' + money(total * p.price).replace("NT$ ", "") + "</td>" : "") + "</tr>";
     });
-    var foot = priceOn ? '<tr><td class="sticky"><b>庫位金額</b></td><td></td><td></td>' +
+    var foot = priceOn ? '<tr><td class="sticky"><b>位置金額</b></td><td></td><td></td>' +
       locs.map(function (l) { return '<td class="num"><b>' + money(stockValue(l.id)).replace("NT$ ", "") + "</b></td>"; }).join("") +
       '<td></td><td class="num"><b>' + money(stockValue(null)).replace("NT$ ", "") + "</b></td></tr>" : "";
     return '<div class="table-wrap"><table class="table"><thead>' + head + "</thead><tbody>" + body + "</tbody>" + (foot ? "<tfoot>" + foot + "</tfoot>" : "") + "</table></div>" +
-      '<p class="muted" style="margin-top:10px">點任一格查看該庫位的批號與效期。' + (priceOn ? "表尾庫位金額含骨釘。" : "") + "</p>";
+      '<p class="muted" style="margin-top:10px"><b>公司倉的庫存可以立即調動</b>（出貨、調撥到醫院）；醫院寄庫是放在醫院的，要調回公司才能給別人；業務移動庫存是業務隨身帶著的。點任一格查看批號與效期。' + (priceOn ? "表尾金額含骨釘。" : "") + "</p>";
   }
 
   function boxesView() {
-    if (!L.location(S, boxLoc)) boxLoc = S.locations[0].id;
     var edit = can("stock_edit");
-    var out = '<div class="row" style="margin-bottom:14px"><label class="field" style="min-width:240px">庫位<select data-bind="box-loc">' + locOptions(S.locations, boxLoc) + "</select></label></div>";
-    var racks = "";
-    L.screwSeries(S).forEach(function (se) {
-      var lotExp = {}, lots = [];
-      S.lots.forEach(function (l) {
-        if (l.loc === boxLoc && se.lens.some(function (len) { return se.sku[len] === l.sku; }) && !lotExp[l.lot]) { lotExp[l.lot] = l.exp; lots.push(l.lot); }
-      });
-      lots.forEach(function (lot) {
-        var sum = 0;
-        var cols = se.lens.map(function (len) {
-          var sku = se.sku[len], q = L.lineQty(S, boxLoc, sku, lot);
-          sum += q;
-          var attrs = 'data-sku="' + esc(sku) + '" data-lot="' + esc(lot) + '" data-exp="' + esc(lotExp[lot]) + '"';
-          return '<div class="rcol' + (q > 0 && q <= 2 ? " low" : "") + '">' + seatsHtml(q, 0, attrs, edit, "stock") +
-            '<span class="len">' + len + '</span><span class="cnt">' + q + (q > L.SEAT_CAP ? "·滿" : "") + "</span></div>";
-        }).join("");
-        racks += '<div class="rack"><div class="rack-h"><b>' + esc(se.series) + " 骨釘盒</b><span>批號 " + esc(lot) + "｜效期 " + esc(lotExp[lot]) + "｜共 " + sum + " 支</span></div>" +
-          '<div class="rack-cols">' + cols + "</div>" + (L.isExpired(lotExp[lot]) ? '<div style="margin-top:8px">' + expBadge(lotExp[lot]) + "</div>" : "") + "</div>";
-      });
+    var locs = sortedLocs();
+    if (boxLoc !== "all" && !L.location(S, boxLoc)) boxLoc = "all";
+    var list = S.boxes.filter(function (b) { return boxLoc === "all" || b.loc === boxLoc; }).sort(function (a, b) {
+      var la = L.location(S, a.loc), lb = L.location(S, b.loc);
+      return (TYPE_ORDER[la.type] - TYPE_ORDER[lb.type]) || (a.name < b.name ? -1 : 1);
     });
-    return out + (racks ? '<div class="racks">' + racks + "</div>" + legend("stock") : '<div class="empty">這個庫位沒有骨釘庫存。</div>') +
-      '<p class="muted" style="margin-top:10px">每一個盒子是一個批號，每一欄是一個長度。' + (edit ? "點亮燈減 1 支、點空位加 1 支（盤點調整，會寫入操作紀錄）。" : "目前身分只能檢視。") + "</p>";
+    var pick = '<div class="row" style="margin-bottom:14px"><label class="field" style="min-width:260px">位置<select data-bind="box-loc"><option value="all"' + (boxLoc === "all" ? " selected" : "") + ">全部位置</option>" + locOptions(locs, boxLoc) + "</select></label></div>";
+    var cards = list.map(function (b) {
+      var loc = L.location(S, b.loc);
+      var per = L.boxBands(S, b).map(function (band) {
+        var n = 0; band.groups.forEach(function (g) { n += g.qty; });
+        return esc(band.series) + " " + n;
+      }).join("　");
+      return '<article class="boxcard" data-act="open-box" data-id="' + esc(b.id) + '"><div class="boxcard-h"><b>' + esc(b.name) + "</b>" + locBadge(loc) + "</div>" +
+        '<div class="muted" style="margin-bottom:8px">' + esc(loc.name) + "｜批號 " + esc(b.lot) + "｜效期 " + esc(b.exp) + " " + expBadge(b.exp) + "</div>" +
+        boxGridHtml(b, "thumb", { thumb: true }) + '<div class="boxcard-f"><span>' + per + "</span><b>共 " + L.boxTotal(S, b) + " 支</b></div></article>";
+    }).join("");
+    return pick + (cards ? '<div class="boxes">' + cards + "</div>" : '<div class="empty">這個位置沒有骨釘盒。</div>') +
+      '<p class="muted" style="margin-top:12px">點一個盒子打開整盒格子' + (edit ? "，可以逐格增減、調撥整盒。" : "。") + " 每個盒子一個批號；<b>在公司倉的盒子可以立即調動</b>。</p>";
+  }
+
+  function openBox(id) {
+    var first = L.box(S, id);
+    openDialog(first ? first.name : "骨釘盒", function () {
+      var box = L.box(S, id);
+      if (!box) return '<div class="empty">找不到這個盒子，可能已被刪除。</div>';
+      var loc = L.location(S, box.loc), edit = can("stock_edit"), cfg = can("settings_edit"), total = L.boxTotal(S, box);
+      var where = loc.type === "company" ? "在公司倉，可以馬上調動：出貨，或調撥到醫院、業務。" : loc.type === "hospital" ? "寄放在醫院，要先調回公司才能給別人。" : "業務隨身帶著。";
+      return '<div class="boxhead">' + locBadge(loc) + "<span><b>" + esc(loc.name) + "</b></span><span>批號 <b>" + esc(box.lot) + "</b></span><span>效期 " + esc(box.exp) + " " + expBadge(box.exp) + "</span><span>共 <b>" + total + "</b> 支</span></div>" +
+        '<p class="muted" style="margin:6px 0 12px">' + where + (edit ? " 點亮燈減 1 支，點空位加 1 支（盤點調整，會寫進操作紀錄）。" : " 目前身分只能檢視。") + "</p>" +
+        boxGridHtml(box, "stock", { interactive: edit }) + legend("stock") +
+        '<div class="row" style="margin-top:16px"><button class="btn btn-primary btn-sm" data-act="move-box" data-id="' + esc(box.id) + '"' + (edit ? "" : " disabled") + ">調撥整盒</button>" +
+        '<button class="btn btn-sm" data-act="edit-box" data-id="' + esc(box.id) + '"' + (cfg ? "" : " disabled") + ">設定這個盒子</button>" +
+        '<button class="btn btn-sm btn-danger" data-act="del-box" data-id="' + esc(box.id) + '"' + (cfg && total === 0 ? "" : ' disabled title="盒內還有螺絲，不能刪除"') + ">刪除</button></div>";
+    }, true);
+  }
+
+  function openBoxConfig(id) {
+    var box = id ? L.box(S, id) : null;
+    var series = L.screwSeries(S).map(function (x) { return x.series; });
+    var b = box || { name: "新骨釘盒", loc: boxLoc !== "all" ? boxLoc : "co", lot: "", exp: L.addDays(540), labels: L.defaultLabels(), bands: [{ series: series[0], rows: 5 }, { series: series[series.length - 1], rows: 6 }] };
+    openDialog(box ? "設定：" + box.name : "新增骨釘盒", function () {
+      var bandRows = [0, 1, 2].map(function (i) {
+        var band = b.bands[i];
+        return '<div class="row" style="margin-bottom:8px"><label class="field">螺絲區塊 ' + (i + 1) + '<select name="series' + i + '"><option value="">（不使用）</option>' + options(series.map(function (x) { return { v: x, t: x + " 骨釘" }; }), band ? band.series : "") + "</select></label>" +
+          '<label class="field">列數<input name="rows' + i + '" type="number" min="1" max="30" value="' + (band ? band.rows : "") + '" style="width:90px"></label></div>';
+      }).join("");
+      return '<form data-form="boxcfg" data-id="' + esc(id || "") + '"><div class="grid">' +
+        '<label class="field">盒子名稱<input name="name" required value="' + esc(b.name) + '"></label>' +
+        '<label class="field">位置<select name="loc">' + locOptions(S.locations, b.loc) + "</select></label>" +
+        '<label class="field">批號<input name="lot" required value="' + esc(b.lot) + '"></label>' +
+        '<label class="field">效期<input name="exp" type="date" required value="' + esc(b.exp) + '"></label></div>' +
+        "<h4>左到右的尺寸標示（一個數字一欄，目前 " + b.labels.length + " 欄）</h4>" +
+        '<label class="field">空白或逗號分隔，同一個尺寸可以連續出現幾欄<textarea name="labels" rows="3" style="padding:9px 11px;border:1px solid var(--line);border-radius:9px;background:var(--panel);font-family:var(--mono);width:100%">' + esc(b.labels.join(" ")) + "</textarea></label>" +
+        '<div class="row" style="margin-top:10px"><label class="field">從<input name="gFrom" type="number" value="10" style="width:76px"></label><label class="field">到<input name="gTo" type="number" value="48" style="width:76px"></label>' +
+        '<label class="field">間距<input name="gStep" type="number" value="2" min="1" style="width:76px"></label><label class="field">每個尺寸幾欄<input name="gRepeat" type="number" value="2" min="1" style="width:96px"></label>' +
+        '<button type="button" class="btn btn-sm" data-act="gen-labels">快速產生</button></div>' +
+        "<h4>螺絲區塊（由上到下，列數加起來就是整盒的列數）</h4>" + bandRows +
+        '<div style="margin-top:14px"><button class="btn btn-primary">儲存</button></div></form>' +
+        '<p class="muted" style="margin-top:10px">預設是 40 欄 × 11 列。盒子裡還有螺絲時，不能改位置和批號，請用「調撥整盒」。</p>';
+    }, true);
+  }
+
+  function openMoveBox(id) {
+    var box = L.box(S, id);
+    if (!box) return;
+    openDialog("調撥整盒：" + box.name, function () {
+      var cur = L.location(S, box.loc), dests = S.locations.filter(function (l) { return l.id !== box.loc; });
+      return '<p class="muted" style="margin-bottom:12px">現在在 ' + esc(cur.name) + " " + locBadge(cur) + "，共 " + L.boxTotal(S, box) + " 支。整盒會一起搬到新位置，批號和效期不變。</p>" +
+        '<form data-form="movebox" data-id="' + esc(box.id) + '" class="row"><label class="field" style="min-width:280px">搬到<select name="to">' + locOptions(dests, dests[0] && dests[0].id) + "</select></label>" +
+        '<button class="btn btn-primary">確認調撥</button></form>';
+    });
   }
 
   // ---------------- 批號追溯 ----------------
@@ -501,7 +578,8 @@
   }
 
   // ---------------- dialogs ----------------
-  function openDialog(title, fn) {
+  function openDialog(title, fn, wide) {
+    dlg.className = wide ? "wide" : "";
     refreshDlg = function () { dlg.innerHTML = '<div class="dlg"><div class="dlg-h"><h3>' + esc(title) + '</h3><button data-close aria-label="關閉">×</button></div><div class="dlg-b">' + fn() + "</div></div>"; };
     refreshDlg();
     if (!dlg.open) dlg.showModal();
@@ -523,11 +601,11 @@
   function openInbound(loc, sku) {
     openDialog("入庫", function () {
       var groups = {}, order = [];
-      S.products.forEach(function (p) { if (!groups[p.group]) { groups[p.group] = []; order.push(p.group); } groups[p.group].push(p); });
+      S.products.filter(function (p) { return p.kind !== "screw"; }).forEach(function (p) { if (!groups[p.group]) { groups[p.group] = []; order.push(p.group); } groups[p.group].push(p); });
       var skuOpts = order.map(function (g) {
         return '<optgroup label="' + esc(g) + '">' + options(groups[g].map(function (p) { return { v: p.sku, t: p.sku + "　" + p.name }; }), sku) + "</optgroup>";
       }).join("");
-      return '<form data-form="inbound" class="grid"><label class="field">品項<select name="sku">' + skuOpts + "</select></label>" +
+      return '<p class="muted" style="margin-bottom:12px">這裡入骨板。骨釘請到「庫存 → 骨釘盒」，打開盒子點空位增加。</p><form data-form="inbound" class="grid"><label class="field">品項<select name="sku">' + skuOpts + "</select></label>" +
         '<label class="field">入庫到<select name="loc">' + locOptions(S.locations, loc || "co") + "</select></label>" +
         '<label class="field">批號<input name="lot" required></label><label class="field">效期<input name="exp" type="date" required value="' + L.addDays(540) + '"></label>' +
         '<label class="field">數量<input name="qty" type="number" min="1" step="1" value="1" required></label>' +
@@ -616,8 +694,8 @@
       D.main.push({ sku: first.sku, lot: usableLines(D.loc, first.sku)[0].lot, qty: 1, scrap: false });
       render();
     } else if (a === "rm-main") { D.main.splice(+g("i"), 1); render(); }
-    else if (a === "seat-add") { draftScrewAdd(g("sku"), D.sp.lot); render(); }
-    else if (a === "seat-sub") { draftScrewSub(g("sku"), D.sp.lot); render(); }
+    else if (a === "seat-add") { draftScrewAdd(g("sku"), g("lot")); render(); }
+    else if (a === "seat-sub") { draftScrewSub(g("sku"), g("lot")); render(); }
     else if (a === "scrap-one") {
       var e1 = D.screws[+g("idx")];
       if (e1) {
@@ -648,13 +726,22 @@
     else if (a === "open-inbound") openInbound(g("loc"), g("sku"));
     else if (a === "open-transfer") openTransfer(g("from") ? { from: g("from"), sku: g("sku"), lot: g("lot") } : null);
     else if (a === "seat-take" || a === "seat-put") {
-      var sku = g("sku"), lot = g("lot"), d = a === "seat-put" ? 1 : -1, loc = boxLoc;
-      run(function () {
-        var line = L.findLine(S, loc, sku, lot);
-        if (line) L.adjustStock(S, loc, sku, lot, Math.max(0, line.qty + d), "盤點調整");
-        else if (d > 0) L.addStock(S, loc, sku, lot, g("exp"), 1, "盤點調整");
-      });
-    } else if (a === "open-sales") { SD = deepCopy(S.sales.filter(function (o) { return o.id === g("id"); })[0]); render(); window.scrollTo(0, 0); }
+      var dd = a === "seat-put" ? 1 : -1;
+      run(function () { L.boxAdjust(S, g("box"), g("series"), Number(g("len")), dd); });
+    } else if (a === "open-box") openBox(g("id"));
+    else if (a === "new-box") openBoxConfig(null);
+    else if (a === "edit-box") openBoxConfig(g("id"));
+    else if (a === "move-box") openMoveBox(g("id"));
+    else if (a === "del-box") {
+      var bid = g("id");
+      if (window.confirm("確定刪除這個骨釘盒？")) { if (run(function () { L.deleteBox(S, bid); }, "已刪除")) closeDialog(); }
+    } else if (a === "gen-labels") {
+      var fm = el.closest("form"), from = Number(fm.elements.gFrom.value), to = Number(fm.elements.gTo.value), step = Number(fm.elements.gStep.value), rep = Number(fm.elements.gRepeat.value);
+      if (!(step >= 1 && rep >= 1 && to >= from)) return toast("起訖、間距、欄數要填對", true);
+      var gen = [];
+      for (var n = from; n <= to; n += step) for (var k = 0; k < rep; k++) gen.push(n);
+      fm.elements.labels.value = gen.join(" ");
+        } else if (a === "open-sales") { SD = deepCopy(S.sales.filter(function (o) { return o.id === g("id"); })[0]); render(); window.scrollTo(0, 0); }
     else if (a === "sales-new") { SD = newSales(); render(); }
     else if (a === "add-sline") {
       var ln = newSalesLine();
@@ -679,7 +766,7 @@
     }
   });
 
-  function resetPicker() { D.main = []; D.screws = []; D.sp = { series: "", lot: "" }; }
+  function resetPicker() { D.main = []; D.screws = []; D.sp = { box: "" }; }
 
   document.addEventListener("change", function (e) {
     var t = e.target, b = t.getAttribute && t.getAttribute("data-bind"), act = t.getAttribute && t.getAttribute("data-act");
@@ -709,8 +796,7 @@
     else if (b === "main-lot") { D.main[i].lot = t.value; render(); }
     else if (b === "main-qty") { D.main[i].qty = Math.max(1, Math.floor(Number(t.value)) || 1); render(); }
     else if (b === "main-scrap") { D.main[i].scrap = t.checked; }
-    else if (b === "sp-series") { D.sp.series = t.value; D.sp.lot = ""; render(); }
-    else if (b === "sp-lot") { D.sp.lot = t.value; render(); }
+    else if (b === "sp-box") { D.sp.box = t.value; render(); }
     else if (b === "box-loc") { boxLoc = t.value; render(); }
     else if (b === "date") D.date = t.value;
     else if (b === "s-date") SD.date = t.value;
@@ -760,6 +846,18 @@
       if (run(function () { L.addStock(S, v("loc"), v("sku"), v("lot").trim(), v("exp"), Math.floor(Number(v("qty")))); }, "已入庫")) closeDialog();
     } else if (f === "transfer") {
       if (run(function () { L.transfer(S, TR.from, TR.to, TR.sku, TR.lot, TR.qty); }, "已調撥")) closeDialog();
+    } else if (f === "boxcfg") {
+      var bid2 = e.target.getAttribute("data-id");
+      var labels = v("labels").split(/[\s,，、]+/).filter(Boolean).map(Number);
+      var bands = [0, 1, 2].map(function (i) { return { series: v("series" + i), rows: Number(v("rows" + i)) }; }).filter(function (x) { return x.series; });
+      var out = run(function () {
+        var cfgObj = { name: v("name"), loc: v("loc"), lot: v("lot"), exp: v("exp"), labels: labels, bands: bands };
+        return bid2 ? L.updateBox(S, bid2, cfgObj) : L.createBox(S, cfgObj);
+      }, "已儲存骨釘盒");
+      if (out) { closeDialog(); openBox(out.id); }
+    } else if (f === "movebox") {
+      var mid = e.target.getAttribute("data-id");
+      if (run(function () { return L.moveBox(S, mid, v("to")); }, "已調撥整盒")) { closeDialog(); openBox(mid); }
     } else if (f === "adduser") {
       run(function () { L.addUser(S, v("name"), v("role")); e.target.reset(); }, "已新增人員");
     } else if (f === "addloc") {

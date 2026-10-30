@@ -4,8 +4,8 @@
 })(typeof self !== "undefined" ? self : this, function () {
   "use strict";
 
-  var KEY = "hs-service-demo-v2";
-  var VERSION = 2;
+  var KEY = "hs-service-demo-v3";
+  var VERSION = 3;
   var ROLES = ["業務", "內勤", "管理員"];
   var TAX = 0.05;
   var SEAT_CAP = 6;
@@ -203,6 +203,130 @@
       var p = k.split("\u0000");
       findLine(S, p[0], p[1], p[2]).qty -= need_[k];
     });
+  }
+
+  // ---------- screw boxes (a physical rack: columns by size, row bands by screw type) ----------
+  // Real racks list the same size on adjacent columns (14 14 16 16 ...), so a size
+  // can span several columns; its stock fills them in order, column by column.
+  function defaultLabels() {
+    var out = [];
+    for (var n = 10; n <= 48; n += 2) { out.push(n); out.push(n); }
+    return out;
+  }
+  function screwSku(S, series, len) {
+    for (var i = 0; i < S.products.length; i++) {
+      var p = S.products[i];
+      if (p.kind === "screw" && p.series === series && p.len === len) return p.sku;
+    }
+    return null;
+  }
+  function ensureScrewSku(S, series, len) {
+    var sku = screwSku(S, series, len);
+    if (sku) return sku;
+    sku = "SC-" + series + "-" + len;
+    S.products.push({ sku: sku, name: series + " 骨釘 L" + len, price: 800, group: series + " 骨釘", kind: "screw", series: series, len: len });
+    return sku;
+  }
+  function boxBands(S, box) {
+    return box.bands.map(function (b) {
+      var groups = [], byLen = {};
+      box.labels.forEach(function (len, ci) {
+        if (!byLen[len]) { byLen[len] = { len: len, cols: [], sku: screwSku(S, b.series, len) }; groups.push(byLen[len]); }
+        byLen[len].cols.push(ci);
+      });
+      groups.forEach(function (g) {
+        g.cap = g.cols.length * b.rows;
+        g.qty = g.sku ? lineQty(S, box.loc, g.sku, box.lot) : 0;
+      });
+      return { series: b.series, rows: b.rows, groups: groups };
+    });
+  }
+  function boxTotal(S, box) {
+    var n = 0;
+    boxBands(S, box).forEach(function (b) { b.groups.forEach(function (g) { n += g.qty; }); });
+    return n;
+  }
+  function box(S, id) {
+    for (var i = 0; i < S.boxes.length; i++) if (S.boxes[i].id === id) return S.boxes[i];
+    return null;
+  }
+  function checkBoxConfig(S, c) {
+    if (!String(c.name || "").trim()) throw new Error("請填盒子名稱");
+    if (!location(S, c.loc)) throw new Error("請選位置");
+    if (!String(c.lot || "").trim()) throw new Error("批號必填");
+    if (!c.exp) throw new Error("效期必填");
+    if (!c.labels || !c.labels.length) throw new Error("至少要有一欄尺寸標示");
+    if (c.labels.length > 80) throw new Error("最多 80 欄");
+    c.labels.forEach(function (n) { if (!posInt(n)) throw new Error("尺寸標示必須是正整數：" + n); });
+    if (!c.bands || !c.bands.length) throw new Error("至少要有一個螺絲區塊");
+    c.bands.forEach(function (b) {
+      if (!b.series) throw new Error("區塊缺螺絲種類");
+      if (!posInt(b.rows) || b.rows > 30) throw new Error("列數必須是 1 到 30 的整數");
+    });
+  }
+  function createBox(S, c) {
+    need(S, "settings_edit");
+    checkBoxConfig(S, c);
+    var b = { id: uid("B"), name: String(c.name).trim(), loc: c.loc, lot: String(c.lot).trim(), exp: c.exp,
+      labels: c.labels.slice(), bands: c.bands.map(function (x) { return { series: x.series, rows: x.rows }; }) };
+    S.boxes.push(b);
+    log(S, "新增骨釘盒", b.name + "｜" + locName(S, b.loc) + "｜" + b.labels.length + " 欄");
+    return b;
+  }
+  function updateBox(S, id, c) {
+    need(S, "settings_edit");
+    var b = box(S, id);
+    if (!b) throw new Error("找不到骨釘盒");
+    checkBoxConfig(S, c);
+    if (c.loc !== b.loc || String(c.lot).trim() !== b.lot) {
+      if (boxTotal(S, b) > 0) throw new Error("盒內還有螺絲，位置與批號要用「調撥整盒」處理");
+    }
+    b.name = String(c.name).trim(); b.loc = c.loc; b.lot = String(c.lot).trim(); b.exp = c.exp;
+    b.labels = c.labels.slice(); b.bands = c.bands.map(function (x) { return { series: x.series, rows: x.rows }; });
+    log(S, "骨釘盒設定", b.name + "｜" + b.labels.length + " 欄｜" + b.bands.map(function (x) { return x.series + "×" + x.rows; }).join("、"));
+    return b;
+  }
+  function deleteBox(S, id) {
+    need(S, "settings_edit");
+    var b = box(S, id);
+    if (!b) throw new Error("找不到骨釘盒");
+    if (boxTotal(S, b) > 0) throw new Error("盒內還有螺絲，不能刪除");
+    S.boxes = S.boxes.filter(function (x) { return x.id !== id; });
+    log(S, "刪除骨釘盒", b.name);
+  }
+  // +1 / -1 on one size of one band; refuses to overfill the columns for that size.
+  function boxAdjust(S, id, series, len, delta) {
+    need(S, "stock_edit");
+    var b = box(S, id);
+    if (!b) throw new Error("找不到骨釘盒");
+    var band = boxBands(S, b).filter(function (x) { return x.series === series; })[0];
+    var g = band && band.groups.filter(function (x) { return x.len === len; })[0];
+    if (!g) throw new Error("這個盒子沒有 " + series + " 的 " + len + " 尺寸");
+    if (delta > 0) {
+      if (g.qty >= g.cap) throw new Error("這個尺寸的格子已滿");
+      var sku = ensureScrewSku(S, series, len);
+      return addStock(S, b.loc, sku, b.lot, b.exp, 1, "盤點調整");
+    }
+    if (!g.sku || g.qty <= 0) throw new Error("這個尺寸沒有庫存");
+    return adjustStock(S, b.loc, g.sku, b.lot, g.qty - 1, "盤點調整");
+  }
+  // Move every screw in a box to another location in one go (e.g. company -> hospital and back).
+  function moveBox(S, id, to) {
+    need(S, "stock_edit");
+    var b = box(S, id);
+    if (!b) throw new Error("找不到骨釘盒");
+    if (!location(S, to)) throw new Error("請選目的位置");
+    if (to === b.loc) throw new Error("目的位置和現在相同");
+    if (isExpired(b.exp)) throw new Error("已過期的盒子不能調撥");
+    var from = b.loc, moved = 0;
+    boxBands(S, b).forEach(function (band) {
+      band.groups.forEach(function (g) {
+        if (g.sku && g.qty > 0) { transfer(S, from, to, g.sku, b.lot, g.qty); moved += g.qty; }
+      });
+    });
+    b.loc = to;
+    log(S, "調撥整盒", b.name + "｜" + locName(S, from) + " → " + locName(S, to) + "｜" + moved + " 支");
+    return moved;
   }
 
   // ---------- 報刀 ----------
@@ -405,7 +529,7 @@
     S.products.push({ sku: "4C310R04", name: "Hook15 右4", price: 9500, group: "鎖骨鉤型骨板 (Hook)", kind: "plate" });
     S.products.push({ sku: "4C310L04", name: "Hook15 左4", price: 9500, group: "鎖骨鉤型骨板 (Hook)", kind: "plate" });
 
-    [["2.7LS", 10, 20], ["3.5LS", 12, 26], ["3.5CS", 12, 26]].forEach(function (s) {
+    [["2.7LS", 10, 48], ["3.5LS", 10, 48], ["3.5CS", 10, 48]].forEach(function (s) {
       for (var len = s[1]; len <= s[2]; len += 2) {
         S.products.push({ sku: "SC-" + s[0] + "-" + len, name: s[0] + " 骨釘 L" + len, price: 800, group: s[0] + " 骨釘", kind: "screw", series: s[0], len: len });
       }
@@ -424,13 +548,28 @@
     });
     S.lots.push({ id: uid("L"), loc: "h4", sku: "4C310R04", lot: "2210120008", exp: addDays(-20), qty: 1 });
 
-    screwSeries(S).forEach(function (se, si) {
-      ["co", "h0", "h1", "h3", "h4", "r0"].forEach(function (loc, li) {
-        var lot = "SL" + se.series.replace(".", "") + "-" + (2403 + si + li);
-        se.lens.forEach(function (len) {
-          var q = loc === "co" ? 3 + Math.floor(r() * 4) : Math.floor(r() * 5);
-          S.lots.push({ id: uid("L"), loc: loc, sku: se.sku[len], lot: lot, exp: addDays(400 + si * 30), qty: q });
+    S.boxes = [];
+    [
+      ["3.5 VA 上肢器械 A盒", "co", "SL35-2403"], ["3.5 VA 上肢器械 B盒", "co", "SL35-2406"],
+      ["3.5 VA 上肢器械（中榮）", "h0", "SL35-2403"], ["3.5 VA 上肢器械（員基）", "h1", "SL35-2403"], ["3.5 VA 上肢器械（803）", "h4", "SL35-2406"],
+      ["3.5 VA 上肢器械（小胖）", "r0", "SL35-2403"]
+    ].forEach(function (b) {
+      var box = { id: uid("B"), name: b[0], loc: b[1], lot: b[2], exp: addDays(420),
+        labels: defaultLabels(), bands: [{ series: "3.5LS", rows: 5 }, { series: "3.5CS", rows: 6 }] };
+      S.boxes.push(box);
+      boxBands(S, box).forEach(function (band) {
+        band.groups.forEach(function (g) {
+          var q = Math.floor(r() * (g.cap + 1) * (b[1] === "co" ? 1 : 0.55));
+          if (q > 0 && g.sku) S.lots.push({ id: uid("L"), loc: b[1], sku: g.sku, lot: box.lot, exp: box.exp, qty: q });
         });
+      });
+    });
+    var rack27 = { id: uid("B"), name: "2.7 小骨釘盒", loc: "co", lot: "SL27-2404", exp: addDays(450), labels: defaultLabels(), bands: [{ series: "2.7LS", rows: 11 }] };
+    S.boxes.push(rack27);
+    boxBands(S, rack27).forEach(function (band) {
+      band.groups.forEach(function (g) {
+        var q = Math.floor(r() * (g.cap + 1) * 0.6);
+        if (q > 0 && g.sku) S.lots.push({ id: uid("L"), loc: "co", sku: g.sku, lot: rack27.lot, exp: rack27.exp, qty: q });
       });
     });
     S.lots = S.lots.filter(function (l) { return l.qty > 0; });
@@ -500,6 +639,8 @@
     user: user, role: role, can: can, need: need, setPerm: setPerm, addUser: addUser, setUserRole: setUserRole,
     product: product, location: location, locName: locName, customer: customer, plates: plates, screwSeries: screwSeries,
     findLine: findLine, lines: lines, lineQty: lineQty, totalQty: totalQty,
+    defaultLabels: defaultLabels, screwSku: screwSku, boxBands: boxBands, boxTotal: boxTotal, box: box,
+    createBox: createBox, updateBox: updateBox, deleteBox: deleteBox, boxAdjust: boxAdjust, moveBox: moveBox,
     addStock: addStock, adjustStock: adjustStock, transfer: transfer,
     submitReport: submitReport, approveReport: approveReport, rejectReport: rejectReport,
     reportItems: reportItems, reportsCSV: reportsCSV,
