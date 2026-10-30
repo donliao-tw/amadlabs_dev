@@ -151,7 +151,7 @@
       '<label class="hs-field">醫院<select data-bind="hospital">' + options(hospitals.map(function (h) { return { v: h.id, t: h.name }; }), D.hospital) + "</select></label>" +
       '<label class="hs-field">醫師<input data-bind="doctor" list="doctors" value="' + esc(D.doctor) + '" placeholder="輸入或選擇"></label>' +
       '<label class="hs-field">扣庫來源<select data-bind="loc">' + locOptions(S.locations, D.loc) + "</select></label>" +
-      '<label class="hs-field">備註<input data-bind="note" value="' + esc(D.note) + '" placeholder="例如 補貨：備貨1"></label></div>' +
+      '<label class="hs-field hs-field-wide">備註<input data-bind="note" value="' + esc(D.note) + '" placeholder="例如 補貨：備貨1"></label></div>' +
       '<datalist id="doctors">' + Object.keys(docs).map(function (d) { return '<option value="' + esc(d) + '">'; }).join("") + "</datalist>" +
       "<h4>骨板／主品項</h4>" + (rows || '<div class="hs-muted" style="margin-bottom:8px">尚未新增品項</div>') +
       '<button type="button" class="hs-btn hs-btn-sm" data-act="add-main">＋ 新增品項</button>' +

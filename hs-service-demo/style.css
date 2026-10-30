@@ -104,7 +104,15 @@ dialog::backdrop { background: rgba(0, 0, 0, 0.55); }
 .hs-toast.err { background: #d64545; color: #fff; }
 
 @media (max-width: 720px) {
+  .hs-wrap { padding: 0 12px; }
+  .hs-card { padding: 14px; }
+  .hs-grid { grid-template-columns: 1fr 1fr; gap: 10px; }
+  .hs-field-wide { grid-column: 1 / -1; }
+  .hs-stats { grid-template-columns: 1fr 1fr; gap: 10px; }
+  .hs-field input, .hs-field select { font-size: 0.9rem; padding: 8px; }
   .hs-mainrow { grid-template-columns: 1fr 1fr; }
+  .hs-mainrow > :first-child { grid-column: 1 / -1; }
+  .hs-trays { grid-template-columns: 1fr; }
   .hs-operator span { display: none; }
   .hs-actions { margin-left: 0; width: 100%; }
 }
