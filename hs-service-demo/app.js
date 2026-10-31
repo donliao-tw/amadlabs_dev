@@ -678,44 +678,102 @@
   }
 
   // ---------------- 統計 ----------------
-  function bars(rows, fmt) {
+  // The form follows the question: a trend over time is a line, a monthly total is a column,
+  // a ranking where exact figures matter is a table, a part-of-whole with severity is a
+  // segmented bar, and a single number is just a number.
+  function monthLabel(m) { return Number(m.slice(5)) + "月"; }
+  function wan(v) { return v >= 10000 ? (v / 10000).toFixed(1).replace(/\.0$/, "") + "萬" : num(v); }
+
+  function chartSvg(points, fmt, kind) {
+    var W = 360, H = 156, pl = 12, pr = 12, pt = 24, pb = 28, n = points.length;
+    var peak = Math.max.apply(null, points.map(function (q) { return q.v; })) || 1, max = peak * 1.18;
+    var iw = W - pl - pr, ih = H - pt - pb;
+    var x = function (i) { return kind === "col" ? pl + iw * (i + 0.5) / n : pl + (n === 1 ? iw / 2 : iw * i / (n - 1)); };
+    var y = function (v) { return pt + ih - ih * v / max; };
+    var out = '<svg class="chart" viewBox="0 0 ' + W + " " + H + '" role="img">' +
+      '<line class="grid" x1="' + pl + '" x2="' + (W - pr) + '" y1="' + (pt + ih) + '" y2="' + (pt + ih) + '"/>' +
+      '<line class="grid dashed" x1="' + pl + '" x2="' + (W - pr) + '" y1="' + y(peak).toFixed(1) + '" y2="' + y(peak).toFixed(1) + '"/>';
+    if (kind === "col") {
+      var bw = iw / n * 0.56;
+      points.forEach(function (q, i) {
+        out += '<rect class="col" x="' + (x(i) - bw / 2).toFixed(1) + '" y="' + y(q.v).toFixed(1) + '" width="' + bw.toFixed(1) + '" height="' + Math.max(0, pt + ih - y(q.v)).toFixed(1) + '" rx="3"/>' +
+          '<text class="val" x="' + x(i).toFixed(1) + '" y="' + (y(q.v) - 6).toFixed(1) + '" text-anchor="middle">' + (fmt ? fmt(q.v) : q.v) + "</text>";
+      });
+    } else {
+      var d = points.map(function (q, i) { return (i ? "L" : "M") + x(i).toFixed(1) + " " + y(q.v).toFixed(1); }).join(" ");
+      out += '<path class="area" d="' + d + " L" + x(n - 1).toFixed(1) + " " + (pt + ih) + " L" + x(0).toFixed(1) + " " + (pt + ih) + ' Z"/><path class="ln" d="' + d + '"/>';
+      points.forEach(function (q, i) {
+        out += '<circle class="dot" cx="' + x(i).toFixed(1) + '" cy="' + y(q.v).toFixed(1) + '" r="3.4"/>' +
+          '<text class="val" x="' + x(i).toFixed(1) + '" y="' + (y(q.v) - 9).toFixed(1) + '" text-anchor="middle">' + (fmt ? fmt(q.v) : q.v) + "</text>";
+      });
+    }
+    points.forEach(function (q, i) { out += '<text class="lab" x="' + x(i).toFixed(1) + '" y="' + (H - 9) + '" text-anchor="middle">' + esc(q.l) + "</text>"; });
+    return out + "</svg>";
+  }
+
+  function ctbl(headers, rows) {
+    return '<div class="table-wrap"><table class="table compact"><thead><tr>' + headers.map(function (h) { return "<th>" + h + "</th>"; }).join("") + "</tr></thead><tbody>" + rows + "</tbody></table></div>";
+  }
+  // Ranked list: exact figure plus share of the whole, with a small bar only as a visual cue.
+  function rankTable(rows, total, unit, nameHead) {
     if (!rows.length) return '<div class="empty">還沒有資料</div>';
-    var max = Math.max.apply(null, rows.map(function (r) { return r.v; })) || 1;
-    return '<div class="bars">' + rows.map(function (r) {
-      return '<div class="bar-row"><span class="bar-l" title="' + esc(r.l) + '">' + esc(r.l) + '</span><span class="bar-t"><i style="width:' + Math.max(2, Math.round(r.v / max * 100)) + '%"></i></span><b class="bar-v">' + (fmt ? fmt(r.v) : r.v) + "</b></div>";
-    }).join("") + "</div>";
+    var max = rows[0].v || 1;
+    return ctbl(["#", nameHead, unit, "占比"], rows.map(function (r, i) {
+      var pct = total ? r.v / total * 100 : 0;
+      return '<tr><td class="num rank">' + (i + 1) + "</td><td>" + esc(r.l) + '</td><td class="num"><b>' + (r.fmt ? r.fmt(r.v) : r.v) + '</b></td><td class="share"><span class="mini"><i style="width:' + Math.max(3, Math.round(r.v / max * 100)) + '%"></i></span><em>' + pct.toFixed(0) + "%</em></td></tr>";
+    }).join(""));
   }
   function top(obj, n) {
     return Object.keys(obj).map(function (k) { return { l: k, v: obj[k] }; }).sort(function (a, b) { return b.v - a.v; }).slice(0, n);
+  }
+  function delta(cur, prev, fmt) {
+    var d = cur - prev;
+    if (!d) return '<span class="delta flat">與上月持平</span>';
+    return '<span class="delta ' + (d > 0 ? "up" : "down") + '">' + (d > 0 ? "▲ " : "▼ ") + (fmt ? fmt(Math.abs(d)) : Math.abs(d)) + " 較上月</span>";
   }
 
   function renderStats() {
     if (!can("stats_view")) return noPerm("查看數據統計");
     var months = L.lastMonths(6), rs = L.reportStats(S, months), priceOn = can("view_price") && can("sales_view");
-    var cards = [];
-    cards.push(card("REPORTS", "報刀數量（近 6 個月，共 " + rs.count + " 張）", bars(months.map(function (m) { return { l: m, v: rs.byMonth[m] }; }))));
-    cards.push(card("HOSPITALS", "各醫院報刀數", bars(top(rs.byHospital, 8))));
-    cards.push(card("DOCTORS", "醫師 Top 5", bars(top(rs.byDoctor, 5))));
-    cards.push(card("USAGE", "使用量 Top 10 品項", bars(top(rs.items, 10))));
-    cards.push(card("SCRAP", "報廢", '<p style="font:600 1.6rem var(--mono)">' + rs.scrap + ' <span class="muted" style="font:400 0.85rem var(--sans)">／ 使用 ' + rs.qty + ' 件，佔 ' + (rs.qty ? (rs.scrap / rs.qty * 100).toFixed(1) : "0.0") + "%</span></p>" +
-      '<p class="muted" style="margin-top:8px">報廢比例偏高的醫院或品項，值得追問原因。</p>'));
-    if (priceOn) {
-      var ss = L.salesStats(S, months);
-      cards.push(card("SALES", "銷貨額（未稅，近 6 個月）", bars(months.map(function (m) { return { l: m, v: ss.byMonth[m] }; }), num) + '<p class="muted" style="margin-top:10px">合計 ' + money(ss.total) + "</p>"));
-      cards.push(card("CUSTOMERS", "客戶銷貨排行（未稅）", bars(top(ss.byCustomer, 5), num)));
-    }
+    var cur = months[5], prev = months[4];
+    var ss = priceOn ? L.salesStats(S, months) : null;
+
+    var kpis = '<div class="kpis"><div class="kpi"><small>本月報刀</small><b>' + rs.byMonth[cur] + " 張</b>" + delta(rs.byMonth[cur], rs.byMonth[prev]) + "</div>" +
+      '<div class="kpi"><small>報廢率（近 6 個月）</small><b>' + (rs.qty ? (rs.scrap / rs.qty * 100).toFixed(1) : "0.0") + '%</b><span class="delta flat">報廢 ' + rs.scrap + " ／ 使用 " + rs.qty + "</span></div>" +
+      (priceOn ? '<div class="kpi"><small>本月銷貨額（未稅）</small><b>' + money(ss.byMonth[cur]) + "</b>" + delta(ss.byMonth[cur], ss.byMonth[prev], num) + "</div>" : "") + "</div>";
+
+    var grid = [];
+    grid.push(card("趨勢", "報刀數量（近 6 個月）", chartSvg(months.map(function (m) { return { l: monthLabel(m), v: rs.byMonth[m] }; }), null, "line")));
+    if (priceOn) grid.push(card("每月總額", "銷貨額（未稅，近 6 個月）", chartSvg(months.map(function (m) { return { l: monthLabel(m), v: ss.byMonth[m] }; }), wan, "col")));
+    grid.push(card("排行", "各醫院報刀數", rankTable(top(rs.byHospital, 8), rs.count, "張數", "醫院")));
+    grid.push(card("排行", "醫師 Top 5", rankTable(top(rs.byDoctor, 5), rs.count, "張數", "醫師")));
+    var out = kpis + '<div class="stat-grid">' + grid.join("") + "</div>";
+
+    out += '<div class="stat-grid" style="margin-top:18px">' + card("排行", "使用量 Top 10 品項", rankTable(top(rs.items, 10), rs.qty, "數量", "品項")) +
+      (priceOn ? card("排行", "客戶銷貨排行（未稅）", rankTable(top(ss.byCustomer, 5).map(function (r) { return { l: r.l, v: r.v, fmt: num }; }), ss.total, "金額", "客戶")) : "") + "</div>";
+
     if (can("stock_view")) {
-      var byType = { company: { p: 0, s: 0 }, hospital: { p: 0, s: 0 }, rep: { p: 0, s: 0 } }, exp = { "已過期": 0, "30 天內": 0, "31–60 天": 0, "61–90 天": 0, "90 天以上": 0 };
+      var byType = { company: { p: 0, s: 0 }, hospital: { p: 0, s: 0 }, rep: { p: 0, s: 0 } };
+      var exp = [["已過期", 0, "expired"], ["30 天內", 0, "d30"], ["31–60 天", 0, "d60"], ["61–90 天", 0, "d90"], ["90 天以上", 0, "ok"]];
       S.lots.forEach(function (l) {
         if (l.qty <= 0) return;
-        var loc = L.location(S, l.loc), p = L.product(S, l.sku), d = L.expDays(l.exp);
-        if (loc && p) byType[loc.type][p.kind === "screw" ? "s" : "p"] += l.qty;
-        exp[d < 0 ? "已過期" : d <= 30 ? "30 天內" : d <= 60 ? "31–60 天" : d <= 90 ? "61–90 天" : "90 天以上"] += l.qty;
+        var loc = L.location(S, l.loc), pr = L.product(S, l.sku), d = L.expDays(l.exp);
+        if (loc && pr) byType[loc.type][pr.kind === "screw" ? "s" : "p"] += l.qty;
+        exp[d < 0 ? 0 : d <= 30 ? 1 : d <= 60 ? 2 : d <= 90 ? 3 : 4][1] += l.qty;
       });
-      cards.push(card("STOCK", "庫存分布（件／支）", bars(["company", "hospital", "rep"].map(function (t) { return { l: TYPE[t] + "・骨板", v: byType[t].p }; }).concat(["company", "hospital", "rep"].map(function (t) { return { l: TYPE[t] + "・骨釘", v: byType[t].s }; })))));
-      cards.push(card("EXPIRY", "效期分布（依數量）", bars(Object.keys(exp).map(function (k) { return { l: k, v: exp[k] }; }))));
+      var totalExp = exp.reduce(function (a, e) { return a + e[1]; }, 0) || 1;
+      var stackBar = '<div class="stack">' + exp.filter(function (e) { return e[1] > 0; }).map(function (e) {
+        return '<span class="seg seg-' + e[2] + '" style="flex:' + e[1] + '" title="' + e[0] + " " + e[1] + '"></span>';
+      }).join("") + '</div><ul class="stack-legend">' + exp.map(function (e) {
+        return '<li><i class="seg-' + e[2] + '"></i>' + e[0] + "<b>" + e[1] + "</b><em>" + (e[1] / totalExp * 100).toFixed(0) + "%</em></li>";
+      }).join("") + "</ul>";
+      out += '<div class="stat-grid" style="margin-top:18px">' +
+        card("明細", "各位置庫存", ctbl(["位置", "骨板（件）", "骨釘（支）"], ["company", "hospital", "rep"].map(function (t) {
+          return "<tr><td>" + TYPE[t] + (t === "company" ? "（可立即調動）" : "") + '</td><td class="num"><b>' + byType[t].p + '</b></td><td class="num"><b>' + byType[t].s + "</b></td></tr>";
+        }).join(""))) +
+        card("占比", "效期分布（依數量）", stackBar) + "</div>";
     }
-    return '<div class="stat-grid">' + cards.join("") + "</div>";
+    return out;
   }
 
   // ---------------- 批號追溯 ----------------
@@ -863,7 +921,7 @@
   // On narrow screens CSS turns each table row into a small card; it needs each cell's column name.
   function labelTables(root) {
     Array.prototype.forEach.call(root.querySelectorAll("table.table"), function (t) {
-      if (t.classList.contains("matrix") || t.classList.contains("perm-table")) return;
+      if (t.classList.contains("matrix") || t.classList.contains("perm-table") || t.classList.contains("compact")) return;
       t.classList.add("stack");
       var heads = Array.prototype.map.call(t.querySelectorAll("thead th"), function (h) { return h.textContent.trim(); });
       Array.prototype.forEach.call(t.querySelectorAll("tbody tr"), function (tr) {
