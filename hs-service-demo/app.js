@@ -610,7 +610,7 @@
   function mapCardHtml() {
     if (!MAP) return "";
     var ms = mapMarkers(false);
-    if (!mapView) mapView = mapFit(ms);
+    if (!mapView) mapView = { k: 1, x: 0, y: 0 };
     var land = MAP.counties.map(function (c) { return '<path class="tw-county" d="' + c.d + '"><title>' + esc(c.n) + "</title></path>"; }).join("");
     var layers = [["company", "公司倉", "sq"], ["hospital", "醫院寄庫", "ci"], ["rep", "執勤中業務", "di"]].map(function (x) {
       return '<label class="layer"><input type="checkbox" data-bind="map-layer" data-layer="' + x[0] + '"' + (mapLayers[x[0]] ? " checked" : "") + '><i class="lg lg-' + x[2] + '"></i>' + x[1] + "</label>";

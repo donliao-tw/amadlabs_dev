@@ -67,7 +67,7 @@ input, select, textarea { font-size: 16px; }
 .who select { width: 100%; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); }
 .role-chip { align-self: flex-start; font: 600 0.68rem var(--mono); letter-spacing: 0.06em; padding: 2px 8px; border-radius: 999px; background: var(--accent-soft); color: var(--accent); }
 
-.main { padding: 26px 30px 70px; min-width: 0; max-width: 1240px; }
+.main { padding: 26px 30px 70px; min-width: 0; }
 .page-head { margin-bottom: 18px; }
 .page-head .eyebrow { font: 600 0.66rem var(--mono); letter-spacing: 0.16em; color: var(--accent); text-transform: uppercase; }
 .page-head h1 { font-size: 1.55rem; line-height: 1.25; margin-top: 2px; }
@@ -378,14 +378,11 @@ td.share em { display: inline-block; min-width: 32px; font: normal 500 0.76rem v
 .stack-legend em { min-width: 36px; text-align: right; font: normal 500 0.76rem var(--mono); color: var(--muted); }
 
 /* ---------- stock page: list on the left, map on the right ---------- */
-.main.wide-page { max-width: 1560px; margin-inline: auto; }
-.stock-layout { display: grid; grid-template-columns: minmax(0, 860px) minmax(380px, 1fr); gap: 20px; align-items: start; }
+.stock-layout { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(380px, 1fr); gap: 20px; align-items: start; }
 .stock-main { min-width: 0; }
 :root { color-scheme: light dark; }
 .stock-side { position: sticky; top: 20px; min-width: 0; }
 .stock-side .card { margin-bottom: 0; }
-.stock-main .matrix-wrap { width: fit-content; max-width: 100%; }
-.stock-main .table.matrix { width: auto; }
 .stock-main .table.matrix th, .stock-main .table.matrix td { padding: 7px 14px; }
 .focus-chip { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; margin-top: 12px; padding: 8px 12px; border: 1px solid var(--accent); border-radius: 10px; background: var(--accent-soft); font-size: 0.86rem; }
 .focus-chip span { color: var(--muted); }
