@@ -5,6 +5,7 @@
   var S = L.load();
   var tab = "todo";
   var stockView = "plates";
+  var moveKind = "all";
   var stockScope = "company";
   var stockQ = "";
   var acctView = "ar";
@@ -487,16 +488,46 @@
     });
   }
 
-  // Stock movements only: in, transfer, count adjustment, scrap, report deductions, shipments, box edits.
-  var MOVE_ACTIONS = ["入庫", "調撥", "調撥整盒", "盤點調整", "報廢", "退回供應商", "報刀審核通過", "銷貨憑單覆核出貨", "新增骨釘盒", "骨釘盒設定", "刪除骨釘盒"];
+  // 最新異動: one row per stock line that changed, newest first, from the append-only ledger.
+  var MOVE_GROUPS = [["all", "全部", null], ["in", "入庫", ["入庫", "新增骨釘盒"]], ["tr", "調撥", ["調撥", "調撥整盒"]],
+    ["out", "扣庫", ["報刀扣庫", "銷貨出貨"]], ["adj", "盤點", ["盤點調整", "骨釘盒盤點", "骨釘盒設定", "刪除骨釘盒"]]];
+  function moveSource(m) {
+    var r = m.ref;
+    if (!r) return '<span class="muted">—</span>';
+    if (r.kind === "report") return '<button class="btn btn-sm" data-act="open-report" data-id="' + esc(r.id) + '">報刀單</button>';
+    if (r.kind === "sales") return '<button class="btn btn-sm" data-act="open-sales" data-id="' + esc(r.id) + '"' + (can("sales_view") ? "" : " disabled") + ">銷貨憑單</button>";
+    if (r.kind === "box" && L.box(S, r.id)) return '<button class="btn btn-sm" data-act="open-box" data-id="' + esc(r.id) + '">骨釘盒</button>';
+    return '<span class="muted">—</span>';
+  }
   function movesView() {
-    var rows = S.log.filter(function (e) { return MOVE_ACTIONS.indexOf(e.action) >= 0; }).slice(0, 60);
-    if (!rows.length) return '<div class="empty">還沒有庫存異動。</div>';
-    return '<p class="muted" style="margin:0 0 10px">庫存的進出都會留紀錄，最新的在最上面（最近 ' + rows.length + " 筆）。</p>" +
-      '<div class="table-wrap"><table class="table"><thead><tr><th>時間</th><th>動作</th><th>內容</th><th>人員</th></tr></thead><tbody>' +
-      rows.map(function (e) {
-        return '<tr><td class="code">' + esc(e.ts) + '</td><td><span class="badge ' + (e.action === "報廢" ? "scrap" : "") + '">' + esc(e.action) + "</span></td><td>" + esc(e.detail) + "</td><td>" + esc(e.user) + "</td></tr>";
+    var grp = MOVE_GROUPS.filter(function (g) { return g[0] === moveKind; })[0] || MOVE_GROUPS[0];
+    var chips = '<div class="seg" style="margin-bottom:12px">' + MOVE_GROUPS.map(function (g) {
+      return '<button data-act="move-kind" data-v="' + g[0] + '" aria-pressed="' + (g[0] === grp[0]) + '">' + g[1] + "</button>";
+    }).join("") + "</div>";
+    var all = (S.moves || []).filter(function (m) { return inScope(m.loc) && (!grp[2] || grp[2].indexOf(m.kind) >= 0); });
+    var rows = all.slice(0, 80);
+    if (!rows.length) return chips + '<div class="empty">這個範圍還沒有庫存異動。</div>';
+    return chips + '<p class="muted" style="margin:0 0 10px">每一筆是一個品項批號在一個位置的增減，最新在最上面。共 ' + all.length + " 筆" + (all.length > rows.length ? "，顯示最新 " + rows.length + " 筆" : "") + "。</p>" +
+      '<div class="table-wrap"><table class="table moves"><thead><tr><th>時間 / 人員</th><th>類型 / 說明</th><th>品項</th><th class="num">增減</th><th class="num">結餘</th><th>位置 / 批號</th><th>來源</th></tr></thead><tbody>' +
+      rows.map(function (m) {
+        var p = L.product(S, m.sku), item = p && p.kind === "screw" ? esc(p.name) : '<span class="code">' + esc(m.sku) + "</span> " + esc(pName(m.sku));
+        return '<tr><td><span class="code">' + esc(m.ts.slice(5, 16)) + '</span><small class="sub2">' + esc(m.user) + '</small></td><td><span class="badge">' + esc(m.kind) + "</span>" + (m.note ? '<small class="sub2">' + esc(m.note) + "</small>" : "") +
+          "</td><td>" + item + '</td><td class="num"><b class="' + (m.delta > 0 ? "mv-up" : "mv-down") + '">' + (m.delta > 0 ? "+" : "−") + Math.abs(m.delta) + '</b></td><td class="num">' + m.after +
+          "</td><td>" + esc(L.locName(S, m.loc)) + '<small class="sub2 code">' + esc(m.lot) + "</small></td><td>" + moveSource(m) + "</td></tr>";
       }).join("") + "</tbody></table></div>";
+  }
+
+  function openReport(id) {
+    var r = S.reports.filter(function (x) { return x.id === id; })[0];
+    if (!r) return toast("找不到這張報刀單", true);
+    openDialog("報刀單 " + r.date, function () {
+      var items = L.reportItems(r).map(function (it) {
+        return "<tr><td class=\"code\">" + esc(it.sku) + "</td><td>" + esc(pName(it.sku)) + '</td><td class="code">' + esc(it.lot) + '</td><td class="num">' + it.qty + "</td><td>" + (it.scrap ? '<span class="badge scrap">報廢</span>' : "") + "</td></tr>";
+      }).join("");
+      return '<dl class="kv"><dt>醫院</dt><dd>' + esc(L.locName(S, r.hospital)) + "</dd><dt>醫師</dt><dd>" + esc(r.doctor) + "</dd><dt>扣庫來源</dt><dd>" + esc(L.locName(S, r.loc)) + "</dd><dt>狀態</dt><dd>" + esc(L.STATUS[r.status]) + "</dd>" +
+        (r.note ? "<dt>備註</dt><dd>" + esc(r.note) + "</dd>" : "") + (r.createdBy ? "<dt>送出</dt><dd>" + esc(r.createdBy) + " " + esc(r.createdAt || "") + "</dd>" : "") +
+        (r.reviewedBy ? "<dt>審核</dt><dd>" + esc(r.reviewedBy) + " " + esc(r.reviewedAt || "") + "</dd>" : "") + "</dl>" + tbl(["型號", "品名", "批號", "數量", ""], items);
+    });
   }
 
   function platesMatrix() {
@@ -1164,6 +1195,8 @@
       URL.revokeObjectURL(link.href);
     } else if (a === "stock-view") { stockView = g("v"); render(); }
     else if (a === "trace-lot") { traceQ = g("lot"); render(); }
+    else if (a === "move-kind") { moveKind = g("v"); render(); }
+    else if (a === "open-report") openReport(g("id"));
     else if (a === "stock-scope") { stockScope = g("v"); stockLoc = null; render(); }
     else if (a === "acct-view") { acctView = g("v"); render(); }
     else if (a === "pay-order") openPay(g("id"));

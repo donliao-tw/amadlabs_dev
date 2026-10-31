@@ -179,6 +179,34 @@
     return n;
   }
 
+  // ---------- 庫存異動帳 ----------
+  // Every operation that can change S.lots is wrapped (see the end of this file): the stock is
+  // snapshotted before and after, and each changed (location, sku, lot) becomes one ledger row with
+  // the delta, the balance, and the document that caused it. The ledger is append-only.
+  function lotMap(S) {
+    var m = {};
+    S.lots.forEach(function (l) { var k = l.loc + " " + l.sku + " " + l.lot; m[k] = (m[k] || 0) + l.qty; });
+    return m;
+  }
+  function recordMoves(S, before, meta) {
+    var after = lotMap(S), keys = Object.keys(before).concat(Object.keys(after).filter(function (k) { return !(k in before); })), ts = nowStr(), rows = [];
+    keys.forEach(function (k) {
+      var b = before[k] || 0, a = after[k] || 0;
+      if (a === b) return;
+      var p = k.split(" ");
+      rows.push({ id: uid("M"), ts: ts, user: S.operator, kind: meta.kind, loc: p[0], sku: p[1], lot: p[2], delta: a - b, after: a, ref: meta.ref || null, note: meta.note || "" });
+    });
+    if (!S.moves) S.moves = [];
+    S.moves = rows.reverse().concat(S.moves).slice(0, 1500);
+  }
+  function tracked(fn, metaOf) {
+    return function (S) {
+      var before = lotMap(S), res = fn.apply(this, arguments);
+      recordMoves(S, before, metaOf.apply(null, [S, res].concat([].slice.call(arguments, 1))));
+      return res;
+    };
+  }
+
   // ---------- stock movements ----------
   function addStock(S, loc, sku, lot, exp, qty, reason) {
     need(S, "stock_edit");
@@ -753,7 +781,7 @@
         { id: "c102", code: "102", name: "範例醫療器材行", addr: "彰化縣範例鎮示範街 28 號", contact: "李先生", tel: "04-7000-0002" },
         { id: "c103", code: "103", name: "測試聯合診所", addr: "雲林縣示範市測試路 5 號", contact: "陳先生", tel: "05-5000-0003" }
       ],
-      products: [], lots: [], reports: [], sales: [], payments: [], journals: [], log: []
+      products: [], lots: [], moves: [], reports: [], sales: [], payments: [], journals: [], log: []
     };
     ["中榮", "員基", "鹿基", "彰基", "803", "二基"].forEach(function (n, i) {
       S.locations.push({ id: "h" + i, name: n, type: "hospital" });
@@ -918,6 +946,7 @@
       if (raw) {
         var S = JSON.parse(raw);
         if (S && S.v === 5) { applyGeoDefaults(S); S.v = VERSION; }
+        if (S && !S.moves) S.moves = [];
         if (S && S.v === VERSION) return S;
       }
     } catch (e) { /* fall through to a fresh seed */ }
@@ -930,6 +959,18 @@
     try { localStorage.removeItem(KEY); } catch (e) { /* ignore */ }
     return seed();
   }
+
+  // ledger hooks: reassigning the declarations also covers internal callers (seed, approvals)
+  addStock = tracked(addStock, function (S, res, loc, sku, lot, exp, qty, reason) { return { kind: reason || "入庫" }; });
+  adjustStock = tracked(adjustStock, function (S, res, loc, sku, lot, newQty, reason) { return { kind: reason || "盤點調整" }; });
+  transfer = tracked(transfer, function (S, res, from, to) { return { kind: "調撥", note: locName(S, from) + " → " + locName(S, to) }; });
+  moveBox = tracked(moveBox, function (S, res, id) { var b = box(S, id); return { kind: "調撥整盒", ref: { kind: "box", id: id }, note: b ? b.name : "" }; });
+  createBox = tracked(createBox, function (S, b) { return { kind: "新增骨釘盒", ref: { kind: "box", id: b.id }, note: b.name }; });
+  updateBox = tracked(updateBox, function (S, res, id) { var b = box(S, id); return { kind: "骨釘盒設定", ref: { kind: "box", id: id }, note: b ? b.name : "" }; });
+  deleteBox = tracked(deleteBox, function (S, res, id) { return { kind: "刪除骨釘盒", note: "" }; });
+  toggleSlot = tracked(toggleSlot, function (S, res, boxId) { var b = box(S, boxId); return { kind: "骨釘盒盤點", ref: { kind: "box", id: boxId }, note: b ? b.name : "" }; });
+  approveReport = tracked(approveReport, function (S, r) { return { kind: "報刀扣庫", ref: { kind: "report", id: r.id }, note: r.date + " " + locName(S, r.hospital) + " " + r.doctor }; });
+  confirmSales = tracked(confirmSales, function (S, o) { return { kind: "銷貨出貨", ref: { kind: "sales", id: o.id }, note: o.no }; });
 
   return {
     ROLES: ROLES, CAPS: CAPS, STATUS: STATUS, SALES_STATUS: SALES_STATUS, TAX: TAX, 

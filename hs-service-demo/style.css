@@ -435,3 +435,12 @@ td.share em { display: inline-block; min-width: 32px; font: normal 500 0.76rem v
   .stock-main .table.matrix th, .stock-main .table.matrix td { padding: 7px 10px; }
   .tw-box { height: 300px; }
 }
+
+/* ---------- stock ledger + detail lists ---------- */
+.mv-up { color: var(--accent); }
+.mv-down { color: var(--red); }
+dl.kv { display: grid; grid-template-columns: max-content 1fr; gap: 6px 18px; margin: 0 0 16px; font-size: 0.88rem; }
+dl.kv dt { color: var(--muted); font: 600 0.7rem var(--mono); letter-spacing: 0.08em; padding-top: 3px; }
+dl.kv dd { margin: 0; }
+.table.moves td { vertical-align: top; }
+.table.moves .sub2 { display: block; margin-top: 2px; color: var(--muted); font-size: 0.72rem; white-space: normal; }
