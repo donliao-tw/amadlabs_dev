@@ -376,3 +376,62 @@ td.share em { display: inline-block; min-width: 32px; font: normal 500 0.76rem v
 .stack-legend i { width: 10px; height: 10px; border-radius: 3px; flex-shrink: 0; }
 .stack-legend b { margin-left: auto; font: 600 0.82rem var(--mono); }
 .stack-legend em { min-width: 36px; text-align: right; font: normal 500 0.76rem var(--mono); color: var(--muted); }
+
+/* ---------- stock page: list on the left, map on the right ---------- */
+.main.wide-page { max-width: 1560px; margin-inline: auto; }
+.stock-layout { display: grid; grid-template-columns: minmax(0, 860px) minmax(380px, 1fr); gap: 20px; align-items: start; }
+.stock-main { min-width: 0; }
+.stock-side { position: sticky; top: 20px; min-width: 0; }
+.stock-side .card { margin-bottom: 0; }
+.stock-main .matrix-wrap { width: fit-content; max-width: 100%; }
+.stock-main .table.matrix { width: auto; }
+.stock-main .table.matrix th, .stock-main .table.matrix td { padding: 7px 14px; }
+.focus-chip { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; margin-top: 12px; padding: 8px 12px; border: 1px solid var(--accent); border-radius: 10px; background: var(--accent-soft); font-size: 0.86rem; }
+.focus-chip span { color: var(--muted); }
+.focus-chip .btn { margin-left: auto; }
+
+.tw-box { position: relative; height: clamp(360px, 62vh, 640px); border: 1px solid var(--line); border-radius: 12px; background: var(--panel); overflow: hidden; }
+.tw-svg { display: block; width: 100%; height: 100%; cursor: grab; touch-action: none; user-select: none; }
+.tw-svg.dragging { cursor: grabbing; }
+.tw-county { fill: var(--surface); stroke: var(--line); stroke-width: 1; vector-effect: non-scaling-stroke; stroke-linejoin: round; }
+.tw-county:hover { fill: var(--accent-soft); }
+.tw-ctl { position: absolute; top: 10px; right: 10px; display: flex; flex-direction: column; gap: 6px; }
+.tw-ctl .btn { padding: 5px 10px; background: var(--surface); }
+.tw-tip { position: absolute; z-index: 3; max-width: 230px; padding: 8px 11px; border-radius: 9px; background: var(--ink); color: var(--bg); font-size: 0.78rem; line-height: 1.55; white-space: pre-line; pointer-events: none; box-shadow: var(--shadow); }
+
+.mk { cursor: pointer; }
+.mk-shape { fill: var(--surface); stroke: var(--ink); stroke-width: 2; }
+.mk-company .mk-shape { fill: var(--accent); stroke: var(--accent); }
+.mk-hospital .mk-shape { fill: var(--panel); stroke: var(--ink); }
+.mk-rep .mk-shape { fill: var(--amber); stroke: var(--amber); }
+.mk.warn .mk-shape { stroke: var(--amber); stroke-width: 3.2; }
+.mk.exp .mk-shape { stroke: var(--red); stroke-width: 3.2; }
+.mk.sel .mk-shape { fill: var(--accent); stroke: var(--accent); }
+.mk.dim { opacity: 0.32; }
+.mk:hover .mk-shape { stroke-width: 3.4; }
+.mk-label { fill: var(--ink); font: 600 11px var(--sans); paint-order: stroke; stroke: var(--surface); stroke-width: 3px; stroke-linejoin: round; opacity: 0; transition: opacity 0.15s; pointer-events: none; }
+.show-labels .mk-label, .mk.sel .mk-label, .mk:hover .mk-label { opacity: 1; }
+.pulse { fill: none; stroke: var(--amber); stroke-width: 2; opacity: 0.6; transform-box: fill-box; transform-origin: center; animation: twPulse 1.8s ease-out infinite; }
+@keyframes twPulse { from { transform: scale(0.55); opacity: 0.8; } to { transform: scale(1.5); opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .pulse { animation: none; } }
+
+.tw-layers { display: flex; flex-wrap: wrap; gap: 6px 16px; margin: 12px 0 4px; }
+.layer { display: inline-flex; align-items: center; gap: 7px; font-size: 0.84rem; cursor: pointer; }
+.layer input { accent-color: var(--accent); }
+.lg { display: inline-block; width: 11px; height: 11px; border: 2px solid var(--ink); background: var(--panel); }
+.lg-sq { border-radius: 3px; background: var(--accent); border-color: var(--accent); }
+.lg-ci { border-radius: 50%; }
+.lg-di { transform: rotate(45deg) scale(0.85); background: var(--amber); border-color: var(--amber); }
+.tw-sel { margin-top: 10px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); }
+.tw-sel-h { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; }
+.tw-note { margin-top: 10px; font-size: 0.72rem; }
+
+@media (max-width: 1280px) {
+  .stock-layout { grid-template-columns: minmax(0, 1fr); }
+  .stock-side { position: static; order: -1; }
+  .tw-box { height: clamp(300px, 52vh, 480px); }
+}
+@media (max-width: 900px) {
+  .stock-main .table.matrix th, .stock-main .table.matrix td { padding: 7px 10px; }
+  .tw-box { height: 300px; }
+}

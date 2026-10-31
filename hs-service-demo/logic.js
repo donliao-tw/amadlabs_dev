@@ -5,7 +5,7 @@
   "use strict";
 
   var KEY = "hs-service-demo-v5";
-  var VERSION = 5;
+  var VERSION = 6;
   var ROLES = ["業務", "內勤", "管理員"];
   var TAX = 0.05;
 
@@ -95,6 +95,50 @@
     if (name === "管理員") throw new Error("內建管理員不能改角色");
     u.role = r;
     log(S, "人員角色", name + " → " + r);
+  }
+
+  // ---------- 位置座標（地圖用） ----------
+  // Demo placeholders guessed from the location names: they only decide where a pin sits on
+  // the map and must be confirmed (and corrected in 設定) with the customer.
+  var GEO_DEFAULTS = {
+    co: { lat: 24.1477, lng: 120.6736 },
+    h0: { lat: 24.1823, lng: 120.6037 },
+    h1: { lat: 23.9602, lng: 120.5760 },
+    h2: { lat: 24.0618, lng: 120.4337 },
+    h3: { lat: 24.0718, lng: 120.5422 },
+    h4: { lat: 24.1372, lng: 120.7347 },
+    h5: { lat: 23.9007, lng: 120.3660 },
+    r0: { lat: 24.0200, lng: 120.5600, onDuty: true, lastSeen: "今天 09:40" }
+  };
+  function applyGeoDefaults(S) {
+    S.locations.forEach(function (l) {
+      var g = GEO_DEFAULTS[l.id];
+      if (g && typeof l.lat !== "number") {
+        l.lat = g.lat; l.lng = g.lng;
+        if (l.type === "rep") { l.onDuty = !!g.onDuty; l.lastSeen = g.lastSeen || ""; }
+      }
+    });
+  }
+  // lat/lng both empty clears the pin; otherwise both must be a believable point around Taiwan.
+  function setGeo(S, id, g) {
+    need(S, "settings_edit");
+    var l = location(S, id);
+    if (!l) throw new Error("找不到庫位");
+    var hasLat = g.lat !== "" && g.lat != null, hasLng = g.lng !== "" && g.lng != null;
+    if (!hasLat && !hasLng) { delete l.lat; delete l.lng; }
+    else {
+      var lat = Number(g.lat), lng = Number(g.lng);
+      if (!hasLat || !hasLng || !isFinite(lat) || !isFinite(lng)) throw new Error("緯度和經度都要填");
+      if (lat < 21.5 || lat > 25.6 || lng < 119.2 || lng > 122.3) throw new Error("座標不在台灣範圍內（緯度 21.5–25.6、經度 119.2–122.3）");
+      l.lat = Math.round(lat * 10000) / 10000; l.lng = Math.round(lng * 10000) / 10000;
+    }
+    if (l.type === "rep" && typeof g.onDuty === "boolean") {
+      var was = !!l.onDuty;
+      l.onDuty = g.onDuty;
+      if (g.onDuty && !was) l.lastSeen = "今天 " + pad(new Date().getHours()) + ":" + pad(new Date().getMinutes());
+    }
+    log(S, "位置座標", l.name + "｜" + (typeof l.lat === "number" ? l.lat + ", " + l.lng : "清除") + (l.type === "rep" ? "｜" + (l.onDuty ? "執勤中" : "未執勤") : ""));
+    return l;
   }
 
   // ---------- state helpers ----------
@@ -715,6 +759,7 @@
       S.locations.push({ id: "h" + i, name: n, type: "hospital" });
     });
     S.locations.push({ id: "r0", name: "小胖移動庫存", type: "rep" });
+    applyGeoDefaults(S);
 
     var holes = [[3, "046"], [5, "058"], [7, "074"], [9, "086"], [11, "102"]];
     [["橈骨遠端掌側鎖定骨板，標準型 (Radius)", [["1", "左寬"], ["2", "右寬"]]],
@@ -870,7 +915,11 @@
   function load() {
     try {
       var raw = typeof localStorage !== "undefined" && localStorage.getItem(KEY);
-      if (raw) { var S = JSON.parse(raw); if (S && S.v === VERSION) return S; }
+      if (raw) {
+        var S = JSON.parse(raw);
+        if (S && S.v === 5) { applyGeoDefaults(S); S.v = VERSION; }
+        if (S && S.v === VERSION) return S;
+      }
     } catch (e) { /* fall through to a fresh seed */ }
     return seed();
   }
@@ -898,6 +947,7 @@
     ACCOUNTS: ACCOUNTS, accountName: accountName, orderTotal: orderTotal, orderPaid: orderPaid, orderBalance: orderBalance,
     receivePayment: receivePayment, arRows: arRows, arByCustomer: arByCustomer, invoiceRows: invoiceRows, trialBalance: trialBalance,
     monthKey: monthKey, lastMonths: lastMonths, reportStats: reportStats, salesStats: salesStats,
+    setGeo: setGeo, GEO_DEFAULTS: GEO_DEFAULTS,
     trace: trace, seed: seed, load: load, save: save, reset: reset, log: log
   };
 });

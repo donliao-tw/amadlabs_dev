@@ -11,6 +11,9 @@
   var acctMonth = "all";
   var moreItems = [];
   var stockZero = false;
+  var stockLoc = null;
+  var mapLayers = { company: true, hospital: true, rep: true };
+  var mapView = null;
   
   var repFilter = "all";
   var traceQ = "";
@@ -422,6 +425,7 @@
     return S.locations.slice().sort(function (a, b) { return TYPE_ORDER[a.type] - TYPE_ORDER[b.type]; });
   }
   function inScope(locId) {
+    if (stockLoc) return locId === stockLoc;
     var l = L.location(S, locId);
     return !!l && (stockScope === "all" || l.type === stockScope);
   }
@@ -450,7 +454,7 @@
       if (p.kind === "screw") screwQ += l.qty; else plateQ += l.qty;
       val += l.qty * p.price;
     });
-    var scopeName = SCOPES.filter(function (x) { return x[0] === stockScope; })[0][1];
+    var scopeName = stockLoc ? L.locName(S, stockLoc) : SCOPES.filter(function (x) { return x[0] === stockScope; })[0][1];
     var summary = '<p class="scope-line"><b>' + esc(scopeName) + "</b>　骨板 " + plateQ + " 件　骨釘 " + screwQ + " 支" + (priceOn ? "　約 " + money(val) : "") + "</p>";
 
     // A banner only for people who can act on it, pointing at the one place that resolves it.
@@ -468,8 +472,10 @@
     var search = stockView === "plates" ? '<div class="row" style="margin:12px 0"><label class="field" style="flex:1;min-width:220px">搜尋<input id="stockSearch" value="' + esc(stockQ) + '" placeholder="型號或品名" autocomplete="off"></label>' +
       '<label class="field check"><input type="checkbox" data-bind="stock-zero"' + (stockZero ? " checked" : "") + ">顯示沒有庫存的品項</label></div>" : "";
 
-    return banner + card("STOCK", "庫存", '<div class="row" style="justify-content:space-between">' + scopeSeg + viewSeg + "</div>" + summary + '<div class="row" style="justify-content:flex-end;margin-bottom:6px">' + actions + "</div>" + search +
+    var focus = stockLoc && L.location(S, stockLoc) ? '<div class="focus-chip"><span>只看</span><b>' + esc(L.locName(S, stockLoc)) + "</b>" + locBadge(L.location(S, stockLoc)) + '<button class="btn btn-sm" data-act="map-clear">顯示全部</button></div>' : "";
+    var main = banner + card("STOCK", "庫存", '<div class="row" style="justify-content:space-between">' + scopeSeg + viewSeg + "</div>" + focus + summary + '<div class="row" style="justify-content:flex-end;margin-bottom:6px">' + actions + "</div>" + search +
       (stockView === "plates" ? '<div id="matrixHost">' + platesMatrix() + "</div>" : boxesView()));
+    return '<div class="stock-layout"><div class="stock-main">' + main + '</div><aside class="stock-side">' + mapCardHtml() + "</aside></div>";
   }
 
   function visiblePlates() {
@@ -530,6 +536,120 @@
     }).join("");
     return (cards ? '<div class="boxes">' + cards + "</div>" : '<div class="empty">這個範圍沒有骨釘盒。</div>') +
       '<p class="muted" style="margin-top:12px">點一個盒子打開整盒' + (edit ? "，每一格各自獨立，可逐格增減、調撥整盒。" : "。") + " 每個盒子一個批號；盒子的排列與名稱由你們自己設計。</p>";
+  }
+
+  // ---------------- 地圖 ----------------
+  // One island and a dozen pins, so no mapping library: the county outlines are pre-projected
+  // (tw-map.js) and pins use the same Mercator maths. Pan, zoom and picking are plain events.
+  var MAP = window.TW_MAP;
+  function mapProject(lat, lng) {
+    return { x: (lng * Math.PI / 180 - MAP.lon0) * MAP.k, y: (MAP.ymax - Math.log(Math.tan(Math.PI / 4 + lat * Math.PI / 360))) * MAP.k };
+  }
+
+  // Every located place with what is physically there; `all` ignores the layer toggles.
+  function mapMarkers(all) {
+    var out = [];
+    S.locations.forEach(function (l) {
+      if (typeof l.lat !== "number" || typeof l.lng !== "number") return;
+      if (l.type === "rep" && !l.onDuty) return;
+      if (!all && !mapLayers[l.type]) return;
+      var pt = mapProject(l.lat, l.lng), plate = 0, screw = 0, minDays = null;
+      S.lots.forEach(function (x) {
+        if (x.loc !== l.id || x.qty <= 0) return;
+        var pr = L.product(S, x.sku), d = L.expDays(x.exp);
+        if (pr && pr.kind === "screw") screw += x.qty; else plate += x.qty;
+        if (minDays === null || d < minDays) minDays = d;
+      });
+      var last = S.reports.filter(function (r) { return r.hospital === l.id || r.loc === l.id; })[0];
+      var pending = S.reports.filter(function (r) { return r.status === "pending" && (r.hospital === l.id || r.loc === l.id); }).length;
+      out.push({ l: l, x: pt.x, y: pt.y, plate: plate, screw: screw, minDays: minDays, last: last, pending: pending });
+    });
+    return out;
+  }
+
+  function mapFit(ms) {
+    if (!ms.length) return { k: 1, x: 0, y: 0 };
+    var minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+    ms.forEach(function (m) { minX = Math.min(minX, m.x); maxX = Math.max(maxX, m.x); minY = Math.min(minY, m.y); maxY = Math.max(maxY, m.y); });
+    var pad = 60, k = Math.min((MAP.w - pad * 2) / Math.max(maxX - minX, 1), (MAP.h - pad * 2) / Math.max(maxY - minY, 1));
+    k = Math.max(1, Math.min(k, 9));
+    return { k: k, x: MAP.w / 2 - (minX + maxX) / 2 * k, y: MAP.h / 2 - (minY + maxY) / 2 * k };
+  }
+
+  function markerTip(m) {
+    var l = m.l, lines = [l.name + "｜" + TYPE[l.type] + (l.type === "company" ? "・可立即調動" : "")];
+    lines.push("骨板 " + m.plate + " 件　骨釘 " + m.screw + " 支");
+    if (m.minDays !== null && m.minDays <= 90) lines.push(m.minDays < 0 ? "有已過期批號" : "最近效期 " + m.minDays + " 天");
+    if (l.type === "rep") lines.push("執勤中" + (l.lastSeen ? "｜更新 " + l.lastSeen : ""));
+    if (l.type === "hospital" && m.last) lines.push("最近報刀 " + m.last.date + " " + m.last.doctor);
+    if (m.pending) lines.push(m.pending + " 張報刀待審核");
+    return lines.join("\n");
+  }
+
+  function markerSvg(m) {
+    var l = m.l, sel = stockLoc === l.id, dim = !inScope(l.id) && !sel;
+    var status = m.minDays !== null && m.minDays < 0 ? " exp" : m.minDays !== null && m.minDays <= 90 ? " warn" : "";
+    var r = Math.min(15, 6.5 + Math.sqrt(m.plate + m.screw) * 0.42), shape, ly;
+    if (l.type === "company") { shape = '<rect class="mk-shape" x="-9" y="-9" width="18" height="18" rx="4"/>'; ly = -15; }
+    else if (l.type === "rep") { shape = '<circle class="pulse" r="13"/><path class="mk-shape" d="M0 -9L9 0L0 9L-9 0Z"/>'; ly = -16; }
+    else { shape = '<circle class="mk-shape" r="' + r.toFixed(1) + '"/>'; ly = -(r + 6); }
+    return '<g class="mk mk-' + l.type + status + (sel ? " sel" : "") + (dim ? " dim" : "") + '" transform="translate(' + m.x.toFixed(1) + " " + m.y.toFixed(1) + ')" data-act="map-pick" data-id="' + esc(l.id) + '" data-tip="' + esc(markerTip(m)) + '">' +
+      '<g class="mk-s" transform="scale(' + (1 / mapView.k).toFixed(4) + ')">' + shape + '<text class="mk-label" y="' + ly + '" text-anchor="middle">' + esc(l.name) + "</text></g></g>";
+  }
+
+  function mapDetailHtml() {
+    var l = stockLoc && L.location(S, stockLoc);
+    if (!l) return '<p class="muted">點標記，左邊的庫存就只顯示那個位置。滾輪縮放、拖曳移動，右上按鈕可以回到全台。</p>';
+    var m = mapMarkers(true).filter(function (x) { return x.l.id === l.id; })[0];
+    var boxes = S.boxes.filter(function (b) { return b.loc === l.id; });
+    return '<div class="tw-sel"><div class="tw-sel-h"><b>' + esc(l.name) + "</b>" + locBadge(l) + "</div>" +
+      (m ? '<p class="muted">骨板 ' + m.plate + " 件　骨釘 " + m.screw + " 支" + (m.pending ? "　" + m.pending + " 張報刀待審核" : "") + (l.type === "rep" && l.lastSeen ? "　更新 " + esc(l.lastSeen) : "") + "</p>" : '<p class="muted">這個位置還沒有設定座標（設定 → 庫位管理）。</p>') +
+      (boxes.length ? '<div class="chips">' + boxes.map(function (b) { return '<button type="button" class="btn btn-sm" data-act="open-box" data-id="' + esc(b.id) + '">打開 ' + esc(b.name) + "</button>"; }).join("") + "</div>" : "") + "</div>";
+  }
+
+  function mapCardHtml() {
+    if (!MAP) return "";
+    var ms = mapMarkers(false);
+    if (!mapView) mapView = mapFit(ms);
+    var land = MAP.counties.map(function (c) { return '<path class="tw-county" d="' + c.d + '"><title>' + esc(c.n) + "</title></path>"; }).join("");
+    var layers = [["company", "公司倉", "sq"], ["hospital", "醫院寄庫", "ci"], ["rep", "執勤中業務", "di"]].map(function (x) {
+      return '<label class="layer"><input type="checkbox" data-bind="map-layer" data-layer="' + x[0] + '"' + (mapLayers[x[0]] ? " checked" : "") + '><i class="lg lg-' + x[2] + '"></i>' + x[1] + "</label>";
+    }).join("");
+    var body = '<div class="tw-box"><svg class="tw-svg' + (mapView.k >= 2.4 ? " show-labels" : "") + '" viewBox="0 0 ' + MAP.w + " " + MAP.h + '" role="img" aria-label="台灣地圖，標示公司、醫院與業務位置">' +
+      '<g class="tw-pan" transform="translate(' + mapView.x.toFixed(2) + " " + mapView.y.toFixed(2) + ") scale(" + mapView.k.toFixed(4) + ')"><g class="tw-land">' + land + '</g><g class="tw-markers">' + ms.map(markerSvg).join("") + "</g></g></svg>" +
+      '<div class="tw-ctl"><button type="button" class="btn btn-sm" data-act="map-zoom-in" aria-label="放大">＋</button><button type="button" class="btn btn-sm" data-act="map-zoom-out" aria-label="縮小">−</button>' +
+      '<button type="button" class="btn btn-sm" data-act="map-fit">聚焦</button><button type="button" class="btn btn-sm" data-act="map-all">全台</button></div><div class="tw-tip" hidden></div></div>' +
+      '<div class="tw-layers">' + layers + "</div>" + '<div id="mapDetail">' + mapDetailHtml() + "</div>" +
+      '<p class="muted tw-note">座標是依院名推測的示範值，業務位置是模擬的。實際版本的業務位置要靠手機定位，且需要員工同意。地圖：內政部，經 taiwan-atlas 整理。</p>';
+    return card("MAP", "位置地圖", body);
+  }
+
+  function applyMapView() {
+    var g = document.querySelector(".tw-pan");
+    if (!g) return;
+    g.setAttribute("transform", "translate(" + mapView.x.toFixed(2) + " " + mapView.y.toFixed(2) + ") scale(" + mapView.k.toFixed(4) + ")");
+    var inv = (1 / mapView.k).toFixed(4);
+    Array.prototype.forEach.call(document.querySelectorAll(".mk-s"), function (el) { el.setAttribute("transform", "scale(" + inv + ")"); });
+    var svg = document.querySelector(".tw-svg");
+    if (svg) svg.classList.toggle("show-labels", mapView.k >= 2.4);
+  }
+  function mapGo(target, animate) {
+    var still = typeof window.matchMedia !== "function" || window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (!animate || still) { mapView = target; applyMapView(); return; }
+    var from = { k: mapView.k, x: mapView.x, y: mapView.y }, t0 = null;
+    function step(ts) {
+      if (t0 === null) t0 = ts;
+      var u = Math.min(1, (ts - t0) / 280), e = 1 - Math.pow(1 - u, 3);
+      mapView = { k: from.k + (target.k - from.k) * e, x: from.x + (target.x - from.x) * e, y: from.y + (target.y - from.y) * e };
+      applyMapView();
+      if (u < 1) requestAnimationFrame(step);
+    }
+    requestAnimationFrame(step);
+  }
+  function mapZoom(factor, px, py, animate) {
+    if (px == null) { px = MAP.w / 2; py = MAP.h / 2; }
+    var k = Math.max(1, Math.min(18, mapView.k * factor)), r = k / mapView.k;
+    mapGo({ k: k, x: px - (px - mapView.x) * r, y: py - (py - mapView.y) * r }, animate);
   }
 
   function openBox(id) {
@@ -814,8 +934,11 @@
     var qtyAt = {};
     S.lots.forEach(function (x) { qtyAt[x.loc] = (qtyAt[x.loc] || 0) + x.qty; });
     var locRows = S.locations.map(function (l) {
-      var qty = qtyAt[l.id] || 0;
-      return '<tr><td><input class="cellinput" data-act="loc-rename" data-id="' + esc(l.id) + '" value="' + esc(l.name) + '"' + (ok ? "" : " disabled") + "></td><td>" + TYPE[l.type] + '</td><td class="num">' + qty + "</td>" +
+      var qty = qtyAt[l.id] || 0, geoDis = ok ? "" : " disabled";
+      return '<tr><td><input class="cellinput" data-act="loc-rename" data-id="' + esc(l.id) + '" value="' + esc(l.name) + '"' + (ok ? "" : " disabled") + "></td><td>" + TYPE[l.type] + "</td>" +
+        '<td><input class="cellinput" type="number" step="0.0001" style="width:104px" data-act="loc-geo" data-field="lat" data-id="' + esc(l.id) + '" value="' + (typeof l.lat === "number" ? l.lat : "") + '" placeholder="24.1477"' + geoDis + "></td>" +
+        '<td><input class="cellinput" type="number" step="0.0001" style="width:104px" data-act="loc-geo" data-field="lng" data-id="' + esc(l.id) + '" value="' + (typeof l.lng === "number" ? l.lng : "") + '" placeholder="120.6736"' + geoDis + "></td>" +
+        "<td>" + (l.type === "rep" ? '<input type="checkbox" data-act="loc-duty" data-id="' + esc(l.id) + '"' + (l.onDuty ? " checked" : "") + geoDis + ">" : "") + '</td><td class="num">' + qty + "</td>" +
         '<td><button class="btn btn-sm btn-danger" data-act="del-loc" data-id="' + esc(l.id) + '"' + (ok && qty === 0 && l.type !== "company" ? "" : ' disabled title="庫位還有庫存或是公司倉，不能刪除"') + ">刪除</button></td></tr>";
     }).join("");
     var groups = {};
@@ -846,7 +969,7 @@
         '<form data-form="adduser" class="row" style="margin-top:14px"><label class="field">新人員名稱<input name="name" required></label>' +
         '<label class="field">角色<select name="role">' + options(L.ROLES.map(function (r) { return { v: r, t: r }; }), "業務") + '</select></label><button class="btn btn-primary"' + (admin ? "" : " disabled") + ">新增人員</button></form>") +
       card("LOCATIONS", "庫位管理", '<p class="muted" style="margin-bottom:12px">醫院寄庫、業務的移動庫存都在這裡設定，新增後報刀和庫存頁會自動出現這個庫位。</p>' +
-        '<div class="table-wrap"><table class="table"><thead><tr><th>名稱</th><th>類型</th><th class="num">庫存支數</th><th></th></tr></thead><tbody>' + locRows + "</tbody></table></div>" +
+        '<div class="table-wrap"><table class="table"><thead><tr><th>名稱</th><th>類型</th><th>緯度</th><th>經度</th><th>執勤中</th><th class="num">庫存支數</th><th></th></tr></thead><tbody>' + locRows + "</tbody></table></div>" +
         '<form data-form="addloc" class="row" style="margin-top:14px"><label class="field">新庫位名稱<input name="name" required' + dis + '></label>' +
         '<label class="field">類型<select name="type"' + dis + '><option value="hospital">醫院寄庫</option><option value="rep">業務移動庫存</option></select></label>' +
         '<button class="btn btn-primary"' + dis + ">新增庫位</button></form>") +
@@ -950,6 +1073,7 @@
       ? '<button data-act="more-nav"' + (moreItems.some(function (n) { return n.id === tab; }) ? ' aria-current="page"' : "") + '><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg><span>更多</span></button>' : "");
 
     var cur = current();
+    document.querySelector(".main").classList.toggle("wide-page", tab === "stock");
     document.getElementById("pageHead").innerHTML = '<div class="eyebrow">' + esc(cur.id) + "</div><h1>" + esc(cur.title) + "</h1><p>" + esc(cur.sub) + "</p>";
 
     var html = tab === "todo" ? renderTodo() : tab === "report" ? renderReport() : tab === "sales" ? renderSales() : tab === "stock" ? renderStock() : tab === "acct" ? renderAcct() : tab === "stats" ? renderStats() : tab === "trace" ? renderTrace() : renderSettings();
@@ -1017,7 +1141,7 @@
       link.click();
       URL.revokeObjectURL(link.href);
     } else if (a === "stock-view") { stockView = g("v"); render(); }
-    else if (a === "stock-scope") { stockScope = g("v"); render(); }
+    else if (a === "stock-scope") { stockScope = g("v"); stockLoc = null; render(); }
     else if (a === "acct-view") { acctView = g("v"); render(); }
     else if (a === "pay-order") openPay(g("id"));
     else if (a === "more-nav") {
@@ -1027,6 +1151,16 @@
         }).join("") + "</div>";
       });
     }
+    else if (a === "map-pick") {
+      var pid = g("id"), ploc = L.location(S, pid);
+      if (!ploc) return;
+      if (stockLoc === pid) stockLoc = null; else { stockLoc = pid; stockScope = ploc.type; }
+      render();
+    } else if (a === "map-clear") { stockLoc = null; render(); }
+    else if (a === "map-zoom-in") mapZoom(1.7, null, null, true);
+    else if (a === "map-zoom-out") mapZoom(1 / 1.7, null, null, true);
+    else if (a === "map-fit") mapGo(mapFit(mapMarkers(false)), true);
+    else if (a === "map-all") mapGo({ k: 1, x: 0, y: 0 }, true);
     else if (a === "go-todo") { tab = "todo"; render(); window.scrollTo(0, 0); }
     else if (a === "toggle-picker") {
       if (!D.showPicker && !boxesAt(D.loc).length) return toast("這個扣庫來源沒有骨釘盒", true);
@@ -1084,6 +1218,17 @@
       if (loc && nm && nm !== loc.name) run(function () { need("settings_edit"); L.log(S, "庫位改名", loc.name + " → " + nm); loc.name = nm; }, "已更新");
       return;
     }
+    if (act === "loc-geo") {
+      var row = t.closest("tr"), gid = t.getAttribute("data-id");
+      var glat = row.querySelector('[data-field="lat"]').value, glng = row.querySelector('[data-field="lng"]').value;
+      if (!run(function () { L.setGeo(S, gid, { lat: glat, lng: glng }); }, "已更新座標")) render();
+      return;
+    }
+    if (act === "loc-duty") {
+      var did = t.getAttribute("data-id"), dl = L.location(S, did), duty = t.checked;
+      if (!run(function () { L.setGeo(S, did, { lat: dl.lat, lng: dl.lng, onDuty: duty }); }, duty ? "已設為執勤中" : "已設為未執勤")) render();
+      return;
+    }
     if (act === "lot-adj") {
       run(function () { L.adjustStock(S, t.getAttribute("data-loc"), t.getAttribute("data-sku"), t.getAttribute("data-lot"), Math.floor(Number(t.value))); }, "已盤點調整");
       return;
@@ -1107,6 +1252,7 @@
     else if (b === "main-scrap") { D.main[i].scrap = t.checked; }
     else if (b === "sp-box") { D.sp.box = t.value; render(); }
     else if (b === "acct-month") { acctMonth = t.value; render(); }
+    else if (b === "map-layer") { mapLayers[t.getAttribute("data-layer")] = t.checked; render(); }
     else if (b === "stock-zero") { stockZero = t.checked; render(); }
     else if (b === "date") D.date = t.value;
     else if (b === "s-date") SD.date = t.value;
@@ -1205,6 +1351,58 @@
         e.target.reset();
       }, "已新增品項");
     }
+  });
+
+  // Pan, wheel-zoom and the pin tooltip. Pointer positions are converted through the SVG's own
+  // matrix, so it stays right however the map is letterboxed or sized.
+  var drag = null;
+  function svgPoint(svg, e) {
+    try {
+      var pt = svg.createSVGPoint(), m = svg.getScreenCTM();
+      pt.x = e.clientX; pt.y = e.clientY;
+      if (m) { var r = pt.matrixTransform(m.inverse()); return { x: r.x, y: r.y }; }
+    } catch (err) { /* no SVG matrix available: fall back to the centre */ }
+    return { x: MAP ? MAP.w / 2 : 0, y: MAP ? MAP.h / 2 : 0 };
+  }
+  document.addEventListener("pointerdown", function (e) {
+    var svg = e.target.closest && e.target.closest(".tw-svg");
+    if (!svg || e.target.closest(".mk") || !mapView) return;
+    var p = svgPoint(svg, e);
+    drag = { svg: svg, px: p.x, py: p.y, vx: mapView.x, vy: mapView.y };
+    svg.classList.add("dragging");
+  });
+  document.addEventListener("pointermove", function (e) {
+    if (!drag) return;
+    var p = svgPoint(drag.svg, e);
+    // The pan transform lives on a child group, so the svg's own client -> user mapping never changes.
+    mapView = { k: mapView.k, x: drag.vx + (p.x - drag.px), y: drag.vy + (p.y - drag.py) };
+    applyMapView();
+  });
+  function endDrag() { if (drag) { drag.svg.classList.remove("dragging"); drag = null; } }
+  document.addEventListener("pointerup", endDrag);
+  document.addEventListener("pointercancel", endDrag);
+  document.addEventListener("wheel", function (e) {
+    var svg = e.target.closest && e.target.closest(".tw-svg");
+    if (!svg || !mapView) return;
+    e.preventDefault();
+    var p = svgPoint(svg, e);
+    mapZoom(e.deltaY < 0 ? 1.22 : 1 / 1.22, p.x, p.y, false);
+  }, { passive: false });
+
+  function placeTip(e, tip) {
+    var box = tip.parentElement.getBoundingClientRect();
+    tip.style.left = Math.min(box.width - 190, Math.max(4, e.clientX - box.left + 12)) + "px";
+    tip.style.top = Math.max(4, e.clientY - box.top + 14) + "px";
+  }
+  document.addEventListener("mouseover", function (e) {
+    var tip = document.querySelector(".tw-tip");
+    if (!tip) return;
+    var mk = e.target.closest && e.target.closest(".mk");
+    if (mk) { tip.textContent = mk.getAttribute("data-tip"); tip.hidden = false; placeTip(e, tip); } else tip.hidden = true;
+  });
+  document.addEventListener("mousemove", function (e) {
+    var tip = document.querySelector(".tw-tip");
+    if (tip && !tip.hidden) placeTip(e, tip);
   });
 
   render();
