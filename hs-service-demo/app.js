@@ -7,6 +7,9 @@
   var stockView = "plates";
   var stockScope = "company";
   var stockQ = "";
+  var acctView = "ar";
+  var acctMonth = "all";
+  var moreItems = [];
   var stockZero = false;
   
   var repFilter = "all";
@@ -20,18 +23,22 @@
   var ICONS = {
     todo: '<path d="M9 6h11M9 12h11M9 18h11"/><path d="M4 6l1 1 2-2M4 12l1 1 2-2M4 18l1 1 2-2"/>',
     report: '<rect x="6" y="4" width="12" height="17" rx="2"/><path d="M9 4h6v3H9zM9 12h6M9 16h4"/>',
+    acct: '<path d="M5 4h12a2 2 0 012 2v14H7a2 2 0 01-2-2z"/><path d="M9 9h6M9 13h6M9 17h3"/>',
+    stats: '<path d="M5 20V10M12 20V4M19 20v-7"/>',
     sales: '<path d="M6 3h12v18l-3-2-3 2-3-2-3 2z"/><path d="M9 8h6M9 12h6"/>',
     stock: '<path d="M3 8l9-5 9 5v8l-9 5-9-5z"/><path d="M3 8l9 5 9-5M12 13v8"/>',
     trace: '<circle cx="11" cy="11" r="6"/><path d="M20 20l-4.5-4.5"/>',
     settings: '<path d="M4 7h10M18 7h2M4 17h2M10 17h10"/><circle cx="16" cy="7" r="2"/><circle cx="8" cy="17" r="2"/>'
   };
-  function canAct() { return can("report_approve") || can("sales_confirm") || can("stock_edit"); }
+  function canAct() { return can("report_approve") || can("sales_confirm") || can("stock_edit") || can("acct_edit"); }
   function defaultTab() { return canAct() ? "todo" : "report"; }
   var NAV = [
     { id: "todo", label: "待辦", title: "待辦", sub: "需要你動手的事，處理完就會從這裡消失。", show: function () { return canAct(); } },
     { id: "report", label: "報刀", title: "報刀", sub: "跟刀後回報這台刀用了什麼，只報你用到的。內勤審核後才會扣庫存。", show: function () { return true; } },
-    { id: "sales", label: "銷貨憑單", title: "銷貨憑單", sub: "對應正航的銷貨憑單：客戶、明細、稅額，覆核後出貨扣庫。", show: function () { return L.can(S, "sales_view"); } },
     { id: "stock", label: "庫存", title: "庫存", sub: "先選範圍：公司的庫存可以立即調動，醫院寄庫要先調回公司。", show: function () { return L.can(S, "stock_view"); } },
+    { id: "sales", label: "銷貨憑單", title: "銷貨憑單", sub: "對應正航的銷貨憑單：客戶、明細、稅額，覆核後出貨扣庫並自動產生傳票。", show: function () { return L.can(S, "sales_view"); } },
+    { id: "acct", label: "會計", title: "會計", sub: "銷貨覆核後自動入帳：應收、收款、銷項發票、傳票與試算表。", show: function () { return L.can(S, "acct_view"); } },
+    { id: "stats", label: "統計", title: "數據統計", sub: "報刀、銷貨、庫存的近況，用來看趨勢與找出問題。", show: function () { return L.can(S, "stats_view"); } },
     { id: "trace", label: "追溯", title: "批號追溯", sub: "一個批號現在在哪、用在哪家醫院哪位醫師。召回時直接查。", show: function () { return L.can(S, "audit_view"); } },
     { id: "settings", label: "設定", title: "設定", sub: "庫位、客戶、品項，以及誰能看到什麼、做什麼。", show: function () { return true; } }
   ];
@@ -45,6 +52,7 @@
     });
   }
   function can(c) { return L.can(S, c); }
+  function num(n) { return Math.round(n).toLocaleString("zh-Hant"); }
   function money(n) { return "NT$ " + Math.round(n).toLocaleString("zh-Hant"); }
   function persist() { L.save(S); }
   function pName(sku) { var p = L.product(S, sku); return p ? p.name : sku; }
@@ -174,6 +182,13 @@
       }).join("");
       out += card("TODO", "效期要處理（" + att.length + "）", tbl(["位置", "品項", "批號", "效期", "數量", ""], rows) +
         '<p class="muted" style="margin-top:10px">已過期的批號不能出貨也不能報刀，先查看再決定退回或報廢。</p>');
+    }
+    var overdue = can("acct_edit") ? L.arRows(S).filter(function (r) { return r.days > 30; }) : [];
+    if (overdue.length) {
+      out += card("TODO", "逾期未收（超過 30 天，" + overdue.length + "）", tbl(["憑單", "客戶", "銷貨日", "未收餘額", "已過", ""], overdue.map(function (r) {
+        var c = L.customer(S, r.o.customer);
+        return '<tr><td class="code">' + esc(r.o.no) + "</td><td>" + esc(c ? c.name : "") + "</td><td>" + esc(r.o.date) + '</td><td class="num">' + num(r.balance) + '</td><td class="num">' + r.days + ' 天</td><td><button class="btn btn-sm btn-primary" data-act="pay-order" data-id="' + r.o.id + '">登記收款</button></td></tr>';
+      }).join("")));
     }
     if (!out) out = card("TODO", "目前沒有待辦", '<div class="empty">報刀都審完了，沒有銷貨草稿，也沒有快到期的批號。</div>');
     return out;
@@ -569,6 +584,140 @@
     });
   }
 
+  // ---------------- 會計 ----------------
+  function agingBadge(days) {
+    if (days > 90) return '<span class="badge expired">' + days + " 天</span>";
+    if (days > 60) return '<span class="badge warn">' + days + " 天</span>";
+    return '<span class="muted">' + days + " 天</span>";
+  }
+
+  function acctAr() {
+    var byC = L.arByCustomer(S), rows = L.arRows(S), canPay = can("acct_edit");
+    var tot = { b0: 0, b1: 0, b2: 0, b3: 0, total: 0 };
+    byC.forEach(function (g) { ["b0", "b1", "b2", "b3", "total"].forEach(function (k) { tot[k] += g[k]; }); });
+    var cells = function (g) {
+      return ["b0", "b1", "b2", "b3"].map(function (k) { return '<td class="num">' + (g[k] ? num(g[k]) : "·") + "</td>"; }).join("") + '<td class="num"><b>' + num(g.total) + "</b></td>";
+    };
+    var summary = byC.length ? tbl(["客戶", "0–30 天", "31–60 天", "61–90 天", "90 天以上", "未收合計"],
+      byC.map(function (g) { return "<tr><td>" + esc(g.customer ? g.customer.name : "") + "</td>" + cells(g) + "</tr>"; }).join("") +
+      '<tr><td><b>合計</b></td>' + cells(tot) + "</tr>") : '<div class="empty">目前沒有未收帳款。</div>';
+    var open = rows.length ? tbl(["憑單", "銷貨日", "客戶", "總計", "已收", "未收餘額", "帳齡", ""], rows.map(function (r) {
+      var c = L.customer(S, r.o.customer);
+      return '<tr><td class="code">' + esc(r.o.no) + "</td><td>" + esc(r.o.date) + "</td><td>" + esc(c ? c.name : "") + '</td><td class="num">' + num(r.total) + '</td><td class="num">' + num(r.paid) + '</td><td class="num"><b>' + num(r.balance) + "</b></td><td>" + agingBadge(r.days) + "</td>" +
+        '<td><button class="btn btn-sm btn-primary" data-act="pay-order" data-id="' + r.o.id + '"' + (canPay ? "" : ' disabled title="沒有登記收款的權限"') + ">登記收款</button></td></tr>";
+    }).join("")) : "";
+    var pays = S.payments.slice().sort(function (a, b) { return a.date < b.date ? 1 : -1; }).slice(0, 10);
+    var payTable = pays.length ? tbl(["收款日", "憑單", "客戶", "金額", "方式", "登記人"], pays.map(function (pm) {
+      var o = S.sales.filter(function (x) { return x.id === pm.orderId; })[0], c = o && L.customer(S, o.customer);
+      return "<tr><td>" + esc(pm.date) + '</td><td class="code">' + esc(o ? o.no : "") + "</td><td>" + esc(c ? c.name : "") + '</td><td class="num">' + num(pm.amount) + "</td><td>" + esc(pm.method) + "</td><td>" + esc(pm.by) + "</td></tr>";
+    }).join("")) : '<div class="empty">還沒有收款紀錄。</div>';
+    return "<h4>客戶應收彙總（依帳齡）</h4>" + summary + (rows.length ? "<h4>未收憑單</h4>" + open : "") + "<h4>最近收款</h4>" + payTable;
+  }
+
+  function acctInvoices() {
+    var all = L.invoiceRows(S);
+    var months = [];
+    all.forEach(function (r) { var m = L.monthKey(r.o.date); if (months.indexOf(m) < 0) months.push(m); });
+    if (acctMonth !== "all" && months.indexOf(acctMonth) < 0) acctMonth = "all";
+    var list = all.filter(function (r) { return acctMonth === "all" || L.monthKey(r.o.date) === acctMonth; });
+    var net = 0, tax = 0, total = 0;
+    list.forEach(function (r) { net += r.t.net; tax += r.t.tax; total += r.t.total; });
+    var pick = '<label class="field" style="max-width:240px;margin-bottom:12px">月份<select data-bind="acct-month"><option value="all"' + (acctMonth === "all" ? " selected" : "") + ">全部</option>" +
+      options(months.map(function (m) { return { v: m, t: m }; }), acctMonth) + "</select></label>";
+    var rows = list.map(function (r) {
+      var c = L.customer(S, r.o.customer);
+      return '<tr><td class="code">' + esc(r.o.invoice) + "</td><td>" + esc(r.o.date) + '</td><td class="code">' + esc(r.o.no) + "</td><td>" + esc(c ? c.name : "") + '</td><td class="num">' + num(r.t.net) + '</td><td class="num">' + num(r.t.tax) + '</td><td class="num">' + num(r.t.total) + "</td></tr>";
+    }).join("") + (list.length ? '<tr><td colspan="4"><b>合計（' + list.length + " 張）</b></td>" + '<td class="num"><b>' + num(net) + '</b></td><td class="num"><b>' + num(tax) + '</b></td><td class="num"><b>' + num(total) + "</b></td></tr>" : "");
+    return pick + (list.length ? tbl(["發票號碼", "日期", "憑單", "客戶", "未稅", "稅額", "總計"], rows) : '<div class="empty">這個月沒有發票。</div>') +
+      '<p class="muted" style="margin-top:10px">稅額合計就是這段期間的銷項稅額。發票號碼是示範用；正式版要串財政部電子發票平台，並產生營業稅申報檔。</p>';
+  }
+
+  function acctJournals() {
+    var list = S.journals.slice(0, 60);
+    if (!list.length) return '<div class="empty">還沒有傳票。</div>';
+    return '<p class="muted" style="margin-bottom:12px">銷貨覆核與收款登記會自動產生傳票，不用手動記帳。</p>' + list.map(function (j) {
+      return '<div class="report"><div class="report-h"><b>' + esc(j.no) + "</b><span>" + esc(j.date) + "</span><span>" + esc(j.memo) + '</span><span class="muted">' + esc(j.by) + "</span></div>" +
+        tbl(["科目", "借方", "貸方"], j.lines.map(function (l) {
+          return '<tr><td><span class="code">' + esc(l.acct) + "</span> " + esc(L.accountName(l.acct)) + '</td><td class="num">' + (l.dr ? num(l.dr) : "") + '</td><td class="num">' + (l.cr ? num(l.cr) : "") + "</td></tr>";
+        }).join("")) + "</div>";
+    }).join("") + (S.journals.length > 60 ? '<p class="muted">只顯示最近 60 張。</p>' : "");
+  }
+
+  function acctTrial() {
+    var tb = L.trialBalance(S), dr = 0, cr = 0;
+    tb.forEach(function (r) { dr += r.dr; cr += r.cr; });
+    var rows = tb.map(function (r) {
+      return '<tr><td><span class="code">' + esc(r.code) + "</span> " + esc(r.name) + '</td><td>' + esc(r.type) + '</td><td class="num">' + num(r.dr) + '</td><td class="num">' + num(r.cr) + '</td><td class="num"><b>' + (r.balance < 0 ? "(" + num(-r.balance) + ")" : num(r.balance)) + "</b></td></tr>";
+    }).join("") + '<tr><td colspan="2"><b>合計</b></td><td class="num"><b>' + num(dr) + '</b></td><td class="num"><b>' + num(cr) + "</b></td><td>" + (Math.round(dr) === Math.round(cr) ? '<span class="badge approved">借貸平衡</span>' : '<span class="badge expired">借貸不平衡</span>') + "</td></tr>";
+    return tbl(["科目", "類別", "借方", "貸方", "餘額（括號為貸方）"], rows) +
+      '<p class="muted" style="margin-top:10px">餘額 = 借方 − 貸方。應收帳款的餘額會等於「應收帳款」頁所有未收憑單加總。</p>';
+  }
+
+  function renderAcct() {
+    if (!can("acct_view")) return noPerm("查看會計");
+    var seg = [["ar", "應收帳款"], ["invoice", "銷項發票"], ["journal", "傳票"], ["trial", "試算表"]].map(function (x) {
+      return '<button data-act="acct-view" data-v="' + x[0] + '" aria-pressed="' + (acctView === x[0]) + '">' + x[1] + "</button>";
+    }).join("");
+    var body = acctView === "ar" ? acctAr() : acctView === "invoice" ? acctInvoices() : acctView === "journal" ? acctJournals() : acctTrial();
+    return card("ACCOUNTING", "會計", '<div class="row" style="margin-bottom:6px"><div class="seg">' + seg + "</div></div>" + body) +
+      '<p class="muted">示範範圍：銷貨 → 傳票 → 應收 → 收款，以及銷項發票。還沒有：進貨與應付帳款、成本與毛利、損益表與資產負債表、營業稅申報檔、票據、固定資產折舊、期末結帳。科目只是示範，正式版要用公司自己的會計科目表。</p>';
+  }
+
+  function openPay(orderId) {
+    var o = S.sales.filter(function (x) { return x.id === orderId; })[0];
+    if (!o) return;
+    openDialog("登記收款：" + o.no, function () {
+      var c = L.customer(S, o.customer), bal = L.orderBalance(S, o);
+      return '<p class="muted" style="margin-bottom:12px">' + esc(c ? c.name : "") + "｜總計 " + num(L.orderTotal(o)) + "｜已收 " + num(L.orderPaid(S, o)) + "｜<b>未收 " + num(bal) + "</b></p>" +
+        '<form data-form="pay" data-id="' + esc(o.id) + '" class="grid"><label class="field">收款日期<input name="date" type="date" required value="' + L.ymd(new Date()) + '"></label>' +
+        '<label class="field">金額<input name="amount" type="number" min="1" max="' + bal + '" step="1" required value="' + bal + '"></label>' +
+        '<label class="field">方式<select name="method"><option>匯款</option><option>支票</option><option>現金</option></select></label>' +
+        '<div class="field">&nbsp;<button class="btn btn-primary">確認收款</button></div></form>' +
+        '<p class="muted" style="margin-top:10px">會自動產生傳票：借 銀行存款，貸 應收帳款。可以只收一部分。</p>';
+    });
+  }
+
+  // ---------------- 統計 ----------------
+  function bars(rows, fmt) {
+    if (!rows.length) return '<div class="empty">還沒有資料</div>';
+    var max = Math.max.apply(null, rows.map(function (r) { return r.v; })) || 1;
+    return '<div class="bars">' + rows.map(function (r) {
+      return '<div class="bar-row"><span class="bar-l" title="' + esc(r.l) + '">' + esc(r.l) + '</span><span class="bar-t"><i style="width:' + Math.max(2, Math.round(r.v / max * 100)) + '%"></i></span><b class="bar-v">' + (fmt ? fmt(r.v) : r.v) + "</b></div>";
+    }).join("") + "</div>";
+  }
+  function top(obj, n) {
+    return Object.keys(obj).map(function (k) { return { l: k, v: obj[k] }; }).sort(function (a, b) { return b.v - a.v; }).slice(0, n);
+  }
+
+  function renderStats() {
+    if (!can("stats_view")) return noPerm("查看數據統計");
+    var months = L.lastMonths(6), rs = L.reportStats(S, months), priceOn = can("view_price") && can("sales_view");
+    var cards = [];
+    cards.push(card("REPORTS", "報刀數量（近 6 個月，共 " + rs.count + " 張）", bars(months.map(function (m) { return { l: m, v: rs.byMonth[m] }; }))));
+    cards.push(card("HOSPITALS", "各醫院報刀數", bars(top(rs.byHospital, 8))));
+    cards.push(card("DOCTORS", "醫師 Top 5", bars(top(rs.byDoctor, 5))));
+    cards.push(card("USAGE", "使用量 Top 10 品項", bars(top(rs.items, 10))));
+    cards.push(card("SCRAP", "報廢", '<p style="font:600 1.6rem var(--mono)">' + rs.scrap + ' <span class="muted" style="font:400 0.85rem var(--sans)">／ 使用 ' + rs.qty + ' 件，佔 ' + (rs.qty ? (rs.scrap / rs.qty * 100).toFixed(1) : "0.0") + "%</span></p>" +
+      '<p class="muted" style="margin-top:8px">報廢比例偏高的醫院或品項，值得追問原因。</p>'));
+    if (priceOn) {
+      var ss = L.salesStats(S, months);
+      cards.push(card("SALES", "銷貨額（未稅，近 6 個月）", bars(months.map(function (m) { return { l: m, v: ss.byMonth[m] }; }), num) + '<p class="muted" style="margin-top:10px">合計 ' + money(ss.total) + "</p>"));
+      cards.push(card("CUSTOMERS", "客戶銷貨排行（未稅）", bars(top(ss.byCustomer, 5), num)));
+    }
+    if (can("stock_view")) {
+      var byType = { company: { p: 0, s: 0 }, hospital: { p: 0, s: 0 }, rep: { p: 0, s: 0 } }, exp = { "已過期": 0, "30 天內": 0, "31–60 天": 0, "61–90 天": 0, "90 天以上": 0 };
+      S.lots.forEach(function (l) {
+        if (l.qty <= 0) return;
+        var loc = L.location(S, l.loc), p = L.product(S, l.sku), d = L.expDays(l.exp);
+        if (loc && p) byType[loc.type][p.kind === "screw" ? "s" : "p"] += l.qty;
+        exp[d < 0 ? "已過期" : d <= 30 ? "30 天內" : d <= 60 ? "31–60 天" : d <= 90 ? "61–90 天" : "90 天以上"] += l.qty;
+      });
+      cards.push(card("STOCK", "庫存分布（件／支）", bars(["company", "hospital", "rep"].map(function (t) { return { l: TYPE[t] + "・骨板", v: byType[t].p }; }).concat(["company", "hospital", "rep"].map(function (t) { return { l: TYPE[t] + "・骨釘", v: byType[t].s }; })))));
+      cards.push(card("EXPIRY", "效期分布（依數量）", bars(Object.keys(exp).map(function (k) { return { l: k, v: exp[k] }; }))));
+    }
+    return '<div class="stat-grid">' + cards.join("") + "</div>";
+  }
+
   // ---------------- 批號追溯 ----------------
   function tbl(headers, rows) {
     return '<div class="table-wrap"><table class="table"><thead><tr>' + headers.map(function (h) { return "<th>" + h + "</th>"; }).join("") + "</tr></thead><tbody>" + rows + "</tbody></table></div>";
@@ -732,16 +881,20 @@
 
     document.getElementById("operator").innerHTML = options(S.users.map(function (u) { return { v: u.name, t: u.name }; }), S.operator);
     document.getElementById("roleChip").textContent = L.role(S);
-    var nav = visible.map(function (n) {
+    var navBtn = function (n) {
       return '<button data-tab="' + n.id + '"' + (n.id === tab ? ' aria-current="page"' : "") + '><svg viewBox="0 0 24 24" aria-hidden="true">' + ICONS[n.id] + "</svg><span>" + n.label + "</span></button>";
-    }).join("");
-    document.getElementById("nav").innerHTML = nav;
-    document.getElementById("bottomnav").innerHTML = nav;
+    };
+    document.getElementById("nav").innerHTML = visible.map(navBtn).join("");
+    // A phone has room for about five: the rest go behind 更多.
+    var shown = visible.length > 5 ? visible.slice(0, 4) : visible;
+    moreItems = visible.length > 5 ? visible.slice(4) : [];
+    document.getElementById("bottomnav").innerHTML = shown.map(navBtn).join("") + (moreItems.length
+      ? '<button data-act="more-nav"' + (moreItems.some(function (n) { return n.id === tab; }) ? ' aria-current="page"' : "") + '><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg><span>更多</span></button>' : "");
 
     var cur = current();
     document.getElementById("pageHead").innerHTML = '<div class="eyebrow">' + esc(cur.id) + "</div><h1>" + esc(cur.title) + "</h1><p>" + esc(cur.sub) + "</p>";
 
-    var html = tab === "todo" ? renderTodo() : tab === "report" ? renderReport() : tab === "sales" ? renderSales() : tab === "stock" ? renderStock() : tab === "trace" ? renderTrace() : renderSettings();
+    var html = tab === "todo" ? renderTodo() : tab === "report" ? renderReport() : tab === "sales" ? renderSales() : tab === "stock" ? renderStock() : tab === "acct" ? renderAcct() : tab === "stats" ? renderStats() : tab === "trace" ? renderTrace() : renderSettings();
     var y = window.scrollY;
     view.innerHTML = html;
     labelTables(view);
@@ -759,7 +912,11 @@
   }
   document.getElementById("nav").addEventListener("click", onNav);
   document.getElementById("bottomnav").addEventListener("click", onNav);
-  dlg.addEventListener("click", function (e) { if (e.target === dlg || e.target.closest("[data-close]")) closeDialog(); });
+  dlg.addEventListener("click", function (e) {
+    var t = e.target.closest("[data-tab]");
+    if (t) { tab = t.getAttribute("data-tab"); closeDialog(); render(); window.scrollTo(0, 0); return; }
+    if (e.target === dlg || e.target.closest("[data-close]")) closeDialog();
+  });
   dlg.addEventListener("close", function () { refreshDlg = null; });
 
   document.addEventListener("click", function (e) {
@@ -803,6 +960,15 @@
       URL.revokeObjectURL(link.href);
     } else if (a === "stock-view") { stockView = g("v"); render(); }
     else if (a === "stock-scope") { stockScope = g("v"); render(); }
+    else if (a === "acct-view") { acctView = g("v"); render(); }
+    else if (a === "pay-order") openPay(g("id"));
+    else if (a === "more-nav") {
+      openDialog("更多", function () {
+        return '<div class="more-list">' + moreItems.map(function (n) {
+          return '<button class="btn" data-tab="' + n.id + '"><svg viewBox="0 0 24 24" aria-hidden="true">' + ICONS[n.id] + "</svg>" + n.label + "</button>";
+        }).join("") + "</div>";
+      });
+    }
     else if (a === "go-todo") { tab = "todo"; render(); window.scrollTo(0, 0); }
     else if (a === "toggle-picker") {
       if (!D.showPicker && !boxesAt(D.loc).length) return toast("這個扣庫來源沒有骨釘盒", true);
@@ -882,6 +1048,7 @@
     else if (b === "main-qty") { D.main[i].qty = Math.max(1, Math.floor(Number(t.value)) || 1); render(); }
     else if (b === "main-scrap") { D.main[i].scrap = t.checked; }
     else if (b === "sp-box") { D.sp.box = t.value; render(); }
+    else if (b === "acct-month") { acctMonth = t.value; render(); }
     else if (b === "stock-zero") { stockZero = t.checked; render(); }
     else if (b === "date") D.date = t.value;
     else if (b === "s-date") SD.date = t.value;
@@ -947,6 +1114,9 @@
     } else if (f === "movebox") {
       var mid = e.target.getAttribute("data-id");
       if (run(function () { return L.moveBox(S, mid, v("to")); }, "已調撥整盒")) { closeDialog(); openBox(mid); }
+    } else if (f === "pay") {
+      var oid = e.target.getAttribute("data-id");
+      if (run(function () { L.receivePayment(S, oid, Number(v("amount")), v("date"), v("method")); }, "已登記收款，傳票已產生")) closeDialog();
     } else if (f === "adduser") {
       run(function () { L.addUser(S, v("name"), v("role")); e.target.reset(); }, "已新增人員");
     } else if (f === "addloc") {

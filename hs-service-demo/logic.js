@@ -4,8 +4,8 @@
 })(typeof self !== "undefined" ? self : this, function () {
   "use strict";
 
-  var KEY = "hs-service-demo-v4";
-  var VERSION = 4;
+  var KEY = "hs-service-demo-v5";
+  var VERSION = 5;
   var ROLES = ["業務", "內勤", "管理員"];
   var TAX = 0.05;
 
@@ -20,12 +20,15 @@
     ["sales_edit", "開立／編輯銷貨憑單", "銷貨"],
     ["sales_confirm", "覆核出貨與開發票", "銷貨"],
     ["settings_edit", "庫位、品項、客戶設定", "設定"],
+    ["acct_view", "查看會計（應收、發票、傳票、試算表）", "會計"],
+    ["acct_edit", "登記收款", "會計"],
+    ["stats_view", "查看數據統計", "統計"],
     ["audit_view", "查看批號追溯與操作紀錄", "紀錄"],
     ["manage_perms", "管理人員與權限", "權限"]
   ];
   var DEFAULT_PERMS = {
     "業務": { report_submit: true, stock_view: true, audit_view: true },
-    "內勤": { report_submit: true, report_approve: true, stock_view: true, stock_edit: true, view_price: true, sales_view: true, sales_edit: true, sales_confirm: true, settings_edit: true, audit_view: true },
+    "內勤": { report_submit: true, report_approve: true, stock_view: true, stock_edit: true, view_price: true, sales_view: true, sales_edit: true, sales_confirm: true, settings_edit: true, acct_view: true, acct_edit: true, stats_view: true, audit_view: true },
     "管理員": {}
   };
   CAPS.forEach(function (c) { DEFAULT_PERMS["管理員"][c[0]] = true; });
@@ -523,7 +526,8 @@
     if (o.status !== "draft") throw new Error("這張憑單已覆核");
     consume(S, o.lines);
     o.status = "confirmed"; o.reviewer = S.operator; o.confirmedAt = nowStr();
-    log(S, "銷貨憑單覆核出貨", o.no + "｜扣庫 " + o.lines.length + " 筆");
+    postSalesJournal(S, o, ymd(new Date()));
+    log(S, "銷貨憑單覆核出貨", o.no + "｜扣庫 " + o.lines.length + " 筆｜已產生傳票");
     return o;
   }
 
@@ -537,6 +541,135 @@
     o.invoice = "ZZ" + String(10000000 + n * 37);
     log(S, "開立發票(示範)", o.no + "｜" + o.invoice);
     return o;
+  }
+
+  // ---------- 會計 (demo scope: 銷貨 -> 傳票 -> 應收 -> 收款) ----------
+  // Account codes are demo placeholders, not a real chart of accounts: a bookkeeper
+  // has to supply the company's own before this is used for real.
+  var ACCOUNTS = [
+    { code: "1100", name: "銀行存款", type: "資產" },
+    { code: "1200", name: "應收帳款", type: "資產" },
+    { code: "2200", name: "銷項稅額", type: "負債" },
+    { code: "4100", name: "銷貨收入", type: "收入" }
+  ];
+  function accountName(code) {
+    for (var i = 0; i < ACCOUNTS.length; i++) if (ACCOUNTS[i].code === code) return ACCOUNTS[i].name;
+    return code;
+  }
+  function shiftDate(str, n) {
+    var d = new Date(str + "T00:00:00");
+    d.setDate(d.getDate() + n);
+    return ymd(d);
+  }
+  function postJournal(S, date, memo, source, ls) {
+    var dr = 0, cr = 0;
+    ls.forEach(function (l) { dr += l.dr || 0; cr += l.cr || 0; });
+    if (Math.round(dr) !== Math.round(cr)) throw new Error("傳票借貸不平衡");
+    var prefix = "J" + String(date).replace(/-/g, "");
+    var n = S.journals.filter(function (j) { return j.no.indexOf(prefix) === 0; }).length + 1;
+    var j = { id: uid("J"), no: prefix + (n < 10 ? "00" : n < 100 ? "0" : "") + n, date: date, memo: memo, source: source, by: S.operator,
+      lines: ls.map(function (l) { return { acct: l.acct, dr: l.dr || 0, cr: l.cr || 0 }; }) };
+    S.journals.unshift(j);
+    return j;
+  }
+  function postSalesJournal(S, o, date) {
+    var t = salesTotals(o);
+    return postJournal(S, date, "銷貨 " + o.no, "sales:" + o.id, [{ acct: "1200", dr: t.total }, { acct: "4100", cr: t.net }, { acct: "2200", cr: t.tax }]);
+  }
+  function orderTotal(o) { return salesTotals(o).total; }
+  function orderPaid(S, o) {
+    var n = 0;
+    S.payments.forEach(function (p) { if (p.orderId === o.id) n += p.amount; });
+    return n;
+  }
+  function orderBalance(S, o) { return orderTotal(o) - orderPaid(S, o); }
+
+  function receivePayment(S, orderId, amount, date, method) {
+    need(S, "acct_edit");
+    var o = S.sales.filter(function (x) { return x.id === orderId; })[0];
+    if (!o || o.status !== "confirmed") throw new Error("只有已覆核的憑單才能收款");
+    amount = Math.round(Number(amount));
+    if (!(amount > 0)) throw new Error("金額必須大於 0");
+    var bal = orderBalance(S, o);
+    if (amount > bal) throw new Error("收款金額超過未收餘額（" + bal + "）");
+    if (!date) throw new Error("請填收款日期");
+    var pay = { id: uid("P"), orderId: orderId, date: date, amount: amount, method: method || "匯款", by: S.operator };
+    S.payments.push(pay);
+    postJournal(S, date, "收款 " + o.no, "pay:" + pay.id, [{ acct: "1100", dr: amount }, { acct: "1200", cr: amount }]);
+    log(S, "收款登記", o.no + "｜" + amount + "｜" + pay.method);
+    return pay;
+  }
+
+  // Unpaid confirmed orders, oldest first; days = age since the sales date.
+  function arRows(S) {
+    return S.sales.filter(function (o) { return o.status === "confirmed"; }).map(function (o) {
+      return { o: o, total: orderTotal(o), paid: orderPaid(S, o), balance: orderBalance(S, o), days: -expDays(o.date) };
+    }).filter(function (r) { return r.balance > 0; }).sort(function (a, b) { return b.days - a.days; });
+  }
+  function arByCustomer(S) {
+    var map = {}, order = [];
+    arRows(S).forEach(function (r) {
+      var c = customer(S, r.o.customer), key = r.o.customer;
+      if (!map[key]) { map[key] = { customer: c, b0: 0, b1: 0, b2: 0, b3: 0, total: 0 }; order.push(key); }
+      var g = map[key], k = r.days <= 30 ? "b0" : r.days <= 60 ? "b1" : r.days <= 90 ? "b2" : "b3";
+      g[k] += r.balance; g.total += r.balance;
+    });
+    return order.map(function (k) { return map[k]; }).sort(function (a, b) { return b.total - a.total; });
+  }
+  function invoiceRows(S) {
+    return S.sales.filter(function (o) { return o.status === "confirmed" && o.invoice; })
+      .map(function (o) { return { o: o, t: salesTotals(o) }; }).sort(function (a, b) { return a.o.date < b.o.date ? 1 : -1; });
+  }
+  function trialBalance(S) {
+    return ACCOUNTS.map(function (a) {
+      var dr = 0, cr = 0;
+      S.journals.forEach(function (j) { j.lines.forEach(function (l) { if (l.acct === a.code) { dr += l.dr; cr += l.cr; } }); });
+      return { code: a.code, name: a.name, type: a.type, dr: dr, cr: cr, balance: dr - cr };
+    });
+  }
+
+  // ---------- 統計 ----------
+  function monthKey(d) { return String(d).slice(0, 7); }
+  function lastMonths(n) {
+    var out = [], now = new Date();
+    for (var i = n - 1; i >= 0; i--) {
+      var x = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      out.push(x.getFullYear() + "-" + pad(x.getMonth() + 1));
+    }
+    return out;
+  }
+  function reportStats(S, months) {
+    var res = { byMonth: {}, byHospital: {}, byDoctor: {}, items: {}, scrap: 0, qty: 0, count: 0 };
+    months.forEach(function (m) { res.byMonth[m] = 0; });
+    S.reports.forEach(function (r) {
+      if (r.status !== "approved") return;
+      var m = monthKey(r.date);
+      if (!(m in res.byMonth)) return;
+      res.count++; res.byMonth[m]++;
+      var hn = locName(S, r.hospital);
+      res.byHospital[hn] = (res.byHospital[hn] || 0) + 1;
+      res.byDoctor[r.doctor] = (res.byDoctor[r.doctor] || 0) + 1;
+      reportItems(r).forEach(function (it) {
+        res.qty += it.qty;
+        if (it.scrap) res.scrap += it.qty;
+        var p = product(S, it.sku), key = (p && p.kind === "screw" ? "骨釘 " : "骨板 ") + (p ? p.name : it.sku);
+        res.items[key] = (res.items[key] || 0) + it.qty;
+      });
+    });
+    return res;
+  }
+  function salesStats(S, months) {
+    var res = { byMonth: {}, byCustomer: {}, total: 0 };
+    months.forEach(function (m) { res.byMonth[m] = 0; });
+    S.sales.forEach(function (o) {
+      if (o.status !== "confirmed") return;
+      var m = monthKey(o.date);
+      if (!(m in res.byMonth)) return;
+      var t = salesTotals(o), c = customer(S, o.customer), name = c ? c.name : o.customer;
+      res.byMonth[m] += t.net; res.total += t.net;
+      res.byCustomer[name] = (res.byCustomer[name] || 0) + t.net;
+    });
+    return res;
   }
 
   // ---------- tracing ----------
@@ -576,7 +709,7 @@
         { id: "c102", code: "102", name: "範例醫療器材行", addr: "彰化縣範例鎮示範街 28 號", contact: "李先生", tel: "04-7000-0002" },
         { id: "c103", code: "103", name: "測試聯合診所", addr: "雲林縣示範市測試路 5 號", contact: "陳先生", tel: "05-5000-0003" }
       ],
-      products: [], lots: [], reports: [], sales: [], log: []
+      products: [], lots: [], reports: [], sales: [], payments: [], journals: [], log: []
     };
     ["中榮", "員基", "鹿基", "彰基", "803", "二基"].forEach(function (n, i) {
       S.locations.push({ id: "h" + i, name: n, type: "hospital" });
@@ -619,7 +752,7 @@
       S.boxes.push(b);
       syncBox(S, b);
     }
-    var two = [["3.5 鎖定骨釘", 5], ["3.5 皮質骨釘", 6]];
+    var two = [["3.5 VALS 鎖定骨釘", 5], ["3.5 CS 皮質骨釘", 6]];
     mkBox("3.5 VA 上肢器械 A盒", "co", "SL35-2403", two, 0.6);
     mkBox("3.5 VA 上肢器械 B盒", "co", "SL35-2406", two, 0.5);
     mkBox("3.5 VA 上肢器械（中榮）", "h0", "SL35-2403", two, 0.28);
@@ -632,6 +765,7 @@
     S.log.unshift({ ts: nowStr(), user: "系統", action: "初始化", detail: "載入示範資料" });
     seedReports(S);
     seedSales(S);
+    seedHistory(S);
     S.operator = "內勤-小美";
     return S;
   }
@@ -656,6 +790,65 @@
       });
       if (i < 2) { S.operator = "內勤-小美"; approveReport(S, rep.id); }
     });
+  }
+
+  // Backdated, already-approved activity so the statistics and the ledger are not empty.
+  // It does not touch stock: it stands for what already happened before the demo started.
+  function seedHistory(S) {
+    var r = rng(77123);
+    var docs = ["林醫師", "陳醫師", "黃醫師", "吳醫師", "張醫師", "李醫師", "周醫師", "蔡醫師"];
+    var reps = ["業務-小胖", "業務-阿明"];
+    var pl = plates(S);
+    var screws = S.products.filter(function (p) { return p.kind === "screw"; });
+    var hospitals = S.locations.filter(function (l) { return l.type === "hospital"; });
+    var lotOf = function (sku) {
+      var ln = S.lots.filter(function (l) { return l.sku === sku; })[0];
+      return ln ? ln.lot : "2410100021";
+    };
+    for (var i = 0; i < 44; i++) {
+      var date = addDays(-(4 + Math.floor(r() * 165)));
+      var hosp = hospitals[Math.floor(r() * hospitals.length)];
+      var main = [], sc = [];
+      for (var k = 0, n1 = 1 + Math.floor(r() * 2); k < n1; k++) {
+        var p = pl[Math.floor(r() * pl.length)];
+        main.push({ sku: p.sku, lot: lotOf(p.sku), qty: 1, scrap: false });
+      }
+      for (var k2 = 0, n2 = Math.floor(r() * 4); k2 < n2 && screws.length; k2++) {
+        var sp = screws[Math.floor(r() * screws.length)];
+        sc.push({ sku: sp.sku, lot: S.boxes[Math.floor(r() * S.boxes.length)].lot, qty: 1, scrap: r() < 0.15 });
+      }
+      S.reports.push({ id: uid("R"), date: date, hospital: hosp.id, doctor: docs[Math.floor(r() * docs.length)], loc: hosp.id, note: "", status: "approved",
+        main: main, screws: sc, createdBy: reps[Math.floor(r() * 2)], createdAt: date + " 09:00:00", reviewedBy: "內勤-小美", reviewedAt: date + " 17:00:00" });
+    }
+    S.reports.sort(function (a, b) { return a.date < b.date ? 1 : a.date > b.date ? -1 : 0; });
+
+    S.operator = "內勤-小美";
+    var invN = S.sales.filter(function (o) { return o.invoice; }).length;
+    for (var j = 0; j < 10; j++) {
+      var d2 = addDays(-(8 + Math.floor(r() * 150)));
+      var cust = S.customers[Math.floor(r() * S.customers.length)];
+      var ls = [];
+      for (var q = 0, n3 = 1 + Math.floor(r() * 3); q < n3; q++) {
+        var pp = pl[Math.floor(r() * pl.length)];
+        ls.push({ sku: pp.sku, loc: "co", lot: lotOf(pp.sku), qty: 1 + Math.floor(r() * 3), price: pp.price });
+      }
+      invN++;
+      var o = { id: uid("S"), no: nextSalesNo(S, d2), date: d2, customer: cust.id, currency: "NTD", taxMode: "incl", salesRep: reps[Math.floor(r() * 2)], dept: "業務部", note: "",
+        status: "confirmed", maker: "內勤-小美", reviewer: "內勤-小美", invoice: "ZZ" + String(10000000 + invN * 37), createdAt: d2 + " 10:00:00", confirmedAt: d2 + " 15:00:00", lines: ls };
+      S.sales.push(o);
+      postSalesJournal(S, o, d2);
+      var total = orderTotal(o), roll = r();
+      if (roll < 0.55) addPaymentSeed(S, o, shiftDate(d2, 12 + Math.floor(r() * 25)), total);
+      else if (roll < 0.75) addPaymentSeed(S, o, shiftDate(d2, 20 + Math.floor(r() * 20)), Math.round(total / 2));
+    }
+    S.sales.sort(function (a, b) { return a.date < b.date ? 1 : a.date > b.date ? -1 : 0; });
+    S.journals.sort(function (a, b) { return a.date < b.date ? 1 : a.date > b.date ? -1 : (a.no < b.no ? 1 : -1); });
+  }
+  function addPaymentSeed(S, o, date, amount) {
+    if (date > ymd(new Date())) return;
+    var pay = { id: uid("P"), orderId: o.id, date: date, amount: amount, method: "匯款", by: "內勤-小美" };
+    S.payments.push(pay);
+    postJournal(S, date, "收款 " + o.no, "pay:" + pay.id, [{ acct: "1100", dr: amount }, { acct: "1200", cr: amount }]);
   }
 
   function seedSales(S) {
@@ -702,6 +895,9 @@
     submitReport: submitReport, approveReport: approveReport, rejectReport: rejectReport,
     reportItems: reportItems, reportsCSV: reportsCSV,
     salesTotals: salesTotals, saveSales: saveSales, confirmSales: confirmSales, issueInvoice: issueInvoice,
+    ACCOUNTS: ACCOUNTS, accountName: accountName, orderTotal: orderTotal, orderPaid: orderPaid, orderBalance: orderBalance,
+    receivePayment: receivePayment, arRows: arRows, arByCustomer: arByCustomer, invoiceRows: invoiceRows, trialBalance: trialBalance,
+    monthKey: monthKey, lastMonths: lastMonths, reportStats: reportStats, salesStats: salesStats,
     trace: trace, seed: seed, load: load, save: save, reset: reset, log: log
   };
 });

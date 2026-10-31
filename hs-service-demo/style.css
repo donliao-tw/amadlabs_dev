@@ -327,3 +327,20 @@ dialog.wide { width: min(980px, 96vw); }
   .submitbar { position: sticky; bottom: 62px; z-index: 5; padding: 10px 0 2px; background: linear-gradient(transparent, var(--surface) 30%); }
   .submitbar .btn { width: 100%; padding: 12px; }
 }
+
+/* ---------- statistics + accounting + mobile "more" ---------- */
+.stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 18px; }
+.stat-grid .card { margin-bottom: 0; }
+.bars { display: flex; flex-direction: column; gap: 9px; }
+.bar-row { display: grid; grid-template-columns: minmax(84px, 36%) 1fr auto; align-items: center; gap: 10px; font-size: 0.84rem; }
+.bar-l { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bar-t { height: 10px; border-radius: 999px; background: var(--panel); border: 1px solid var(--line); overflow: hidden; }
+.bar-t i { display: block; height: 100%; border-radius: 999px; background: var(--accent); }
+.bar-v { min-width: 34px; text-align: right; font: 600 0.8rem var(--mono); font-variant-numeric: tabular-nums; }
+.more-list { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.more-list .btn { display: flex; align-items: center; gap: 10px; justify-content: flex-start; padding: 12px 14px; }
+.more-list svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+@media (max-width: 900px) {
+  .stat-grid { grid-template-columns: 1fr; }
+  .bar-row { grid-template-columns: minmax(70px, 40%) 1fr auto; }
+}
