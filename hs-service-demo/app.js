@@ -465,7 +465,8 @@
       return '<button data-act="stock-scope" data-v="' + x[0] + '" aria-pressed="' + (stockScope === x[0]) + '">' + x[1] + "</button>";
     }).join("") + "</div>";
     var viewSeg = '<div class="seg"><button data-act="stock-view" data-v="plates" aria-pressed="' + (stockView === "plates") + '">骨板</button>' +
-      '<button data-act="stock-view" data-v="boxes" aria-pressed="' + (stockView === "boxes") + '">骨釘盒</button></div>';
+      '<button data-act="stock-view" data-v="boxes" aria-pressed="' + (stockView === "boxes") + '">骨釘盒</button>' +
+      '<button data-act="stock-view" data-v="moves" aria-pressed="' + (stockView === "moves") + '">最新異動</button></div>';
     var actions = '<div class="row">' + (stockView === "boxes" ? '<button class="btn btn-sm" data-act="new-box"' + (cfg ? "" : ' disabled title="沒有設定權限"') + ">＋ 新增骨釘盒</button>" : "") +
       '<button class="btn btn-sm" data-act="open-inbound"' + (edit ? "" : ' disabled title="沒有庫存異動權限"') + ">＋ 入庫</button>" +
       '<button class="btn btn-sm" data-act="open-transfer"' + (edit ? "" : " disabled") + ">調撥</button></div>";
@@ -474,7 +475,7 @@
 
     var focus = stockLoc && L.location(S, stockLoc) ? '<div class="focus-chip"><span>只看</span><b>' + esc(L.locName(S, stockLoc)) + "</b>" + locBadge(L.location(S, stockLoc)) + '<button class="btn btn-sm" data-act="map-clear">顯示全部</button></div>' : "";
     var main = banner + card("STOCK", "庫存", '<div class="row" style="justify-content:space-between">' + scopeSeg + viewSeg + "</div>" + focus + summary + '<div class="row" style="justify-content:flex-end;margin-bottom:6px">' + actions + "</div>" + search +
-      (stockView === "plates" ? '<div id="matrixHost">' + platesMatrix() + "</div>" : boxesView()));
+      (stockView === "plates" ? '<div id="matrixHost">' + platesMatrix() + "</div>" : stockView === "moves" ? movesView() : boxesView()));
     return '<div class="stock-layout"><div class="stock-main">' + main + '</div><aside class="stock-side">' + mapCardHtml() + "</aside></div>";
   }
 
@@ -484,6 +485,18 @@
       if (q && (p.sku + " " + p.name).toLowerCase().indexOf(q) < 0) return false;
       return stockZero || scopeQty(p.sku) > 0;
     });
+  }
+
+  // Stock movements only: in, transfer, count adjustment, scrap, report deductions, shipments, box edits.
+  var MOVE_ACTIONS = ["入庫", "調撥", "調撥整盒", "盤點調整", "報廢", "退回供應商", "報刀審核通過", "銷貨憑單覆核出貨", "新增骨釘盒", "骨釘盒設定", "刪除骨釘盒"];
+  function movesView() {
+    var rows = S.log.filter(function (e) { return MOVE_ACTIONS.indexOf(e.action) >= 0; }).slice(0, 60);
+    if (!rows.length) return '<div class="empty">還沒有庫存異動。</div>';
+    return '<p class="muted" style="margin:0 0 10px">庫存的進出都會留紀錄，最新的在最上面（最近 ' + rows.length + " 筆）。</p>" +
+      '<div class="table-wrap"><table class="table"><thead><tr><th>時間</th><th>動作</th><th>內容</th><th>人員</th></tr></thead><tbody>' +
+      rows.map(function (e) {
+        return '<tr><td class="code">' + esc(e.ts) + '</td><td><span class="badge ' + (e.action === "報廢" ? "scrap" : "") + '">' + esc(e.action) + "</span></td><td>" + esc(e.detail) + "</td><td>" + esc(e.user) + "</td></tr>";
+      }).join("") + "</tbody></table></div>";
   }
 
   function platesMatrix() {
@@ -900,9 +913,18 @@
   function tbl(headers, rows) {
     return '<div class="table-wrap"><table class="table"><thead><tr>' + headers.map(function (h) { return "<th>" + h + "</th>"; }).join("") + "</tr></thead><tbody>" + rows + "</tbody></table></div>";
   }
+  function traceLotList() {
+    var lots = S.lots.filter(function (l) { return l.qty > 0; }).sort(function (a, b) { return a.exp < b.exp ? -1 : a.exp > b.exp ? 1 : 0; });
+    if (!lots.length) return '<div class="empty">目前沒有庫存批號。</div>';
+    return '<p class="muted" style="margin:14px 0 10px">輸入批號或型號，或直接從下面選一個，查它現在在哪、用在哪家醫院哪位醫師。</p>' +
+      '<div class="table-wrap"><table class="table"><thead><tr><th>批號</th><th>型號</th><th>庫位</th><th>效期</th><th class="num">數量</th><th></th></tr></thead><tbody>' +
+      lots.map(function (l) {
+        return '<tr><td class="code">' + esc(l.lot) + '</td><td class="code">' + esc(l.sku) + "</td><td>" + esc(L.locName(S, l.loc)) + "</td><td>" + esc(l.exp) + " " + expBadge(l.exp) + '</td><td class="num">' + l.qty + '</td><td><button class="btn btn-sm" data-act="trace-lot" data-lot="' + esc(l.lot) + '">追溯</button></td></tr>';
+      }).join("") + "</tbody></table></div>";
+  }
   function traceResultsHtml() {
     var t = L.trace(S, traceQ);
-    if (!t) return '<div class="empty">輸入批號或型號，查它現在在哪、用在哪家醫院哪位醫師。</div>';
+    if (!t) return traceLotList();
     var stock = t.stock.length ? tbl(["庫位", "型號", "品名", "批號", "效期", "數量"], t.stock.map(function (l) {
       return "<tr><td>" + esc(L.locName(S, l.loc)) + '</td><td class="code">' + esc(l.sku) + "</td><td>" + esc(pName(l.sku)) + '</td><td class="code">' + esc(l.lot) + "</td><td>" + esc(l.exp) + " " + expBadge(l.exp) + '</td><td class="num">' + l.qty + "</td></tr>";
     }).join("")) : '<div class="empty">目前沒有庫存</div>';
@@ -1141,6 +1163,7 @@
       link.click();
       URL.revokeObjectURL(link.href);
     } else if (a === "stock-view") { stockView = g("v"); render(); }
+    else if (a === "trace-lot") { traceQ = g("lot"); render(); }
     else if (a === "stock-scope") { stockScope = g("v"); stockLoc = null; render(); }
     else if (a === "acct-view") { acctView = g("v"); render(); }
     else if (a === "pay-order") openPay(g("id"));
@@ -1290,6 +1313,7 @@
     } else if (t.id === "traceInput") {
       traceQ = t.value;
       document.getElementById("traceResults").innerHTML = traceResultsHtml();
+      labelTables(document.getElementById("traceResults"));
     }
   });
 
