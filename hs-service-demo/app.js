@@ -882,7 +882,7 @@
         exp[d < 0 ? 0 : d <= 30 ? 1 : d <= 60 ? 2 : d <= 90 ? 3 : 4][1] += l.qty;
       });
       var totalExp = exp.reduce(function (a, e) { return a + e[1]; }, 0) || 1;
-      var stackBar = '<div class="stack">' + exp.filter(function (e) { return e[1] > 0; }).map(function (e) {
+      var stackBar = '<div class="segbar">' + exp.filter(function (e) { return e[1] > 0; }).map(function (e) {
         return '<span class="seg seg-' + e[2] + '" style="flex:' + e[1] + '" title="' + e[0] + " " + e[1] + '"></span>';
       }).join("") + '</div><ul class="stack-legend">' + exp.map(function (e) {
         return '<li><i class="seg-' + e[2] + '"></i>' + e[0] + "<b>" + e[1] + "</b><em>" + (e[1] / totalExp * 100).toFixed(0) + "%</em></li>";

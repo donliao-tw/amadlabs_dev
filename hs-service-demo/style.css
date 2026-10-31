@@ -364,7 +364,7 @@ dialog.wide { width: min(980px, 96vw); }
 .mini i { display: block; height: 100%; background: var(--accent); }
 td.share em { display: inline-block; min-width: 32px; font: normal 500 0.76rem var(--mono); color: var(--muted); text-align: right; }
 
-.stack { display: flex; height: 18px; border-radius: 999px; overflow: hidden; border: 1px solid var(--line); }
+.segbar { display: flex; height: 18px; border-radius: 999px; overflow: hidden; border: 1px solid var(--line); }
 .seg { display: block; min-width: 4px; }
 .seg-expired { background: var(--red); }
 .seg-d30 { background: var(--amber); }
