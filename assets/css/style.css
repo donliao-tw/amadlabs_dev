@@ -919,6 +919,17 @@ a:hover { text-decoration: underline; }
   margin-top: 2px;
 }
 
+.nav-demo-tag {
+  margin-left: auto;
+  padding: 2px 7px;
+  border-radius: 6px;
+  background: var(--color-accent);
+  color: var(--color-accent-contrast);
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+}
+
 .nav-dropdown-note {
   margin: 8px 6px 2px;
   color: var(--color-text-muted);
@@ -1127,6 +1138,19 @@ a:hover { text-decoration: underline; }
 
 /* Mobile */
 @media (max-width: 720px) {
+  /* The mobile nav is a left-aligned column panel; the desktop popover (right-anchored,
+     absolutely positioned) opened off the left edge of the screen there, so show it inline. */
+  .nav-dropdown {
+    align-self: stretch;
+  }
+
+  .nav-dropdown-menu {
+    position: static;
+    width: 100%;
+    margin-top: 10px;
+    box-shadow: none;
+  }
+
   .nav-toggle {
     display: flex;
   }

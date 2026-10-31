@@ -6,6 +6,8 @@
   "nav.contact": "聯絡我們",
   "apps.iea.title": "Industrial Excel AI",
   "apps.iea.desc": "掃描 Excel 結構的小工具",
+  "apps.hs.title": "報刀與庫存系統",
+  "apps.hs.desc": "醫材報刀、庫存、銷貨憑單",
   "apps.currency.title": "幣值換算",
   "apps.currency.desc": "輸入 X 自動算出 Y",
   "apps.more": "更多小工具陸續推出",

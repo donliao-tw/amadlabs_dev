@@ -4,11 +4,10 @@
 })(typeof self !== "undefined" ? self : this, function () {
   "use strict";
 
-  var KEY = "hs-service-demo-v3";
-  var VERSION = 3;
+  var KEY = "hs-service-demo-v4";
+  var VERSION = 4;
   var ROLES = ["業務", "內勤", "管理員"];
   var TAX = 0.05;
-  var SEAT_CAP = 6;
 
   // key, label, group — the order here is the order shown in the matrix.
   var CAPS = [
@@ -115,17 +114,6 @@
     return null;
   }
 
-  function screwSeries(S) {
-    var map = {}, order = [];
-    S.products.forEach(function (p) {
-      if (p.kind !== "screw") return;
-      if (!map[p.series]) { map[p.series] = { series: p.series, lens: [], sku: {} }; order.push(p.series); }
-      map[p.series].lens.push(p.len);
-      map[p.series].sku[p.len] = p.sku;
-    });
-    return order.map(function (s) { map[s].lens.sort(function (a, b) { return a - b; }); return map[s]; });
-  }
-
   function findLine(S, loc, sku, lot) {
     for (var i = 0; i < S.lots.length; i++) {
       var l = S.lots[i];
@@ -205,112 +193,161 @@
     });
   }
 
-  // ---------- screw boxes (a physical rack: columns by size, row bands by screw type) ----------
-  // Real racks list the same size on adjacent columns (14 14 16 16 ...), so a size
-  // can span several columns; its stock fills them in order, column by column.
+  // ---------- 骨釘盒 (a physical rack the customer lays out themselves) ----------
+  // A box is a grid: one label per column (any text, e.g. a size), and 1-4 row bands
+  // with a free name each (e.g. a screw type). Every slot is independent: filled or
+  // empty. A filled slot is one 骨釘 of (band name, column label); stock lines in
+  // S.lots are kept in step with the slots by syncBox.
   function defaultLabels() {
     var out = [];
-    for (var n = 10; n <= 48; n += 2) { out.push(n); out.push(n); }
+    for (var n = 10; n <= 48; n += 2) { out.push(String(n)); out.push(String(n)); }
     return out;
   }
-  function screwSku(S, series, len) {
-    for (var i = 0; i < S.products.length; i++) {
-      var p = S.products[i];
-      if (p.kind === "screw" && p.series === series && p.len === len) return p.sku;
+  function cleanKey(x) { return String(x).replace(/\s+/g, ""); }
+  function skuFor(bandName, label) { return "SC-" + cleanKey(bandName) + "-" + cleanKey(label); }
+  function ensureProduct(S, bandName, label) {
+    var sku = skuFor(bandName, label);
+    if (!product(S, sku)) {
+      S.products.push({ sku: sku, name: bandName + " " + label, price: 800, group: bandName + " 骨釘", kind: "screw", series: bandName, len: String(label) });
     }
-    return null;
-  }
-  function ensureScrewSku(S, series, len) {
-    var sku = screwSku(S, series, len);
-    if (sku) return sku;
-    sku = "SC-" + series + "-" + len;
-    S.products.push({ sku: sku, name: series + " 骨釘 L" + len, price: 800, group: series + " 骨釘", kind: "screw", series: series, len: len });
     return sku;
-  }
-  function boxBands(S, box) {
-    return box.bands.map(function (b) {
-      var groups = [], byLen = {};
-      box.labels.forEach(function (len, ci) {
-        if (!byLen[len]) { byLen[len] = { len: len, cols: [], sku: screwSku(S, b.series, len) }; groups.push(byLen[len]); }
-        byLen[len].cols.push(ci);
-      });
-      groups.forEach(function (g) {
-        g.cap = g.cols.length * b.rows;
-        g.qty = g.sku ? lineQty(S, box.loc, g.sku, box.lot) : 0;
-      });
-      return { series: b.series, rows: b.rows, groups: groups };
-    });
-  }
-  function boxTotal(S, box) {
-    var n = 0;
-    boxBands(S, box).forEach(function (b) { b.groups.forEach(function (g) { n += g.qty; }); });
-    return n;
   }
   function box(S, id) {
     for (var i = 0; i < S.boxes.length; i++) if (S.boxes[i].id === id) return S.boxes[i];
     return null;
   }
+  function slotId(boxId, bi, i) { return boxId + "|" + bi + "|" + i; }
+  function parseSlot(S, id) {
+    var p = String(id).split("|"), b = box(S, p[0]);
+    if (!b) return null;
+    var band = b.bands[+p[1]];
+    var i = +p[2];
+    if (!band || !(i >= 0 && i < band.fill.length)) return null;
+    return { box: b, bi: +p[1], band: band, i: i };
+  }
+  function slotLabel(box, i) { return box.labels[i % box.labels.length]; }
+  // Cells of one band, row by row, for drawing.
+  function boxCells(box, bi) {
+    var band = box.bands[bi], cols = box.labels.length, out = [];
+    band.fill.forEach(function (v, i) { out.push({ i: i, r: Math.floor(i / cols), c: i % cols, label: box.labels[i % cols], on: !!v }); });
+    return out;
+  }
+  function filledSlots(S, bx) {
+    var out = [];
+    bx.bands.forEach(function (band, bi) {
+      band.fill.forEach(function (v, i) {
+        if (v) out.push({ id: slotId(bx.id, bi, i), bi: bi, i: i, sku: skuFor(band.name, slotLabel(bx, i)) });
+      });
+    });
+    return out;
+  }
+  function boxTotal(S, bx) {
+    var n = 0;
+    bx.bands.forEach(function (band) { band.fill.forEach(function (v) { if (v) n++; }); });
+    return n;
+  }
+  function bandTotal(band) { var n = 0; band.fill.forEach(function (v) { if (v) n++; }); return n; }
+
+  // Make the stock lines match what is physically in the box.
+  function syncBox(S, bx) {
+    var counts = {};
+    bx.bands.forEach(function (band) {
+      band.fill.forEach(function (v, i) {
+        if (!v) return;
+        var sku = ensureProduct(S, band.name, slotLabel(bx, i));
+        counts[sku] = (counts[sku] || 0) + 1;
+      });
+    });
+    var all = Object.keys(counts).concat((bx.synced || []).filter(function (k) { return !(k in counts); }));
+    all.forEach(function (sku) {
+      var q = counts[sku] || 0, line = findLine(S, bx.loc, sku, bx.lot);
+      if (line) { line.qty = q; line.exp = bx.exp; }
+      else if (q > 0) S.lots.push({ id: uid("L"), loc: bx.loc, sku: sku, lot: bx.lot, exp: bx.exp, qty: q });
+    });
+    bx.synced = Object.keys(counts);
+  }
+
   function checkBoxConfig(S, c) {
     if (!String(c.name || "").trim()) throw new Error("請填盒子名稱");
     if (!location(S, c.loc)) throw new Error("請選位置");
     if (!String(c.lot || "").trim()) throw new Error("批號必填");
     if (!c.exp) throw new Error("效期必填");
-    if (!c.labels || !c.labels.length) throw new Error("至少要有一欄尺寸標示");
+    if (!c.labels || !c.labels.length) throw new Error("至少要有一欄標示");
     if (c.labels.length > 80) throw new Error("最多 80 欄");
-    c.labels.forEach(function (n) { if (!posInt(n)) throw new Error("尺寸標示必須是正整數：" + n); });
-    if (!c.bands || !c.bands.length) throw new Error("至少要有一個螺絲區塊");
+    c.labels.forEach(function (n) { if (!String(n).trim()) throw new Error("標示不能是空的"); });
+    if (!c.bands || !c.bands.length) throw new Error("至少要有一個區塊");
+    if (c.bands.length > 4) throw new Error("最多 4 個區塊");
     c.bands.forEach(function (b) {
-      if (!b.series) throw new Error("區塊缺螺絲種類");
+      if (!String(b.name || "").trim()) throw new Error("區塊要有名稱");
       if (!posInt(b.rows) || b.rows > 30) throw new Error("列數必須是 1 到 30 的整數");
     });
   }
+
   function createBox(S, c) {
     need(S, "settings_edit");
     checkBoxConfig(S, c);
-    var b = { id: uid("B"), name: String(c.name).trim(), loc: c.loc, lot: String(c.lot).trim(), exp: c.exp,
-      labels: c.labels.slice(), bands: c.bands.map(function (x) { return { series: x.series, rows: x.rows }; }) };
+    var cols = c.labels.length;
+    var b = { id: uid("B"), name: String(c.name).trim(), loc: c.loc, lot: String(c.lot).trim(), exp: c.exp, synced: [],
+      labels: c.labels.map(function (x) { return String(x).trim(); }),
+      bands: c.bands.map(function (x) { return { name: String(x.name).trim(), rows: x.rows, fill: new Array(x.rows * cols).fill(0) }; }) };
     S.boxes.push(b);
     log(S, "新增骨釘盒", b.name + "｜" + locName(S, b.loc) + "｜" + b.labels.length + " 欄");
     return b;
   }
+
+  // Layout edits are allowed as long as no filled slot is removed, moved or renamed.
   function updateBox(S, id, c) {
     need(S, "settings_edit");
     var b = box(S, id);
     if (!b) throw new Error("找不到骨釘盒");
     checkBoxConfig(S, c);
-    if (c.loc !== b.loc || String(c.lot).trim() !== b.lot) {
-      if (boxTotal(S, b) > 0) throw new Error("盒內還有螺絲，位置與批號要用「調撥整盒」處理");
-    }
+    var filled = boxTotal(S, b) > 0;
+    if (filled && (c.loc !== b.loc || String(c.lot).trim() !== b.lot)) throw new Error("盒內還有骨釘，位置與批號要用「調撥整盒」處理");
+    var oldCols = b.labels.length, newLabels = c.labels.map(function (x) { return String(x).trim(); }), newCols = newLabels.length;
+    b.bands.forEach(function (ob, bi) {
+      ob.fill.forEach(function (v, i) {
+        if (!v) return;
+        var r = Math.floor(i / oldCols), col = i % oldCols, nb = c.bands[bi];
+        var same = nb && String(nb.name).trim() === ob.name && r < nb.rows && col < newCols && newLabels[col] === b.labels[col];
+        if (!same) throw new Error("這樣改會影響已放入的骨釘（區塊 " + (bi + 1) + " 第 " + (r + 1) + " 列第 " + (col + 1) + " 欄），請先把那格清空");
+      });
+    });
+    var newBands = c.bands.map(function (nb, bi) {
+      var ob = b.bands[bi], fill = new Array(nb.rows * newCols).fill(0);
+      if (ob) ob.fill.forEach(function (v, i) { if (v) fill[Math.floor(i / oldCols) * newCols + (i % oldCols)] = 1; });
+      return { name: String(nb.name).trim(), rows: nb.rows, fill: fill };
+    });
     b.name = String(c.name).trim(); b.loc = c.loc; b.lot = String(c.lot).trim(); b.exp = c.exp;
-    b.labels = c.labels.slice(); b.bands = c.bands.map(function (x) { return { series: x.series, rows: x.rows }; });
-    log(S, "骨釘盒設定", b.name + "｜" + b.labels.length + " 欄｜" + b.bands.map(function (x) { return x.series + "×" + x.rows; }).join("、"));
+    b.labels = newLabels; b.bands = newBands;
+    syncBox(S, b);
+    log(S, "骨釘盒設定", b.name + "｜" + b.labels.length + " 欄｜" + b.bands.map(function (x) { return x.name + "×" + x.rows; }).join("、"));
     return b;
   }
+
   function deleteBox(S, id) {
     need(S, "settings_edit");
     var b = box(S, id);
     if (!b) throw new Error("找不到骨釘盒");
-    if (boxTotal(S, b) > 0) throw new Error("盒內還有螺絲，不能刪除");
+    if (boxTotal(S, b) > 0) throw new Error("盒內還有骨釘，不能刪除");
     S.boxes = S.boxes.filter(function (x) { return x.id !== id; });
     log(S, "刪除骨釘盒", b.name);
   }
-  // +1 / -1 on one size of one band; refuses to overfill the columns for that size.
-  function boxAdjust(S, id, series, len, delta) {
+
+  // Flip exactly one slot: filled -> empty (-1) or empty -> filled (+1).
+  function toggleSlot(S, id, bi, i) {
     need(S, "stock_edit");
     var b = box(S, id);
     if (!b) throw new Error("找不到骨釘盒");
-    var band = boxBands(S, b).filter(function (x) { return x.series === series; })[0];
-    var g = band && band.groups.filter(function (x) { return x.len === len; })[0];
-    if (!g) throw new Error("這個盒子沒有 " + series + " 的 " + len + " 尺寸");
-    if (delta > 0) {
-      if (g.qty >= g.cap) throw new Error("這個尺寸的格子已滿");
-      var sku = ensureScrewSku(S, series, len);
-      return addStock(S, b.loc, sku, b.lot, b.exp, 1, "盤點調整");
-    }
-    if (!g.sku || g.qty <= 0) throw new Error("這個尺寸沒有庫存");
-    return adjustStock(S, b.loc, g.sku, b.lot, g.qty - 1, "盤點調整");
+    var band = b.bands[bi];
+    if (!band || !(i >= 0 && i < band.fill.length)) throw new Error("沒有這一格");
+    var on = !band.fill[i];
+    band.fill[i] = on ? 1 : 0;
+    syncBox(S, b);
+    log(S, "盤點調整", b.name + "｜" + band.name + " " + slotLabel(b, i) + "｜" + (on ? "+1" : "-1"));
+    return on;
   }
-  // Move every screw in a box to another location in one go (e.g. company -> hospital and back).
+
+  // Move the whole box (and everything in it) to another location in one go.
   function moveBox(S, id, to) {
     need(S, "stock_edit");
     var b = box(S, id);
@@ -318,15 +355,15 @@
     if (!location(S, to)) throw new Error("請選目的位置");
     if (to === b.loc) throw new Error("目的位置和現在相同");
     if (isExpired(b.exp)) throw new Error("已過期的盒子不能調撥");
-    var from = b.loc, moved = 0;
-    boxBands(S, b).forEach(function (band) {
-      band.groups.forEach(function (g) {
-        if (g.sku && g.qty > 0) { transfer(S, from, to, g.sku, b.lot, g.qty); moved += g.qty; }
-      });
+    var from = b.loc, n = boxTotal(S, b);
+    (b.synced || []).forEach(function (sku) {
+      var line = findLine(S, from, sku, b.lot);
+      if (line) line.qty = 0;
     });
     b.loc = to;
-    log(S, "調撥整盒", b.name + "｜" + locName(S, from) + " → " + locName(S, to) + "｜" + moved + " 支");
-    return moved;
+    syncBox(S, b);
+    log(S, "調撥整盒", b.name + "｜" + locName(S, from) + " → " + locName(S, to) + "｜" + n + " 支");
+    return n;
   }
 
   // ---------- 報刀 ----------
@@ -340,16 +377,29 @@
     if (!location(S, d.loc)) throw new Error("請選扣庫來源");
     var items = d.main.concat(d.screws);
     if (!items.length) throw new Error("至少要有一個品項");
+    var seen = {};
     items.forEach(function (it) {
       if (!product(S, it.sku)) throw new Error("品項不存在：" + it.sku);
       if (!it.lot) throw new Error("品項缺批號：" + it.sku);
       if (!posInt(it.qty)) throw new Error("數量必須是正整數：" + it.sku);
+      if (it.slots) {
+        if (it.slots.length !== it.qty) throw new Error("格子數與數量不一致：" + it.sku);
+        it.slots.forEach(function (id) {
+          var sl = parseSlot(S, id);
+          if (!sl) throw new Error("找不到格子");
+          if (!sl.band.fill[sl.i]) throw new Error("這一格沒有骨釘：" + sl.band.name + " " + slotLabel(sl.box, sl.i));
+          if (sl.box.loc !== d.loc) throw new Error("格子不在扣庫來源：" + sl.box.name);
+          if (sl.box.lot !== it.lot || skuFor(sl.band.name, slotLabel(sl.box, sl.i)) !== it.sku) throw new Error("格子和品項不符");
+          if (seen[id]) throw new Error("同一格不能選兩次");
+          seen[id] = 1;
+        });
+      }
     });
     var r = {
       id: uid("R"), date: d.date, hospital: d.hospital, doctor: String(d.doctor).trim(),
       loc: d.loc, note: d.note || "", status: "pending",
       main: d.main.map(function (x) { return { sku: x.sku, lot: x.lot, qty: x.qty, scrap: !!x.scrap }; }),
-      screws: d.screws.map(function (x) { return { sku: x.sku, lot: x.lot, qty: x.qty, scrap: !!x.scrap }; }),
+      screws: d.screws.map(function (x) { return { sku: x.sku, lot: x.lot, qty: x.qty, scrap: !!x.scrap, slots: x.slots ? x.slots.slice() : undefined }; }),
       createdBy: S.operator, createdAt: nowStr(), reviewedBy: "", reviewedAt: ""
     };
     S.reports.unshift(r);
@@ -362,7 +412,22 @@
     var r = S.reports.filter(function (x) { return x.id === id; })[0];
     if (!r) throw new Error("找不到報刀單");
     if (r.status !== "pending") throw new Error("這張單已處理過");
-    consume(S, reportItems(r).map(function (it) { return { loc: r.loc, sku: it.sku, lot: it.lot, qty: it.qty }; }));
+    var byLine = r.main.slice(), slotIds = [];
+    r.screws.forEach(function (it) { if (it.slots) it.slots.forEach(function (sid) { slotIds.push(sid); }); else byLine.push(it); });
+    slotIds.forEach(function (sid) {
+      var sl = parseSlot(S, sid);
+      if (!sl || !sl.band.fill[sl.i]) throw new Error("有一格骨釘已經被用掉或移走，請退回這張單重新選");
+      if (sl.box.loc !== r.loc) throw new Error("骨釘盒已不在扣庫來源（" + locName(S, r.loc) + "）");
+      if (isExpired(sl.box.exp)) throw new Error("批號 " + sl.box.lot + " 已過期，不可使用");
+    });
+    consume(S, byLine.map(function (it) { return { loc: r.loc, sku: it.sku, lot: it.lot, qty: it.qty }; }));
+    var touched = {};
+    slotIds.forEach(function (sid) {
+      var sl = parseSlot(S, sid);
+      sl.band.fill[sl.i] = 0;
+      touched[sl.box.id] = sl.box;
+    });
+    Object.keys(touched).forEach(function (k) { syncBox(S, touched[k]); });
     r.status = "approved"; r.reviewedBy = S.operator; r.reviewedAt = nowStr();
     log(S, "報刀審核通過", r.date + "｜" + locName(S, r.hospital) + "｜" + r.doctor + "｜扣庫 " + locName(S, r.loc));
     return r;
@@ -420,6 +485,7 @@
     if (!d.lines.length) throw new Error("至少要有一筆明細");
     d.lines.forEach(function (l, i) {
       if (!product(S, l.sku)) throw new Error("第 " + (i + 1) + " 筆品項不存在");
+      if (product(S, l.sku).kind === "screw") throw new Error("第 " + (i + 1) + " 筆是骨釘，骨釘走報刀，銷貨憑單先不支援");
       if (!location(S, l.loc)) throw new Error("第 " + (i + 1) + " 筆缺倉庫");
       if (!l.lot) throw new Error("第 " + (i + 1) + " 筆缺批號");
       if (!posInt(l.qty)) throw new Error("第 " + (i + 1) + " 筆數量必須是正整數");
@@ -529,12 +595,6 @@
     S.products.push({ sku: "4C310R04", name: "Hook15 右4", price: 9500, group: "鎖骨鉤型骨板 (Hook)", kind: "plate" });
     S.products.push({ sku: "4C310L04", name: "Hook15 左4", price: 9500, group: "鎖骨鉤型骨板 (Hook)", kind: "plate" });
 
-    [["2.7LS", 10, 48], ["3.5LS", 10, 48], ["3.5CS", 10, 48]].forEach(function (s) {
-      for (var len = s[1]; len <= s[2]; len += 2) {
-        S.products.push({ sku: "SC-" + s[0] + "-" + len, name: s[0] + " 骨釘 L" + len, price: 800, group: s[0] + " 骨釘", kind: "screw", series: s[0], len: len });
-      }
-    });
-
     var plateLots = [["2402270013", addDays(55)], ["2410100021", addDays(520)], ["2504150007", addDays(880)]];
     plates(S).forEach(function (p) {
       var lot = plateLots[Math.floor(r() * 3)];
@@ -549,29 +609,24 @@
     S.lots.push({ id: uid("L"), loc: "h4", sku: "4C310R04", lot: "2210120008", exp: addDays(-20), qty: 1 });
 
     S.boxes = [];
-    [
-      ["3.5 VA 上肢器械 A盒", "co", "SL35-2403"], ["3.5 VA 上肢器械 B盒", "co", "SL35-2406"],
-      ["3.5 VA 上肢器械（中榮）", "h0", "SL35-2403"], ["3.5 VA 上肢器械（員基）", "h1", "SL35-2403"], ["3.5 VA 上肢器械（803）", "h4", "SL35-2406"],
-      ["3.5 VA 上肢器械（小胖）", "r0", "SL35-2403"]
-    ].forEach(function (b) {
-      var box = { id: uid("B"), name: b[0], loc: b[1], lot: b[2], exp: addDays(420),
-        labels: defaultLabels(), bands: [{ series: "3.5LS", rows: 5 }, { series: "3.5CS", rows: 6 }] };
-      S.boxes.push(box);
-      boxBands(S, box).forEach(function (band) {
-        band.groups.forEach(function (g) {
-          var q = Math.floor(r() * (g.cap + 1) * (b[1] === "co" ? 1 : 0.55));
-          if (q > 0 && g.sku) S.lots.push({ id: uid("L"), loc: b[1], sku: g.sku, lot: box.lot, exp: box.exp, qty: q });
-        });
+    function mkBox(name, loc, lot, bands, fillRate) {
+      var labels = defaultLabels(), cols = labels.length;
+      var b = { id: uid("B"), name: name, loc: loc, lot: lot, exp: addDays(420), labels: labels, synced: [],
+        bands: bands.map(function (x) { return { name: x[0], rows: x[1], fill: new Array(x[1] * cols).fill(0) }; }) };
+      b.bands.forEach(function (band) {
+        for (var i = 0; i < band.fill.length; i++) band.fill[i] = r() < fillRate ? 1 : 0;
       });
-    });
-    var rack27 = { id: uid("B"), name: "2.7 小骨釘盒", loc: "co", lot: "SL27-2404", exp: addDays(450), labels: defaultLabels(), bands: [{ series: "2.7LS", rows: 11 }] };
-    S.boxes.push(rack27);
-    boxBands(S, rack27).forEach(function (band) {
-      band.groups.forEach(function (g) {
-        var q = Math.floor(r() * (g.cap + 1) * 0.6);
-        if (q > 0 && g.sku) S.lots.push({ id: uid("L"), loc: "co", sku: g.sku, lot: rack27.lot, exp: rack27.exp, qty: q });
-      });
-    });
+      S.boxes.push(b);
+      syncBox(S, b);
+    }
+    var two = [["3.5 鎖定骨釘", 5], ["3.5 皮質骨釘", 6]];
+    mkBox("3.5 VA 上肢器械 A盒", "co", "SL35-2403", two, 0.6);
+    mkBox("3.5 VA 上肢器械 B盒", "co", "SL35-2406", two, 0.5);
+    mkBox("3.5 VA 上肢器械（中榮）", "h0", "SL35-2403", two, 0.28);
+    mkBox("3.5 VA 上肢器械（員基）", "h1", "SL35-2403", two, 0.25);
+    mkBox("3.5 VA 上肢器械（803）", "h4", "SL35-2406", two, 0.3);
+    mkBox("3.5 VA 上肢器械（小胖）", "r0", "SL35-2403", two, 0.3);
+    mkBox("2.7 小骨釘盒", "co", "SL27-2404", [["2.7 骨釘", 11]], 0.4);
     S.lots = S.lots.filter(function (l) { return l.qty > 0; });
 
     S.log.unshift({ ts: nowStr(), user: "系統", action: "初始化", detail: "載入示範資料" });
@@ -585,18 +640,19 @@
     var docs = ["林醫師", "陳醫師", "黃醫師"];
     var reps = ["業務-小胖", "業務-阿明", "業務-小胖"];
     ["h4", "h0", "h1"].forEach(function (hid, i) {
-      var plate = null, screw = null;
+      var plate = null;
       S.lots.forEach(function (l) {
         var p = product(S, l.sku);
         if (!plate && l.loc === hid && p && p.kind === "plate" && l.qty > 0 && !isExpired(l.exp)) plate = l;
-        if (!screw && l.loc === hid && p && p.kind === "screw" && l.qty > 1 && !isExpired(l.exp)) screw = l;
       });
-      if (!plate || !screw) return;
+      var bx = S.boxes.filter(function (b) { return b.loc === hid; })[0];
+      var slots = bx ? filledSlots(S, bx).slice(0, 2) : [];
+      if (!plate || slots.length < 2) return;
       S.operator = reps[i];
       var rep = submitReport(S, {
         date: addDays(-(8 - i * 3)), hospital: hid, doctor: docs[i], loc: hid, note: i === 1 ? "補貨：備貨1" : "",
         main: [{ sku: plate.sku, lot: plate.lot, qty: 1 }],
-        screws: [{ sku: screw.sku, lot: screw.lot, qty: 1 }, { sku: screw.sku, lot: screw.lot, qty: 1, scrap: true }]
+        screws: [{ sku: slots[0].sku, lot: bx.lot, qty: 1, slots: [slots[0].id] }, { sku: slots[1].sku, lot: bx.lot, qty: 1, scrap: true, slots: [slots[1].id] }]
       });
       if (i < 2) { S.operator = "內勤-小美"; approveReport(S, rep.id); }
     });
@@ -634,13 +690,14 @@
   }
 
   return {
-    ROLES: ROLES, CAPS: CAPS, STATUS: STATUS, SALES_STATUS: SALES_STATUS, TAX: TAX, SEAT_CAP: SEAT_CAP,
+    ROLES: ROLES, CAPS: CAPS, STATUS: STATUS, SALES_STATUS: SALES_STATUS, TAX: TAX, 
     ymd: ymd, addDays: addDays, expDays: expDays, isExpired: isExpired, posInt: posInt,
     user: user, role: role, can: can, need: need, setPerm: setPerm, addUser: addUser, setUserRole: setUserRole,
-    product: product, location: location, locName: locName, customer: customer, plates: plates, screwSeries: screwSeries,
+    product: product, location: location, locName: locName, customer: customer, plates: plates,
     findLine: findLine, lines: lines, lineQty: lineQty, totalQty: totalQty,
-    defaultLabels: defaultLabels, screwSku: screwSku, boxBands: boxBands, boxTotal: boxTotal, box: box,
-    createBox: createBox, updateBox: updateBox, deleteBox: deleteBox, boxAdjust: boxAdjust, moveBox: moveBox,
+    defaultLabels: defaultLabels, skuFor: skuFor, box: box, boxCells: boxCells, boxTotal: boxTotal, bandTotal: bandTotal,
+    slotId: slotId, parseSlot: parseSlot, slotLabel: slotLabel, filledSlots: filledSlots,
+    createBox: createBox, updateBox: updateBox, deleteBox: deleteBox, toggleSlot: toggleSlot, moveBox: moveBox,
     addStock: addStock, adjustStock: adjustStock, transfer: transfer,
     submitReport: submitReport, approveReport: approveReport, rejectReport: rejectReport,
     reportItems: reportItems, reportsCSV: reportsCSV,

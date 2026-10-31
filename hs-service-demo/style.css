@@ -280,3 +280,34 @@ button.slot:disabled { cursor: default; }
 .table th small { display: block; margin-top: 2px; font: 500 0.58rem var(--mono); letter-spacing: 0.04em; text-transform: none; opacity: 0.8; }
 
 dialog.wide { width: min(980px, 96vw); }
+
+/* ---------- touch / small screens: nothing may drag the layout sideways ---------- */
+.table-wrap, .boxscroll { overscroll-behavior-x: contain; -webkit-overflow-scrolling: touch; }
+.matrix-list { display: none; }
+.mgroup { margin: 16px 0 8px; padding: 6px 10px; border-radius: 8px; background: var(--accent-soft); color: var(--accent); font: 600 0.78rem var(--sans); }
+.mgroup:first-child { margin-top: 0; }
+.mitem { padding: 10px 12px; margin-bottom: 8px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); }
+.mitem-h { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; }
+.mitem-h .code { font: 600 0.8rem var(--mono); }
+.mitem-h em { margin-left: auto; font: normal 500 0.72rem var(--mono); color: var(--muted); }
+.mlocs { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.mloc { display: inline-flex; align-items: center; gap: 8px; padding: 5px 10px; border: 1px solid var(--line); border-radius: 999px; background: var(--panel); color: var(--ink); font: 500 0.78rem var(--sans); cursor: pointer; }
+.mloc b { font: 600 0.82rem var(--mono); }
+.mloc.company { background: var(--accent-soft); border-color: transparent; color: var(--accent); }
+.mloc.rep { border-style: dashed; }
+
+@media (max-width: 900px) {
+  .matrix-wrap { display: none; }
+  .matrix-list { display: block; }
+  .table-wrap { overflow: visible; max-height: none; border: none; background: none; }
+  .table.stack, .table.stack tbody, .table.stack tr, .table.stack td { display: block; }
+  .table.stack thead, .table.stack tfoot { display: none; }
+  .table.stack tr { margin-bottom: 8px; padding: 6px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); }
+  .table.stack tr.group { margin: 12px 0 4px; padding: 0; border: none; background: none; }
+  .table.stack tr.click:hover td { background: none; }
+  .table.stack td { display: flex; justify-content: space-between; align-items: center; gap: 14px; padding: 5px 0; border: none; white-space: normal; text-align: right; }
+  .table.stack td::before { content: attr(data-label); flex-shrink: 0; color: var(--muted); font: 600 0.64rem var(--mono); letter-spacing: 0.08em; text-align: left; }
+  .table.stack td input, .table.stack td select { width: auto; flex: 1; min-width: 0; max-width: 64%; }
+  .table.stack td:empty { display: none; }
+  .table .sticky { position: static; }
+}
