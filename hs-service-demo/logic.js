@@ -179,6 +179,119 @@
     return n;
   }
 
+  // ---------- 產品別（客戶自訂欄位，例如 PRP：代理商名、容量） ----------
+  // 骨板 and 骨釘 stay built in. Anything else the company sells is a category with its own
+  // fields; its products keep the values in p.attrs keyed by the field key (stable under renames).
+  var FIELD_TYPES = { text: "文字", number: "數字", date: "日期" };
+  function category(S, id) {
+    var list = S.categories || [];
+    for (var i = 0; i < list.length; i++) if (list[i].id === id) return list[i];
+    return null;
+  }
+  function categoryProducts(S, id) { return S.products.filter(function (p) { return p.kind === "custom" && p.cat === id; }); }
+  function sellable(S) { return S.products.filter(function (p) { return p.kind !== "screw"; }); }
+  function kindName(S, p) {
+    if (!p) return "品項";
+    if (p.kind === "screw") return "骨釘";
+    if (p.kind === "custom") { var c = category(S, p.cat); return c ? c.name : "品項"; }
+    return "骨板";
+  }
+  function cleanFields(S, list, existing) {
+    if (!list || !list.length) return [];
+    if (list.length > 8) throw new Error("最多 8 個欄位");
+    var used = {}, n = 0;
+    (existing || []).forEach(function (f) { used[f.key] = 1; });
+    return list.map(function (f) {
+      var label = String(f.label || "").trim();
+      if (!label) throw new Error("欄位名稱不能是空的");
+      if (!FIELD_TYPES[f.type]) throw new Error("欄位類型不正確：" + label);
+      var key = f.key;
+      if (!key) { do { n++; key = "f" + n; } while (used[key]); used[key] = 1; }
+      return { key: key, label: label, type: f.type };
+    });
+  }
+  function checkFieldLabels(fields) {
+    var seen = {};
+    fields.forEach(function (f) { if (seen[f.label]) throw new Error("欄位名稱重複：" + f.label); seen[f.label] = 1; });
+  }
+  function addCategory(S, c) {
+    need(S, "settings_edit");
+    var name = String(c.name || "").trim();
+    if (!name) throw new Error("請填產品別名稱");
+    if (name === "骨板" || name === "骨釘" || name === "骨釘盒") throw new Error("這個名稱已被內建分類使用");
+    if ((S.categories || []).some(function (x) { return x.name === name; })) throw new Error("已經有這個產品別");
+    var fields = cleanFields(S, c.fields, []);
+    checkFieldLabels(fields);
+    if (!S.categories) S.categories = [];
+    var cat = { id: uid("C"), name: name, fields: fields };
+    S.categories.push(cat);
+    log(S, "新增產品別", name + "｜欄位：" + (fields.map(function (f) { return f.label; }).join("、") || "無"));
+    return cat;
+  }
+  // Fields can be added, renamed or removed; removing one that already holds values is refused.
+  function updateCategory(S, id, c) {
+    need(S, "settings_edit");
+    var cat = category(S, id);
+    if (!cat) throw new Error("找不到產品別");
+    var name = String(c.name || "").trim();
+    if (!name) throw new Error("請填產品別名稱");
+    if ((S.categories || []).some(function (x) { return x.id !== id && x.name === name; })) throw new Error("已經有這個產品別");
+    var fields = cleanFields(S, c.fields, cat.fields);
+    checkFieldLabels(fields);
+    var keep = {};
+    fields.forEach(function (f) { keep[f.key] = 1; });
+    cat.fields.forEach(function (f) {
+      if (keep[f.key]) return;
+      var used = categoryProducts(S, id).some(function (p) { return p.attrs && p.attrs[f.key] !== undefined && p.attrs[f.key] !== ""; });
+      if (used) throw new Error("「" + f.label + "」已經有產品填了資料，不能刪除這個欄位");
+    });
+    categoryProducts(S, id).forEach(function (p) { p.group = name; });
+    cat.name = name; cat.fields = fields;
+    log(S, "產品別設定", name + "｜欄位：" + (fields.map(function (f) { return f.label; }).join("、") || "無"));
+    return cat;
+  }
+  function deleteCategory(S, id) {
+    need(S, "settings_edit");
+    var cat = category(S, id);
+    if (!cat) throw new Error("找不到產品別");
+    if (categoryProducts(S, id).length) throw new Error("這個產品別底下還有產品，不能刪除");
+    S.categories = S.categories.filter(function (x) { return x.id !== id; });
+    log(S, "刪除產品別", cat.name);
+  }
+  function checkAttrs(cat, attrs) {
+    var out = {};
+    cat.fields.forEach(function (f) {
+      var v = attrs && attrs[f.key] != null ? String(attrs[f.key]).trim() : "";
+      if (v !== "" && f.type === "number" && !isFinite(Number(v))) throw new Error("「" + f.label + "」要填數字");
+      if (v !== "" && f.type === "date" && !/^\d{4}-\d{2}-\d{2}$/.test(v)) throw new Error("「" + f.label + "」日期格式不正確");
+      out[f.key] = v;
+    });
+    return out;
+  }
+  function addCustomProduct(S, d) {
+    need(S, "settings_edit");
+    var cat = category(S, d.cat);
+    if (!cat) throw new Error("請選產品別");
+    var sku = String(d.sku || "").trim(), name = String(d.name || "").trim();
+    if (!sku) throw new Error("品號必填");
+    if (!name) throw new Error("品名必填");
+    if (product(S, sku)) throw new Error("品號已存在");
+    var price = Number(d.price);
+    if (!isFinite(price) || price < 0) throw new Error("單價必須是 0 以上的數字");
+    var p = { sku: sku, name: name, price: price, group: cat.name, kind: "custom", cat: cat.id, attrs: checkAttrs(cat, d.attrs) };
+    S.products.push(p);
+    log(S, "新增品項", cat.name + "｜" + sku + " " + name);
+    return p;
+  }
+  function setProductAttrs(S, sku, attrs) {
+    need(S, "settings_edit");
+    var p = product(S, sku);
+    if (!p || p.kind !== "custom") throw new Error("找不到品項");
+    p.attrs = checkAttrs(category(S, p.cat), attrs);
+    log(S, "品項資料修改", sku + " " + p.name);
+    return p;
+  }
+
   // ---------- 庫存異動帳 ----------
   // Every operation that can change S.lots is wrapped (see the end of this file): the stock is
   // snapshotted before and after, and each changed (location, sku, lot) becomes one ledger row with
@@ -724,7 +837,7 @@
       reportItems(r).forEach(function (it) {
         res.qty += it.qty;
         if (it.scrap) res.scrap += it.qty;
-        var p = product(S, it.sku), key = (p && p.kind === "screw" ? "骨釘 " : "骨板 ") + (p ? p.name : it.sku);
+        var p = product(S, it.sku), key = kindName(S, p) + " " + (p ? p.name : it.sku);
         res.items[key] = (res.items[key] || 0) + it.qty;
       });
     });
@@ -781,7 +894,7 @@
         { id: "c102", code: "102", name: "範例醫療器材行", addr: "彰化縣範例鎮示範街 28 號", contact: "李先生", tel: "04-7000-0002" },
         { id: "c103", code: "103", name: "測試聯合診所", addr: "雲林縣示範市測試路 5 號", contact: "陳先生", tel: "05-5000-0003" }
       ],
-      products: [], lots: [], moves: [], reports: [], sales: [], payments: [], journals: [], log: []
+      products: [], categories: [], lots: [], moves: [], reports: [], sales: [], payments: [], journals: [], log: []
     };
     ["中榮", "員基", "鹿基", "彰基", "803", "二基"].forEach(function (n, i) {
       S.locations.push({ id: "h" + i, name: n, type: "hospital" });
@@ -813,6 +926,13 @@
       });
     });
     S.lots.push({ id: uid("L"), loc: "h4", sku: "4C310R04", lot: "2210120008", exp: addDays(-20), qty: 1 });
+
+    S.categories.push({ id: "cPRP", name: "PRP 自體血小板", fields: [{ key: "f1", label: "代理商名", type: "text" }, { key: "f2", label: "容量（ml）", type: "number" }] });
+    [["PRP-10", "PRP 離心套組 10ml", 4200, "示範生技", "10"], ["PRP-20", "PRP 離心套組 20ml", 6800, "示範生技", "20"], ["PRP-60", "PRP 濃縮套組 60ml", 9800, "範例醫材", "60"]].forEach(function (x, i) {
+      S.products.push({ sku: x[0], name: x[1], price: x[2], group: "PRP 自體血小板", kind: "custom", cat: "cPRP", attrs: { f1: x[3], f2: x[4] } });
+      S.lots.push({ id: uid("L"), loc: "co", sku: x[0], lot: "PRP-2605-" + (i + 1), exp: addDays(300 + i * 60), qty: 6 + i * 2 });
+    });
+    S.lots.push({ id: uid("L"), loc: "h0", sku: "PRP-10", lot: "PRP-2605-1", exp: addDays(300), qty: 2 });
 
     S.boxes = [];
     function mkBox(name, loc, lot, bands, fillRate) {
@@ -947,6 +1067,7 @@
         var S = JSON.parse(raw);
         if (S && S.v === 5) { applyGeoDefaults(S); S.v = VERSION; }
         if (S && !S.moves) S.moves = [];
+        if (S && !S.categories) S.categories = [];
         if (S && S.v === VERSION) return S;
       }
     } catch (e) { /* fall through to a fresh seed */ }
@@ -978,6 +1099,8 @@
     user: user, role: role, can: can, need: need, setPerm: setPerm, addUser: addUser, setUserRole: setUserRole,
     product: product, location: location, locName: locName, customer: customer, plates: plates,
     findLine: findLine, lines: lines, lineQty: lineQty, totalQty: totalQty,
+    FIELD_TYPES: FIELD_TYPES, category: category, categoryProducts: categoryProducts, sellable: sellable, kindName: kindName,
+    addCategory: addCategory, updateCategory: updateCategory, deleteCategory: deleteCategory, addCustomProduct: addCustomProduct, setProductAttrs: setProductAttrs,
     defaultLabels: defaultLabels, skuFor: skuFor, box: box, boxCells: boxCells, boxTotal: boxTotal, bandTotal: bandTotal,
     slotId: slotId, parseSlot: parseSlot, slotLabel: slotLabel, filledSlots: filledSlots,
     createBox: createBox, updateBox: updateBox, deleteBox: deleteBox, toggleSlot: toggleSlot, moveBox: moveBox,
