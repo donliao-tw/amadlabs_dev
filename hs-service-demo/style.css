@@ -311,3 +311,19 @@ dialog.wide { width: min(980px, 96vw); }
   .table.stack td:empty { display: none; }
   .table .sticky { position: static; }
 }
+
+/* ---------- task-first additions ---------- */
+.banner { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 14px; margin-bottom: 14px; padding: 10px 16px; border: 1px solid var(--amber); border-radius: 12px; background: var(--surface); font-size: 0.88rem; }
+.banner::before { content: ""; width: 9px; height: 9px; border-radius: 50%; background: var(--amber); box-shadow: 0 0 9px var(--amber-glow); flex-shrink: 0; }
+.banner span { flex: 1; }
+.scope-line { margin: 14px 0 4px; color: var(--muted); font-size: 0.86rem; }
+.scope-line b { color: var(--ink); }
+.usage-empty { padding: 16px; border: 1px dashed var(--line); border-radius: 10px; color: var(--muted); font-size: 0.86rem; text-align: center; }
+.btn.on { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
+.rack.picker { margin-top: 12px; }
+.chip-kind { margin-right: 2px; padding: 1px 6px; border-radius: 6px; background: var(--accent-soft); color: var(--accent); font: 600 0.62rem var(--mono); }
+.submitbar { margin-top: 20px; }
+@media (max-width: 900px) {
+  .submitbar { position: sticky; bottom: 62px; z-index: 5; padding: 10px 0 2px; background: linear-gradient(transparent, var(--surface) 30%); }
+  .submitbar .btn { width: 100%; padding: 12px; }
+}
