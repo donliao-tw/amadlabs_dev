@@ -3,7 +3,7 @@
 
   var L = HSLogic;
   var S = L.load();
-  var tab = "todo";
+  var tab = "intro";
   var stockView = "plates";
   var moveKind = "all";
   var stockScope = "company";
@@ -25,6 +25,7 @@
 
   var TYPE = { company: "公司", hospital: "醫院寄庫", rep: "業務移動庫存" };
   var ICONS = {
+    intro: '<path d="M4 11l8-7 8 7"/><path d="M6 10v10h12V10"/><path d="M10 20v-6h4v6"/>',
     todo: '<path d="M9 6h11M9 12h11M9 18h11"/><path d="M4 6l1 1 2-2M4 12l1 1 2-2M4 18l1 1 2-2"/>',
     report: '<rect x="6" y="4" width="12" height="17" rx="2"/><path d="M9 4h6v3H9zM9 12h6M9 16h4"/>',
     acct: '<path d="M5 4h12a2 2 0 012 2v14H7a2 2 0 01-2-2z"/><path d="M9 9h6M9 13h6M9 17h3"/>',
@@ -37,6 +38,7 @@
   function canAct() { return can("report_approve") || can("sales_confirm") || can("stock_edit") || can("acct_edit"); }
   function defaultTab() { return canAct() ? "todo" : "report"; }
   var NAV = [
+    { id: "intro", label: "介紹", title: "系統介紹", sub: "這套系統做了什麼、一張單怎麼從刀房走到帳上。", show: function () { return true; } },
     { id: "todo", label: "待辦", title: "待辦", sub: "需要你動手的事，處理完就會從這裡消失。", show: function () { return canAct(); } },
     { id: "report", label: "報刀", title: "報刀", sub: "跟刀後回報這台刀用了什麼，只報你用到的。內勤審核後才會扣庫存。", show: function () { return true; } },
     { id: "stock", label: "庫存", title: "庫存", sub: "先選範圍：公司的庫存可以立即調動，醫院寄庫要先調回公司。", show: function () { return L.can(S, "stock_view"); } },
@@ -940,6 +942,100 @@
     return out;
   }
 
+  // ---------------- 介紹 ----------------
+  var FLOW = [
+    { lane: 0, t: "報刀", d: "醫院、醫師、用了哪些品項與批號" },
+    { lane: 1, t: "審核", d: "通過，或退回請業務修改" },
+    { lane: 2, t: "自動扣庫", d: "檢查批號與效期，記一筆異動帳" },
+    { lane: 1, t: "銷貨憑單", d: "客戶、明細、稅額" },
+    { lane: 1, t: "覆核出貨", d: "覆核後扣庫存，可開發票" },
+    { lane: 2, t: "自動入帳", d: "傳票、銷項稅額、應收帳款" },
+    { lane: 1, t: "登記收款", d: "沖銷應收，帳齡自動更新" }
+  ];
+  var LANES = ["業務", "內勤", "系統自動"];
+  function flowSvg() {
+    var X0 = 96, STEP = 146, NW = 134, NH = 66, LH = 104, LY = 16, W = 1116, H = LY + LH * 3 + 78;
+    var cy = function (lane) { return LY + LH * lane + LH / 2; };
+    var out = '<svg class="flow-svg" viewBox="0 0 ' + W + " " + H + '" role="img" aria-label="從報刀到收款的流程圖">' +
+      '<defs><marker id="flArrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 1l9 4-9 4z" class="fl-head"/></marker></defs>';
+    LANES.forEach(function (n, i) {
+      out += '<rect class="fl-lane' + (i === 2 ? " sys" : "") + '" x="0" y="' + (LY + LH * i) + '" width="' + W + '" height="' + LH + '" rx="10"/>' +
+        '<text class="fl-lane-t" x="16" y="' + (cy(i) + 5) + '">' + n + "</text>";
+    });
+    FLOW.forEach(function (n, i) {
+      var x = X0 + i * STEP, y = cy(n.lane) - NH / 2;
+      if (i) {
+        var p = FLOW[i - 1], x1 = X0 + (i - 1) * STEP + NW, y1 = cy(p.lane), x2 = x, y2 = cy(n.lane), xm = (x1 + x2) / 2;
+        out += '<path class="fl-arrow" marker-end="url(#flArrow)" d="M' + x1 + " " + y1 + (y1 === y2 ? " H" + x2 : " H" + xm + " V" + y2 + " H" + x2) + '"/>';
+      }
+      out += '<g><rect class="fl-node' + (n.lane === 2 ? " sys" : "") + '" x="' + x + '" y="' + y + '" width="' + NW + '" height="' + NH + '" rx="9"/>' +
+        '<text class="fl-n" x="' + (x + 12) + '" y="' + (y + 22) + '">' + (i + 1) + '</text><text class="fl-t" x="' + (x + 32) + '" y="' + (y + 22) + '">' + n.t + "</text>" +
+        '<foreignObject x="' + (x + 10) + '" y="' + (y + 28) + '" width="' + (NW - 18) + '" height="' + (NH - 30) + '"><div xmlns="http://www.w3.org/1999/xhtml" class="fl-d">' + n.d + "</div></foreignObject></g>";
+    });
+    var by = LY + LH * 3 + 12;
+    out += '<rect class="fl-base" x="0" y="' + by + '" width="' + W + '" height="52" rx="10"/><text class="fl-lane-t" x="16" y="' + (by + 31) + '">全程</text>' +
+      '<text class="fl-base-t" x="96" y="' + (by + 31) + '">每次庫存變動都留下紀錄　·　批號追溯　·　操作紀錄只增不改　·　權限依角色　·　統計與地圖</text>';
+    return out + "</svg>";
+  }
+  function flowList() {
+    return '<ol class="flow-list">' + FLOW.map(function (n) {
+      return '<li><span class="badge">' + LANES[n.lane] + "</span><b>" + n.t + '</b><span class="muted">' + n.d + "</span></li>";
+    }).join("") + "</ol>";
+  }
+
+  var FEATURES = [
+    ["report", "報刀", "業務在手機上報，只報用到的品項。骨釘直接在盒子上點格子，批號跟著帶出。內勤審核後才扣庫。"],
+    ["stock", "庫存與骨釘盒", "公司倉、醫院寄庫、業務移動庫存分開看，公司的可以立即調動。骨釘盒可自訂排列，像座位圖一樣一格一格看。有效期警示、位置地圖、最新異動帳。"],
+    ["sales", "銷貨憑單", "對應正航的銷貨憑單：客戶、明細、稅額。覆核後出貨扣庫，並可開立發票。"],
+    ["acct", "會計", "覆核出貨後自動產生傳票。應收帳款與帳齡、收款登記、銷項發票、試算表。"],
+    ["stats", "數據統計", "報刀趨勢、每月銷貨額、各醫院與醫師排行、效期分布。每種資訊用最適合的圖或表。"],
+    ["trace", "批號追溯", "輸入批號就看到它現在在哪、用在哪家醫院哪位醫師。每筆庫存異動都能點回來源單據。"],
+    ["settings", "權限與設定", "角色對應功能可自行調整，例如業務看不到任何金額。醫院、業務移動庫存、客戶、品項都能自己新增。"]
+  ];
+  var COMPARE = [
+    ["報刀", "業務傳 Excel 或訊息，內勤再重打一次", "業務自己報，內勤審核，資料不用重打"],
+    ["庫存", "寄庫、業務庫存、公司庫存分散在不同檔案", "同一份帳，分位置顯示，骨釘盒看得到每一格"],
+    ["銷貨與帳", "資料整理後再轉進正航，另外對帳", "憑單覆核即扣庫、開票、入帳"],
+    ["追溯", "翻檔案找批號", "輸入批號，直接看到去向"],
+    ["權限與紀錄", "檔案誰都能改，改了沒有紀錄", "依角色給權限，每個動作留紀錄"]
+  ];
+  var GDP = [
+    ["產品可追溯", "批號追溯；每筆庫存異動可回查到報刀單或銷貨憑單", "召回流程的 SOP"],
+    ["效期與不良品管制", "效期警示；過期批號不能出貨、不能報刀", "隔離、退回、銷毀的作業程序"],
+    ["人員權責", "角色與功能權限；每個動作記下操作人員", "人員訓練與授權紀錄"],
+    ["紀錄不可竄改", "操作紀錄只增不改；庫存異動帳逐筆保存", "紀錄保存年限與備份規定"],
+    ["儲存與調撥", "公司、醫院寄庫、業務庫存分區；調撥留紀錄", "場所環境（溫濕度等）不在系統範圍"]
+  ];
+
+  function renderIntro() {
+    var hero = '<section class="intro-hero"><div class="eyebrow">AMAD Labs · DEMO</div><h2>從刀房到帳本，同一份資料</h2>' +
+      '<p>業務在醫院報刀，內勤審核，庫存自動扣、銷貨憑單、發票、傳票、應收跟著走，批號隨時查得到去向。取代現在的 Excel 加正航的來回整理。</p>' +
+      '<div class="row"><button class="btn btn-primary" data-act="intro-as" data-name="業務-小胖" data-tab="report">以業務身分報一張刀</button>' +
+      '<button class="btn" data-act="intro-as" data-name="內勤-小美" data-tab="todo">以內勤身分審核</button>' +
+      '<button class="btn" data-act="intro-go" data-tab="stock">看庫存與地圖</button></div></section>';
+
+    var flow = card("FLOW", "一張單怎麼走", '<div class="flow-wrap">' + flowSvg() + "</div>" + flowList() +
+      '<p class="muted" style="margin-top:12px">報刀審核與銷貨覆核，都會用同一套規則檢查批號與效期，通過才扣庫，並各記下一筆異動。</p>');
+
+    var feats = card("WHAT", "我們做了什麼", '<div class="feat-grid">' + FEATURES.map(function (f) {
+      return '<div class="feat"><svg viewBox="0 0 24 24" aria-hidden="true">' + ICONS[f[0]] + "</svg><h3>" + f[1] + "</h3><p>" + f[2] + '</p><button class="btn btn-sm" data-act="intro-go" data-tab="' + f[0] + '">看看</button></div>';
+    }).join("") + "</div>");
+
+    var cmp = card("BEFORE / AFTER", "和現在的作法比", '<div class="table-wrap"><table class="table"><thead><tr><th></th><th>目前的作法</th><th>用這套系統</th></tr></thead><tbody>' +
+      COMPARE.map(function (r) { return "<tr><td><b>" + r[0] + '</b></td><td class="wrap">' + r[1] + '</td><td class="wrap">' + r[2] + "</td></tr>"; }).join("") + "</tbody></table></div>" +
+      '<p class="muted" style="margin-top:10px">「目前的作法」是依你們告知的流程整理，細節以實際情況為準。</p>');
+
+    var gdp = card("GDP", "和醫療器材優良運銷準則（GDP）的對應", '<div class="table-wrap"><table class="table"><thead><tr><th>要求重點</th><th>系統怎麼支援</th><th>仍需你們文件化</th></tr></thead><tbody>' +
+      GDP.map(function (r) { return "<tr><td><b>" + r[0] + '</b></td><td class="wrap">' + r[1] + '</td><td class="wrap">' + r[2] + "</td></tr>"; }).join("") + "</tbody></table></div>" +
+      '<p class="muted" style="margin-top:10px">系統提供的是紀錄與管制的工具。GDP 認證還需要文件化的 SOP 與稽核，不是裝了系統就通過。這個示範版資料存在瀏覽器；正式版會放在伺服器的資料庫。</p>');
+
+    var tour = card("TRY", "三分鐘體驗", '<ol class="tour"><li><b>業務報刀</b><span>以「業務-小胖」報一張刀，選醫院、醫師，加骨板，再到骨釘盒點用掉的格子。</span></li>' +
+      '<li><b>內勤審核</b><span>換成「內勤-小美」，在待辦審核通過，庫存自動扣。</span></li>' +
+      '<li><b>回頭查</b><span>到「庫存」的「最新異動」看到剛剛那筆扣庫，點「報刀單」回到來源；再到「追溯」查批號。</span></li></ol>' +
+      '<p class="muted">所有資料都是示範用的假資料，隨時可以在「設定」重設。</p>');
+    return hero + flow + feats + '<div class="stat-grid intro-two">' + cmp + gdp + "</div>" + tour;
+  }
+
   // ---------------- 批號追溯 ----------------
   function tbl(headers, rows) {
     return '<div class="table-wrap"><table class="table"><thead><tr>' + headers.map(function (h) { return "<th>" + h + "</th>"; }).join("") + "</tr></thead><tbody>" + rows + "</tbody></table></div>";
@@ -1129,7 +1225,7 @@
     document.querySelector(".main").classList.toggle("wide-page", tab === "stock");
     document.getElementById("pageHead").innerHTML = '<div class="eyebrow">' + esc(cur.id) + "</div><h1>" + esc(cur.title) + "</h1><p>" + esc(cur.sub) + "</p>";
 
-    var html = tab === "todo" ? renderTodo() : tab === "report" ? renderReport() : tab === "sales" ? renderSales() : tab === "stock" ? renderStock() : tab === "acct" ? renderAcct() : tab === "stats" ? renderStats() : tab === "trace" ? renderTrace() : renderSettings();
+    var html = tab === "intro" ? renderIntro() : tab === "todo" ? renderTodo() : tab === "report" ? renderReport() : tab === "sales" ? renderSales() : tab === "stock" ? renderStock() : tab === "acct" ? renderAcct() : tab === "stats" ? renderStats() : tab === "trace" ? renderTrace() : renderSettings();
     var y = window.scrollY;
     view.innerHTML = html;
     labelTables(view);
@@ -1196,6 +1292,8 @@
     } else if (a === "stock-view") { stockView = g("v"); render(); }
     else if (a === "trace-lot") { traceQ = g("lot"); render(); }
     else if (a === "move-kind") { moveKind = g("v"); render(); }
+    else if (a === "intro-go") { tab = g("tab"); render(); window.scrollTo(0, 0); }
+    else if (a === "intro-as") { S.operator = g("name"); persist(); tab = g("tab"); render(); window.scrollTo(0, 0); }
     else if (a === "open-report") openReport(g("id"));
     else if (a === "stock-scope") { stockScope = g("v"); stockLoc = null; render(); }
     else if (a === "acct-view") { acctView = g("v"); render(); }
