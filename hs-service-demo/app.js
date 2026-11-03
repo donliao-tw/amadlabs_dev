@@ -230,7 +230,7 @@
     var skuOpts = options(avail.map(function (p) { return { v: p.sku, t: (p.kind === "custom" ? "［" + L.kindName(S, p) + "］" : "") + p.sku + "　" + p.name + "（庫存 " + L.totalQty(S, D.loc, p.sku) + "）" }; }), row.sku);
     var lotOpts = options(L.lines(S, D.loc, row.sku).map(function (l) {
       var ex = L.isExpired(l.exp);
-      return { v: l.lot, t: l.lot + "｜效期 " + l.exp + "｜剩 " + l.qty + (ex ? "（已過期）" : ""), disabled: ex };
+      return { v: l.lot, t: l.lot + "｜" + l.exp + "｜剩 " + l.qty + (ex ? "（已過期）" : ""), disabled: ex };
     }), row.lot);
     return '<div class="mainrow">' +
       '<label class="field">品項<select data-bind="main-sku" data-i="' + i + '">' + skuOpts + "</select></label>" +
@@ -1246,7 +1246,7 @@
     if (!dests.some(function (l) { return l.id === TR.to; })) TR.to = dests[0] ? dests[0].id : "";
     return '<form data-form="transfer" class="grid"><label class="field">從<select data-bind="tr-from">' + locOptions(S.locations, TR.from) + "</select></label>" +
       '<label class="field">品項<select data-bind="tr-sku">' + (options(skus.map(function (p) { return { v: p.sku, t: p.sku + "　" + p.name }; }), TR.sku) || "<option>沒有可調撥庫存</option>") + "</select></label>" +
-      '<label class="field">批號<select data-bind="tr-lot">' + options(ls.map(function (l) { return { v: l.lot, t: l.lot + "｜效期 " + l.exp + "｜剩 " + l.qty }; }), TR.lot) + "</select></label>" +
+      '<label class="field">批號<select data-bind="tr-lot">' + options(ls.map(function (l) { return { v: l.lot, t: l.lot + "｜" + l.exp + "｜剩 " + l.qty }; }), TR.lot) + "</select></label>" +
       '<label class="field">數量<input type="number" min="1" step="1" max="' + (line ? line.qty : 1) + '" value="' + TR.qty + '" data-bind="tr-qty"></label>' +
       '<label class="field">到<select data-bind="tr-to">' + locOptions(dests, TR.to) + "</select></label>" +
       '<div class="field">&nbsp;<button class="btn btn-primary">確認調撥</button></div></form><p class="muted" style="margin-top:10px">已過期的批號不能調撥。</p>';
