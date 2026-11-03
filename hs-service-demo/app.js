@@ -91,7 +91,8 @@
       return '<option value="' + esc(o.v) + '"' + (o.v === selected ? " selected" : "") + (o.disabled ? " disabled" : "") + ">" + esc(o.t) + "</option>";
     }).join("");
   }
-  function locLabel(l) { return l.name + "（" + TYPE[l.type] + (l.type === "company" ? "・可立即調動" : "") + "）"; }
+  var TYPE_SHORT = { company: "", hospital: "寄庫", rep: "業務" };
+  function locLabel(l) { return l.name + (TYPE_SHORT[l.type] ? "（" + TYPE_SHORT[l.type] + "）" : ""); }
   function locOptions(list, selected) {
     return options(list.map(function (l) { return { v: l.id, t: locLabel(l) }; }), selected);
   }

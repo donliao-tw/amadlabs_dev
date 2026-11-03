@@ -498,7 +498,7 @@ dl.kv dd { margin: 0; }
 /* ---------- phone: dropdowns and rows need the full width ---------- */
 select { max-width: 100%; text-overflow: ellipsis; }
 @media (max-width: 560px) {
-  .grid { grid-template-columns: minmax(0, 1fr); }
+  .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .mainrow { grid-template-columns: minmax(0, 1fr) auto auto; gap: 10px; }
   .mainrow > :nth-child(1), .mainrow > :nth-child(2) { grid-column: 1 / -1; }
   .mainrow > :nth-child(3) { grid-column: 1; }
@@ -507,3 +507,11 @@ select { max-width: 100%; text-overflow: ellipsis; }
   .ce-row { grid-template-columns: minmax(0, 1fr); }
   .card-b > h4, .card-b > .usage-title { margin-top: 18px; }
 }
+
+/* iOS Safari draws date inputs (and selects) with their own intrinsic width and centred text;
+   reset them so they obey the grid cell like every other field. */
+.field input:not([type="checkbox"]):not([type="radio"]), .field select { display: block; max-width: 100%; box-sizing: border-box; -webkit-appearance: none; appearance: none; }
+.field select { padding-right: 30px; background-image: linear-gradient(45deg, transparent 50%, var(--muted) 50%), linear-gradient(135deg, var(--muted) 50%, transparent 50%); background-position: calc(100% - 17px) 52%, calc(100% - 12px) 52%; background-size: 5px 5px; background-repeat: no-repeat; }
+.field input[type="date"], .field input[type="month"] { min-height: 42px; text-align: left; }
+.field input::-webkit-date-and-time-value { text-align: left; min-width: 0; }
+.field input::-webkit-datetime-edit { padding: 0; }
