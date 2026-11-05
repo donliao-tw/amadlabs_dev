@@ -1197,9 +1197,22 @@
   }
 
   // ---------------- dialogs ----------------
+  // Re-rendering through innerHTML throws away every scroll position inside the page. On a phone that
+  // is what sent a pinch-zoomed screw box back to its left edge after each tap, so remember them.
+  var SCROLLERS = ".boxscroll, .dlg-b, .table-wrap, .flow-wrap";
+  function keepScroll(root, rebuild) {
+    var vx = window.scrollX, vy = window.scrollY;
+    var saved = [].map.call(root.querySelectorAll(SCROLLERS), function (el) { return [el.scrollLeft, el.scrollTop]; });
+    rebuild();
+    [].forEach.call(root.querySelectorAll(SCROLLERS), function (el, i) {
+      if (saved[i]) { el.scrollLeft = saved[i][0]; el.scrollTop = saved[i][1]; }
+    });
+    window.scrollTo(vx, vy);
+  }
   function openDialog(title, fn, wide) {
     dlg.className = wide ? "wide" : "";
-    refreshDlg = function () { dlg.innerHTML = '<div class="dlg"><div class="dlg-h"><h3>' + esc(title) + '</h3><button data-close aria-label="關閉">×</button></div><div class="dlg-b">' + fn() + "</div></div>"; labelTables(dlg); };
+    refreshDlg = function () { keepScroll(dlg, function () { dlg.innerHTML = '<div class="dlg"><div class="dlg-h"><h3>' + esc(title) + '</h3><button data-close aria-label="關閉">×</button></div><div class="dlg-b">' + fn() + "</div></div>"; labelTables(dlg); }); };
+    dlg.innerHTML = "";
     refreshDlg();
     if (!dlg.open) dlg.showModal();
   }
@@ -1268,6 +1281,7 @@
   // ---------------- render ----------------
   var current = function () { return NAV.filter(function (n) { return n.id === tab; })[0] || NAV[0]; };
 
+  var renderedTab = null;
   function render() {
     var visible = NAV.filter(function (n) { return n.show(); });
     if (!visible.some(function (n) { return n.id === tab; })) tab = defaultTab();
@@ -1289,10 +1303,9 @@
     document.getElementById("pageHead").innerHTML = '<div class="eyebrow">' + esc(cur.id) + "</div><h1>" + esc(cur.title) + "</h1><p>" + esc(cur.sub) + "</p>";
 
     var html = tab === "intro" ? renderIntro() : tab === "todo" ? renderTodo() : tab === "report" ? renderReport() : tab === "sales" ? renderSales() : tab === "stock" ? renderStock() : tab === "acct" ? renderAcct() : tab === "stats" ? renderStats() : tab === "trace" ? renderTrace() : renderSettings();
-    var y = window.scrollY;
-    view.innerHTML = html;
-    labelTables(view);
-    window.scrollTo(0, y);
+    // Only the same page keeps its scroll; a page change starts from the top.
+    if (tab !== renderedTab) { renderedTab = tab; view.innerHTML = html; labelTables(view); }
+    else keepScroll(view, function () { view.innerHTML = html; labelTables(view); });
     if (dlg.open && refreshDlg) refreshDlg();
   }
 

@@ -515,3 +515,12 @@ select { max-width: 100%; text-overflow: ellipsis; }
 .field input[type="date"], .field input[type="month"] { min-height: 42px; text-align: left; }
 .field input::-webkit-date-and-time-value { text-align: left; min-width: 0; }
 .field input::-webkit-datetime-edit { padding: 0; }
+
+/* Phone: bigger lamps so a screw slot can be tapped without pinch-zooming first. */
+@media (max-width: 560px) {
+  .bgrid { grid-template-columns: repeat(var(--cols), 22px); gap: 4px; }
+  .bgrid.thumb { grid-template-columns: repeat(var(--cols), 4px); gap: 2px; }
+  .blabel { width: 22px; }
+  .slot { width: 22px; height: 22px; }
+  .bgrid.thumb .slot { width: 4px; height: 4px; }
+}
