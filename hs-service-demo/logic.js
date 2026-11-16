@@ -4,7 +4,7 @@
 })(typeof self !== "undefined" ? self : this, function () {
   "use strict";
 
-  var KEY = "hs-service-demo-v5";
+  var KEY = "hs-service-demo-v7";
   var VERSION = 6;
   var ROLES = ["業務", "內勤", "管理員"];
   var TAX = 0.05;
@@ -608,6 +608,8 @@
       if (sl.box.loc !== r.loc) throw new Error("骨釘盒已不在扣庫來源（" + locName(S, r.loc) + "）");
       if (isExpired(sl.box.exp)) throw new Error("批號 " + sl.box.lot + " 已過期，不可使用");
     });
+    var expOf = {};
+    reportItems(r).forEach(function (it) { expOf[it.sku + " " + it.lot] = lotExp(S, r.loc, it.sku, it.lot); });
     consume(S, byLine.map(function (it) { return { loc: r.loc, sku: it.sku, lot: it.lot, qty: it.qty }; }));
     var touched = {};
     slotIds.forEach(function (sid) {
@@ -618,6 +620,7 @@
     Object.keys(touched).forEach(function (k) { syncBox(S, touched[k]); });
     r.status = "approved"; r.reviewedBy = S.operator; r.reviewedAt = nowStr();
     log(S, "報刀審核通過", r.date + "｜" + locName(S, r.hospital) + "｜" + r.doctor + "｜扣庫 " + locName(S, r.loc));
+    reportDocs(S, r, expOf);
     return r;
   }
 
@@ -726,6 +729,190 @@
     o.invoice = "ZZ" + String(10000000 + n * 37);
     log(S, "開立發票(示範)", o.no + "｜" + o.invoice);
     return o;
+  }
+
+  // ---------- GDP 物流單據：進貨憑單、借出憑單（寄庫）、借出還回單 ----------
+  // Mirrors the client's GDP SOP: goods come in on a 進貨憑單 after the receiving check; stock sent
+  // to a hospital or a rep is lent (借出憑單, it is still company stock); what a 報刀 used comes
+  // back on a 借出還回單 with the same lots and is then sold on a 銷貨憑單 (the money document).
+  var DOC_TYPES = { in: "進貨憑單", lend: "借出憑單", ret: "借出還回單" };
+  var DOC_STATUS = { draft: "草稿", posted: "已過帳" };
+  var SHIP_MODES = ["自送", "委外"];
+  function doc(S, id) {
+    for (var i = 0; i < S.docs.length; i++) if (S.docs[i].id === id) return S.docs[i];
+    return null;
+  }
+  // Same numbering as 正航: yyyymmdd + a three-digit running number, per document type.
+  function nextDocNo(S, type, date) {
+    var prefix = String(date).replace(/-/g, "");
+    var n = S.docs.filter(function (d) { return d.type === type && d.no.indexOf(prefix) === 0; }).length + 1;
+    return prefix + (n < 10 ? "00" : n < 100 ? "0" : "") + n;
+  }
+  function newDoc(S, type, d) {
+    var x = { id: uid("D"), type: type, no: nextDocNo(S, type, d.date), date: d.date, status: "draft", maker: S.operator, checker: "", checkedAt: "",
+      createdAt: nowStr(), note: d.note || "", ref: d.ref || null, lines: [] };
+    S.docs.unshift(x);
+    return x;
+  }
+  function cleanDocLines(S, lines, needLoc) {
+    if (!lines || !lines.length) throw new Error("至少要有一筆明細");
+    return lines.map(function (l, i) {
+      var p = product(S, l.sku), n = "第 " + (i + 1) + " 筆";
+      if (!p) throw new Error(n + "品項不存在");
+      if (!String(l.lot || "").trim()) throw new Error(n + "缺批號");
+      if (!posInt(l.qty)) throw new Error(n + "數量必須是正整數");
+      if (needLoc && !location(S, l.from)) throw new Error(n + "缺出貨倉庫");
+      return { sku: l.sku, lot: String(l.lot).trim(), qty: l.qty, mfg: l.mfg || "", exp: l.exp || "", from: l.from || "", price: typeof l.price === "number" ? l.price : p.price, note: l.note || "" };
+    });
+  }
+
+  // 進貨：the receiving check (外觀、標示、數量，溫控品記溫度) is part of the document and must pass.
+  function receiveGoods(S, d) {
+    need(S, "stock_edit");
+    if (!d.date) throw new Error("請填進貨日期");
+    if (!String(d.vendor || "").trim()) throw new Error("請填廠商");
+    var lines = cleanDocLines(S, d.lines, false);
+    lines.forEach(function (l, i) { if (!/^\d{4}-\d{2}-\d{2}$/.test(l.exp)) throw new Error("第 " + (i + 1) + " 筆缺有效日期"); });
+    var ck = d.check || {};
+    if (!ck.look || !ck.label || !ck.count) throw new Error("收貨檢查未全部合格，不能入庫");
+    if (d.cold && !String(ck.temp || "").trim()) throw new Error("溫控產品要填進貨溫度");
+    var x = newDoc(S, "in", d);
+    x.vendor = String(d.vendor).trim(); x.cold = !!d.cold; x.check = { look: true, label: true, count: true, temp: ck.temp || "" };
+    x.lines = lines;
+    lines.forEach(function (l) {
+      var line = findLine(S, "co", l.sku, l.lot);
+      if (line) line.qty += l.qty;
+      else S.lots.push({ id: uid("L"), loc: "co", sku: l.sku, lot: l.lot, exp: l.exp, qty: l.qty });
+    });
+    x.status = "posted"; x.checker = S.operator; x.checkedAt = nowStr();
+    log(S, "進貨憑單", x.no + "｜" + x.vendor + "｜" + lines.length + " 筆入公司倉");
+    return x;
+  }
+
+  // 借出（寄庫）：saved as a draft; 倉儲 checks the goods (出貨檢查) and posts, which moves the stock.
+  function saveLend(S, d) {
+    need(S, "stock_edit");
+    if (!d.date) throw new Error("請填借出日期");
+    var to = location(S, d.to);
+    if (!to || to.type === "company") throw new Error("請選借出對象（醫院或業務）");
+    if (SHIP_MODES.indexOf(d.ship) < 0) throw new Error("請選配送方式");
+    var lines = cleanDocLines(S, d.lines, true);
+    var x = d.id ? doc(S, d.id) : null;
+    if (x && x.status !== "draft") throw new Error("已過帳的借出憑單不能再修改");
+    if (!x) x = newDoc(S, "lend", d);
+    x.date = d.date; x.to = d.to; x.ship = d.ship; x.kind = d.kind || "寄庫"; x.handler = d.handler || ""; x.due = d.due || ""; x.note = d.note || ""; x.lines = lines;
+    log(S, "借出憑單儲存", x.no + "｜" + to.name);
+    return x;
+  }
+  function postLend(S, id) {
+    need(S, "stock_edit");
+    var x = doc(S, id);
+    if (!x || x.type !== "lend") throw new Error("找不到借出憑單");
+    if (x.status !== "draft") throw new Error("這張借出憑單已過帳");
+    var take = x.lines.map(function (l) { return { loc: l.from, sku: l.sku, lot: l.lot, qty: l.qty }; });
+    consume(S, take);
+    x.lines.forEach(function (l) {
+      var src = S.lots.filter(function (z) { return z.sku === l.sku && z.lot === l.lot; })[0];
+      var dest = findLine(S, x.to, l.sku, l.lot);
+      if (dest) dest.qty += l.qty;
+      else S.lots.push({ id: uid("L"), loc: x.to, sku: l.sku, lot: l.lot, exp: l.exp || (src ? src.exp : ""), qty: l.qty });
+    });
+    x.status = "posted"; x.checker = S.operator; x.checkedAt = nowStr();
+    log(S, "借出憑單出貨", x.no + "｜" + locName(S, x.to) + "｜出貨檢查：" + S.operator);
+    return x;
+  }
+
+  // A hospital (or a rep) is billed as a customer: create its customer record the first time.
+  function partyCustomer(S, locId) {
+    var c = S.customers.filter(function (x) { return x.loc === locId; })[0];
+    if (c) return c;
+    var l = location(S, locId);
+    c = { id: "cx" + locId, code: "H" + String(100 + S.customers.length), name: l ? l.name : locId, loc: locId, addr: "", contact: "", tel: "" };
+    S.customers.push(c);
+    return c;
+  }
+  // Earliest-expiry company lot with enough stock, for the replenishment suggestion.
+  function fefoLot(S, sku, qty) {
+    return lines(S, "co", sku).filter(function (l) { return !isExpired(l.exp) && l.qty >= qty; })
+      .sort(function (a, b) { return a.exp < b.exp ? -1 : 1; })[0] || null;
+  }
+  function lotExp(S, loc, sku, lot) {
+    var l = S.lots.filter(function (z) { return z.sku === sku && z.lot === lot; })[0];
+    var b = (S.boxes || []).filter(function (z) { return z.lot === lot; })[0];
+    return l ? l.exp : b ? b.exp : "";
+  }
+  // Called from approveReport after the stock is deducted at the hospital.
+  function reportDocs(S, r, expOf) {
+    var today = ymd(new Date()), items = reportItems(r);
+    var ret = newDoc(S, "ret", { date: today, ref: { kind: "report", id: r.id }, note: "報刀耗用｜" + r.date + " " + locName(S, r.hospital) + " " + r.doctor });
+    ret.from = r.loc;
+    ret.lines = items.map(function (it) { return { sku: it.sku, lot: it.lot, qty: it.qty, exp: expOf[it.sku + " " + it.lot] || "", mfg: "", from: r.loc, price: 0, note: it.scrap ? "報廢" : "" }; });
+    ret.status = "posted"; ret.checker = S.operator; ret.checkedAt = nowStr();
+    var sold = items.filter(function (it) { return !it.scrap; });
+    var o = null;
+    if (sold.length) {
+      var c = partyCustomer(S, r.hospital);
+      o = { id: uid("S"), no: nextSalesNo(S, today), date: today, customer: c.id, currency: "NTD", taxMode: "incl", salesRep: r.createdBy, dept: "業務部",
+        note: "報刀耗用｜借出還回單 " + ret.no, status: "confirmed", maker: S.operator, reviewer: S.operator, invoice: "", createdAt: nowStr(), confirmedAt: nowStr(),
+        ref: { kind: "report", id: r.id },
+        lines: sold.map(function (it) { var p = product(S, it.sku); return { sku: it.sku, loc: r.loc, lot: it.lot, exp: expOf[it.sku + " " + it.lot] || "", qty: it.qty, price: p ? p.price : 0 }; }) };
+      S.sales.unshift(o);
+      postSalesJournal(S, o, today);
+    }
+    // Replenishment: lend the same items back to the hospital from company stock. 骨釘 are refilled
+    // through the screw box itself, so they are left out of the suggestion.
+    var need_ = {};
+    items.forEach(function (it) { var p = product(S, it.sku); if (p && p.kind !== "screw") need_[it.sku] = (need_[it.sku] || 0) + it.qty; });
+    var lend = null, short = [];
+    var ls = Object.keys(need_).map(function (sku) {
+      var lot = fefoLot(S, sku, need_[sku]);
+      if (!lot) { short.push(sku); return null; }
+      return { sku: sku, lot: lot.lot, qty: need_[sku], exp: lot.exp, mfg: "", from: "co", price: product(S, sku).price, note: "" };
+    }).filter(Boolean);
+    if (ls.length && location(S, r.loc) && location(S, r.loc).type !== "company") {
+      lend = newDoc(S, "lend", { date: today, ref: { kind: "report", id: r.id }, note: "補貨｜報刀 " + r.date + " " + locName(S, r.hospital) });
+      lend.to = r.loc; lend.ship = "自送"; lend.kind = "寄庫"; lend.handler = r.createdBy; lend.due = ""; lend.lines = ls;
+    }
+    r.docs = { ret: ret.id, sales: o ? o.id : null, lend: lend ? lend.id : null, short: short };
+    log(S, "報刀產生單據", "借出還回單 " + ret.no + (o ? "｜銷貨憑單 " + o.no : "") + (lend ? "｜補貨借出（草稿）" + lend.no : "") + (short.length ? "｜公司倉不足：" + short.join("、") : ""));
+    return r.docs;
+  }
+
+  // ---------- 安全庫存 ----------
+  function companyQty(S, sku) { return totalQty(S, "co", sku); }
+  function lowStock(S) {
+    return S.products.filter(function (p) { return typeof p.safety === "number" && p.safety > 0; })
+      .map(function (p) { return { sku: p.sku, name: p.name, vendor: p.vendor || "未指定原廠", have: companyQty(S, p.sku), safety: p.safety }; })
+      .filter(function (x) { return x.have < x.safety; });
+  }
+  function setSafety(S, sku, n, vendor) {
+    need(S, "settings_edit");
+    var p = product(S, sku);
+    if (!p) throw new Error("找不到品項");
+    if (typeof n !== "number" || n < 0 || Math.floor(n) !== n) throw new Error("安全庫存要是 0 以上的整數");
+    p.safety = n;
+    if (vendor !== undefined) p.vendor = String(vendor).trim();
+    log(S, "安全庫存", sku + "｜" + n + (p.vendor ? "｜" + p.vendor : ""));
+    return p;
+  }
+
+  // ---------- FR17-02 訂單審核表（每月，借出或銷貨） ----------
+  // The columns are exactly the ones the SOP exports from 正航: date, document no, party code and
+  // name, then per line the product code, name and quantity.
+  function auditRows(S, month, kind) {
+    var rows = [];
+    if (kind === "lend") {
+      S.docs.filter(function (d) { return d.type === "lend" && d.status === "posted" && monthKey(d.date) === month; }).forEach(function (d) {
+        var c = partyCustomer(S, d.to);
+        d.lines.forEach(function (l) { var p = product(S, l.sku); rows.push({ date: d.date, no: d.no, code: c.code, party: c.name, sku: l.sku, name: p ? p.name : "", qty: l.qty, ship: d.ship }); });
+      });
+    } else {
+      S.sales.filter(function (o) { return o.status === "confirmed" && monthKey(o.date) === month; }).forEach(function (o) {
+        var c = customer(S, o.customer) || {};
+        o.lines.forEach(function (l) { var p = product(S, l.sku); rows.push({ date: o.date, no: o.no, code: c.code || "", party: c.name || "", sku: l.sku, name: p ? p.name : "", qty: l.qty, ship: o.ref ? "報刀耗用（金流單）" : "賣斷" }); });
+      });
+    }
+    return rows.sort(function (a, b) { return a.date < b.date ? -1 : a.date > b.date ? 1 : (a.no < b.no ? -1 : 1); });
   }
 
   // ---------- 會計 (demo scope: 銷貨 -> 傳票 -> 應收 -> 收款) ----------
@@ -894,7 +1081,7 @@
         { id: "c102", code: "102", name: "範例醫療器材行", addr: "彰化縣範例鎮示範街 28 號", contact: "李先生", tel: "04-7000-0002" },
         { id: "c103", code: "103", name: "測試聯合診所", addr: "雲林縣示範市測試路 5 號", contact: "陳先生", tel: "05-5000-0003" }
       ],
-      products: [], categories: [], lots: [], moves: [], reports: [], sales: [], payments: [], journals: [], log: []
+      products: [], categories: [], lots: [], moves: [], docs: [], reports: [], sales: [], payments: [], journals: [], log: []
     };
     ["中榮", "員基", "鹿基", "彰基", "803", "二基"].forEach(function (n, i) {
       S.locations.push({ id: "h" + i, name: n, type: "hospital" });
@@ -955,12 +1142,29 @@
     mkBox("2.7 小骨釘盒", "co", "SL27-2404", [["2.7 骨釘", 11]], 0.4);
     S.lots = S.lots.filter(function (l) { return l.qty > 0; });
 
+    S.products.forEach(function (p) {
+      if (p.kind === "plate") { p.vendor = "示範原廠（骨材）"; p.safety = 4 + Math.floor(r() * 4); }
+      else if (p.kind === "custom") { p.vendor = "示範生技"; p.safety = 6; }
+    });
     S.log.unshift({ ts: nowStr(), user: "系統", action: "初始化", detail: "載入示範資料" });
+    seedDocs(S);
     seedReports(S);
     seedSales(S);
     seedHistory(S);
     S.operator = "內勤-小美";
     return S;
+  }
+
+  function seedDocs(S) {
+    S.operator = "內勤-小美";
+    receiveGoods(S, { date: addDays(-12), vendor: "示範生技", cold: true, check: { look: true, label: true, count: true, temp: "18°C" },
+      lines: [{ sku: "PRP-20", lot: "PRP-2609-2", mfg: addDays(-60), exp: addDays(540), qty: 6 }] });
+    var pl = plates(S).filter(function (p) { return fefoLot(S, p.sku, 1); }).slice(0, 2);
+    if (pl.length) {
+      var x = saveLend(S, { date: addDays(-6), to: "h3", ship: "自送", kind: "寄庫", handler: "業務-阿明",
+        lines: pl.map(function (p) { var l = fefoLot(S, p.sku, 1); return { sku: p.sku, lot: l.lot, exp: l.exp, qty: 1, from: "co" }; }) });
+      postLend(S, x.id);
+    }
   }
 
   function seedReports(S) {
@@ -1068,6 +1272,7 @@
         if (S && S.v === 5) { applyGeoDefaults(S); S.v = VERSION; }
         if (S && !S.moves) S.moves = [];
         if (S && !S.categories) S.categories = [];
+        if (S && !S.docs) S.docs = [];
         if (S && S.v === VERSION) return S;
       }
     } catch (e) { /* fall through to a fresh seed */ }
@@ -1090,6 +1295,8 @@
   updateBox = tracked(updateBox, function (S, res, id) { var b = box(S, id); return { kind: "骨釘盒設定", ref: { kind: "box", id: id }, note: b ? b.name : "" }; });
   deleteBox = tracked(deleteBox, function (S, res, id) { return { kind: "刪除骨釘盒", note: "" }; });
   toggleSlot = tracked(toggleSlot, function (S, res, boxId) { var b = box(S, boxId); return { kind: "骨釘盒盤點", ref: { kind: "box", id: boxId }, note: b ? b.name : "" }; });
+  receiveGoods = tracked(receiveGoods, function (S, x) { return { kind: "進貨", ref: { kind: "doc", id: x.id }, note: x.no + " " + x.vendor }; });
+  postLend = tracked(postLend, function (S, x) { return { kind: "借出", ref: { kind: "doc", id: x.id }, note: x.no + " → " + locName(S, x.to) }; });
   approveReport = tracked(approveReport, function (S, r) { return { kind: "報刀扣庫", ref: { kind: "report", id: r.id }, note: r.date + " " + locName(S, r.hospital) + " " + r.doctor }; });
   confirmSales = tracked(confirmSales, function (S, o) { return { kind: "銷貨出貨", ref: { kind: "sales", id: o.id }, note: o.no }; });
 
@@ -1107,6 +1314,8 @@
     addStock: addStock, adjustStock: adjustStock, transfer: transfer,
     submitReport: submitReport, approveReport: approveReport, rejectReport: rejectReport,
     reportItems: reportItems, reportsCSV: reportsCSV,
+    DOC_TYPES: DOC_TYPES, DOC_STATUS: DOC_STATUS, SHIP_MODES: SHIP_MODES, doc: doc, receiveGoods: receiveGoods, saveLend: saveLend, postLend: postLend,
+    partyCustomer: partyCustomer, fefoLot: fefoLot, lowStock: lowStock, setSafety: setSafety, companyQty: companyQty, auditRows: auditRows,
     salesTotals: salesTotals, saveSales: saveSales, confirmSales: confirmSales, issueInvoice: issueInvoice,
     ACCOUNTS: ACCOUNTS, accountName: accountName, orderTotal: orderTotal, orderPaid: orderPaid, orderBalance: orderBalance,
     receivePayment: receivePayment, arRows: arRows, arByCustomer: arByCustomer, invoiceRows: invoiceRows, trialBalance: trialBalance,

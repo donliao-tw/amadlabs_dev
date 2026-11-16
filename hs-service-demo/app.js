@@ -6,6 +6,10 @@
   var tab = "intro";
   var stockView = "plates";
   var moveKind = "all";
+  var docView = "lend";
+  var auditKind = "lend";
+  var auditMonth = "";
+  var DL = null, GR = null;
   var stockScope = "company";
   var stockQ = "";
   var acctView = "ar";
@@ -31,6 +35,7 @@
     acct: '<path d="M5 4h12a2 2 0 012 2v14H7a2 2 0 01-2-2z"/><path d="M9 9h6M9 13h6M9 17h3"/>',
     stats: '<path d="M5 20V10M12 20V4M19 20v-7"/>',
     sales: '<path d="M6 3h12v18l-3-2-3 2-3-2-3 2z"/><path d="M9 8h6M9 12h6"/>',
+    docs: '<path d="M7 3h7l5 5v13H7z"/><path d="M14 3v5h5M10 13h6M10 17h6"/>',
     stock: '<path d="M3 8l9-5 9 5v8l-9 5-9-5z"/><path d="M3 8l9 5 9-5M12 13v8"/>',
     trace: '<circle cx="11" cy="11" r="6"/><path d="M20 20l-4.5-4.5"/>',
     settings: '<path d="M4 7h10M18 7h2M4 17h2M10 17h10"/><circle cx="16" cy="7" r="2"/><circle cx="8" cy="17" r="2"/>'
@@ -42,6 +47,7 @@
     { id: "todo", label: "待辦", title: "待辦", sub: "需要你動手的事，處理完就會從這裡消失。", show: function () { return canAct(); } },
     { id: "report", label: "報刀", title: "報刀", sub: "跟刀後回報這台刀用了什麼，只報你用到的。內勤審核後才會扣庫存。", show: function () { return true; } },
     { id: "stock", label: "庫存", title: "庫存", sub: "先選範圍：公司的庫存可以立即調動，醫院寄庫要先調回公司。", show: function () { return L.can(S, "stock_view"); } },
+    { id: "docs", label: "單據", title: "GDP 單據", sub: "進貨、借出（寄庫）、借出還回與每月訂單審核表。格式比照正航，報刀審核後自動產生。", show: function () { return L.can(S, "stock_view"); } },
     { id: "sales", label: "銷貨憑單", title: "銷貨憑單", sub: "對應正航的銷貨憑單：客戶、明細、稅額，覆核後出貨扣庫並自動產生傳票。", show: function () { return L.can(S, "sales_view"); } },
     { id: "acct", label: "會計", title: "會計", sub: "銷貨覆核後自動入帳：應收、收款、銷項發票、傳票與試算表。", show: function () { return L.can(S, "acct_view"); } },
     { id: "stats", label: "統計", title: "數據統計", sub: "報刀、銷貨、庫存的近況，用來看趨勢與找出問題。", show: function () { return L.can(S, "stats_view"); } },
@@ -189,6 +195,18 @@
       }).join("");
       out += card("TODO", "效期要處理（" + att.length + "）", tbl(["位置", "品項", "批號", "效期", "數量", ""], rows) +
         '<p class="muted" style="margin-top:10px">已過期的批號不能出貨也不能報刀，先查看再決定退回或報廢。</p>');
+    }
+    var lendDrafts = S.docs.filter(function (d) { return d.type === "lend" && d.status === "draft"; });
+    if (lendDrafts.length && can("stock_edit")) {
+      out += card("TODO", "借出憑單待出貨檢查（" + lendDrafts.length + "）", tbl(["單號", "借出對象", "配送", "明細", "來源", ""], lendDrafts.map(function (d) {
+        return '<tr><td class="code">' + esc(d.no) + "</td><td>" + esc(L.locName(S, d.to)) + "</td><td>" + esc(d.ship) + '</td><td class="num">' + d.lines.length + " 筆</td><td>" + docSource(d) + '</td><td><button class="btn btn-sm btn-primary" data-act="open-doc" data-id="' + d.id + '">出貨檢查</button></td></tr>';
+      }).join("")) + '<p class="muted" style="margin-top:10px">報刀審核後，系統依耗用量建議補貨給醫院。倉儲目視確認品項、批號、數量後過帳，庫存才會移到醫院。</p>');
+    }
+    var low = can("stock_view") ? L.lowStock(S) : [];
+    if (low.length) {
+      out += card("TODO", "低於安全庫存（" + low.length + "）", tbl(["原廠", "品項", "公司倉", "安全庫存"], low.slice(0, 8).map(function (x) {
+        return "<tr><td>" + esc(x.vendor) + '</td><td><span class="code">' + esc(x.sku) + "</span> " + esc(x.name) + '</td><td class="num"><b class="mv-down">' + x.have + '</b></td><td class="num">' + x.safety + "</td></tr>";
+      }).join("")) + '<div class="row" style="margin-top:10px"><button class="btn btn-sm" data-act="docs-go" data-v="safety">看全部並產生訂購單</button></div>');
     }
     var overdue = can("acct_edit") ? L.arRows(S).filter(function (r) { return r.days > 30; }) : [];
     if (overdue.length) {
@@ -400,7 +418,9 @@
       (ro ? "" : '<button type="submit" class="btn btn-primary"' + (canEdit ? "" : " disabled") + ">儲存憑單</button>") +
       (!ro && SD.lines.length ? '<button type="button" class="btn" data-act="sales-confirm"' + (canConfirm && canEdit ? "" : ' disabled title="沒有覆核權限"') + ">儲存並覆核出貨（扣庫）</button>" : "") +
       (ro && !SD.invoice ? '<button type="button" class="btn btn-primary" data-act="sales-invoice"' + (canConfirm ? "" : " disabled") + ">開立發票（示範）</button>" : "") +
-      '<button type="button" class="btn" data-act="sales-new">新增憑單</button></div>';
+      (SD.id && ro ? '<button type="button" class="btn" data-act="print-sales" data-id="' + esc(SD.id) + '">列印銷貨憑單</button>' : "") +
+      '<button type="button" class="btn" data-act="sales-new">新增憑單</button></div>' +
+      (SD.ref && SD.ref.kind === "report" ? '<p class="muted" style="margin-top:10px">這張是報刀耗用自動產生的銷貨憑單（金流單），庫存已在借出還回時處理。<button type="button" class="btn btn-sm" data-act="open-report" data-id="' + esc(SD.ref.id) + '">看報刀單</button></p>' : "");
 
     return card(SD.id ? "ORDER " + SD.no : "NEW", "銷貨憑單", '<form data-form="sales"><div class="sales-layout"><div>' + head + detail + "</div>" + totals + "</div>" + buttons + "</form>",
       '<span class="badge ' + SD.status + '">' + L.SALES_STATUS[SD.status] + "</span>");
@@ -495,13 +515,14 @@
   }
 
   // 最新異動: one row per stock line that changed, newest first, from the append-only ledger.
-  var MOVE_GROUPS = [["all", "全部", null], ["in", "入庫", ["入庫", "新增骨釘盒"]], ["tr", "調撥", ["調撥", "調撥整盒"]],
+  var MOVE_GROUPS = [["all", "全部", null], ["in", "入庫", ["入庫", "進貨", "新增骨釘盒"]], ["tr", "調撥", ["調撥", "調撥整盒", "借出"]],
     ["out", "扣庫", ["報刀扣庫", "銷貨出貨"]], ["adj", "盤點", ["盤點調整", "骨釘盒盤點", "骨釘盒設定", "刪除骨釘盒"]]];
   function moveSource(m) {
     var r = m.ref;
     if (!r) return '<span class="muted">—</span>';
     if (r.kind === "report") return '<button class="btn btn-sm" data-act="open-report" data-id="' + esc(r.id) + '">報刀單</button>';
     if (r.kind === "sales") return '<button class="btn btn-sm" data-act="open-sales" data-id="' + esc(r.id) + '"' + (can("sales_view") ? "" : " disabled") + ">銷貨憑單</button>";
+    if (r.kind === "doc" && L.doc(S, r.id)) return '<button class="btn btn-sm" data-act="open-doc" data-id="' + esc(r.id) + '">' + L.DOC_TYPES[L.doc(S, r.id).type] + "</button>";
     if (r.kind === "box" && L.box(S, r.id)) return '<button class="btn btn-sm" data-act="open-box" data-id="' + esc(r.id) + '">骨釘盒</button>';
     return '<span class="muted">—</span>';
   }
@@ -532,7 +553,7 @@
       }).join("");
       return '<dl class="kv"><dt>醫院</dt><dd>' + esc(L.locName(S, r.hospital)) + "</dd><dt>醫師</dt><dd>" + esc(r.doctor) + "</dd><dt>扣庫來源</dt><dd>" + esc(L.locName(S, r.loc)) + "</dd><dt>狀態</dt><dd>" + esc(L.STATUS[r.status]) + "</dd>" +
         (r.note ? "<dt>備註</dt><dd>" + esc(r.note) + "</dd>" : "") + (r.createdBy ? "<dt>送出</dt><dd>" + esc(r.createdBy) + " " + esc(r.createdAt || "") + "</dd>" : "") +
-        (r.reviewedBy ? "<dt>審核</dt><dd>" + esc(r.reviewedBy) + " " + esc(r.reviewedAt || "") + "</dd>" : "") + "</dl>" + tbl(["型號", "品名", "批號", "數量", ""], items);
+        (r.reviewedBy ? "<dt>審核</dt><dd>" + esc(r.reviewedBy) + " " + esc(r.reviewedAt || "") + "</dd>" : "") + "</dl>" + tbl(["型號", "品名", "批號", "數量", ""], items) + reportDocsHtml(r);
     });
   }
 
@@ -996,10 +1017,10 @@
   var FLOW = [
     { lane: 0, t: "報刀", d: "醫院、醫師、用了哪些品項與批號" },
     { lane: 1, t: "審核", d: "通過，或退回請業務修改" },
-    { lane: 2, t: "自動扣庫", d: "檢查批號與效期，記一筆異動帳" },
-    { lane: 1, t: "銷貨憑單", d: "客戶、明細、稅額" },
-    { lane: 1, t: "覆核出貨", d: "覆核後扣庫存，可開發票" },
-    { lane: 2, t: "自動入帳", d: "傳票、銷項稅額、應收帳款" },
+    { lane: 2, t: "借出還回", d: "寄庫扣庫，批號和報刀一致" },
+    { lane: 2, t: "銷貨憑單", d: "金流單，自動產生並入帳" },
+    { lane: 1, t: "補貨借出", d: "出貨檢查後過帳，補回醫院" },
+    { lane: 1, t: "訂單審核表", d: "FR17-02 每月自動彙整列印" },
     { lane: 1, t: "登記收款", d: "沖銷應收，帳齡自動更新" }
   ];
   var LANES = ["業務", "內勤", "系統自動"];
@@ -1024,7 +1045,7 @@
     });
     var by = LY + LH * 3 + 12;
     out += '<rect class="fl-base" x="0" y="' + by + '" width="' + W + '" height="52" rx="10"/><text class="fl-lane-t" x="16" y="' + (by + 31) + '">全程</text>' +
-      '<text class="fl-base-t" x="96" y="' + (by + 31) + '">每次庫存變動都留下紀錄　·　批號追溯　·　操作紀錄只增不改　·　權限依角色　·　統計與地圖</text>';
+      '<text class="fl-base-t" x="96" y="' + (by + 31) + '">進貨收貨檢查　·　安全庫存與訂購單　·　每次庫存變動都留下紀錄　·　批號追溯　·　權限依角色</text>';
     return out + "</svg>";
   }
   function flowList() {
@@ -1036,6 +1057,7 @@
   var FEATURES = [
     ["report", "報刀", "業務在手機上報，只報用到的品項。骨釘直接在盒子上點格子，批號跟著帶出。內勤審核後才扣庫。"],
     ["stock", "庫存與骨釘盒", "公司倉、醫院寄庫、業務移動庫存分開看，公司的可以立即調動。骨釘盒可自訂排列，像座位圖一樣一格一格看。有效期警示、位置地圖、最新異動帳。"],
+    ["docs", "GDP 單據", "進貨憑單含收貨檢查與溫度；借出憑單（寄庫）出貨檢查後過帳；報刀審核自動開借出還回單，批號和報刀一致。每月 FR17-02 訂單審核表直接列印，不用再從正航匯出貼 Excel。低於安全庫存時提醒並產生訂購單。"],
     ["sales", "銷貨憑單", "對應正航的銷貨憑單：客戶、明細、稅額。覆核後出貨扣庫，並可開立發票。"],
     ["acct", "會計", "覆核出貨後自動產生傳票。應收帳款與帳齡、收款登記、銷項發票、試算表。"],
     ["stats", "數據統計", "報刀趨勢、每月銷貨額、各醫院與醫師排行、效期分布。每種資訊用最適合的圖或表。"],
@@ -1045,12 +1067,14 @@
   var COMPARE = [
     ["報刀", "業務傳 Excel 或訊息，內勤再重打一次", "業務自己報，內勤審核，資料不用重打"],
     ["庫存", "寄庫、業務庫存、公司庫存分散在不同檔案", "同一份帳，分位置顯示，骨釘盒看得到每一格"],
+    ["GDP 單據", "正航開借出、還回、銷貨，每月匯出貼 Dropbox 的 Excel 再列印", "報刀審核就產生借出還回單與銷貨憑單；訂單審核表直接印"],
     ["銷貨與帳", "資料整理後再轉進正航，另外對帳", "憑單覆核即扣庫、開票、入帳"],
     ["追溯", "翻檔案找批號", "輸入批號，直接看到去向"],
     ["權限與紀錄", "檔案誰都能改，改了沒有紀錄", "依角色給權限，每個動作留紀錄"]
   ];
   var GDP = [
-    ["產品可追溯", "批號追溯；每筆庫存異動可回查到報刀單或銷貨憑單", "召回流程的 SOP"],
+    ["產品可追溯", "批號追溯；每筆庫存異動可回查到報刀單、借出憑單、借出還回單或銷貨憑單", "召回流程的 SOP"],
+    ["進貨與出貨檢查", "進貨憑單必須通過收貨檢查（溫控品記溫度）才能入庫；借出憑單出貨檢查後才過帳", "檢查章與紙本歸檔方式"],
     ["效期與不良品管制", "效期警示；過期批號不能出貨、不能報刀", "隔離、退回、銷毀的作業程序"],
     ["人員權責", "角色與功能權限；每個動作記下操作人員", "人員訓練與授權紀錄"],
     ["紀錄不可竄改", "操作紀錄只增不改；庫存異動帳逐筆保存", "紀錄保存年限與備份規定"],
@@ -1302,7 +1326,7 @@
     document.querySelector(".main").classList.toggle("wide-page", tab === "stock");
     document.getElementById("pageHead").innerHTML = '<div class="eyebrow">' + esc(cur.id) + "</div><h1>" + esc(cur.title) + "</h1><p>" + esc(cur.sub) + "</p>";
 
-    var html = tab === "intro" ? renderIntro() : tab === "todo" ? renderTodo() : tab === "report" ? renderReport() : tab === "sales" ? renderSales() : tab === "stock" ? renderStock() : tab === "acct" ? renderAcct() : tab === "stats" ? renderStats() : tab === "trace" ? renderTrace() : renderSettings();
+    var html = tab === "intro" ? renderIntro() : tab === "todo" ? renderTodo() : tab === "report" ? renderReport() : tab === "sales" ? renderSales() : tab === "stock" ? renderStock() : tab === "docs" ? renderDocs() : tab === "acct" ? renderAcct() : tab === "stats" ? renderStats() : tab === "trace" ? renderTrace() : renderSettings();
     // Only the same page keeps its scroll; a page change starts from the top.
     if (tab !== renderedTab) { renderedTab = tab; view.innerHTML = html; labelTables(view); }
     else keepScroll(view, function () { view.innerHTML = html; labelTables(view); });
@@ -1354,7 +1378,7 @@
       D.picks.splice(+g("idx"), 1);
       render();
         } else if (a === "rep-filter") { repFilter = g("v"); render(); }
-    else if (a === "approve") run(function () { L.approveReport(S, g("id")); }, "已審核，庫存已扣除");
+    else if (a === "approve") run(function () { L.approveReport(S, g("id")); }, "已審核：已扣庫，並產生借出還回單、銷貨憑單與補貨借出草稿");
     else if (a === "reject") {
       var why = window.prompt("退回原因（可留空）");
       if (why !== null) run(function () { L.rejectReport(S, g("id"), why); }, "已退回");
@@ -1654,6 +1678,331 @@
   document.addEventListener("mousemove", function (e) {
     var tip = document.querySelector(".tw-tip");
     if (tip && !tip.hidden) placeTip(e, tip);
+  });
+
+  // ---------------- GDP 單據 ----------------
+  var COMPANY = { name: "禾翔醫藥生技有限公司", tel: "04-0000-0000", fax: "04-0000-0001", taxId: "00000000" };
+  function docSource(d) {
+    if (d.ref && d.ref.kind === "report") return '<button class="btn btn-sm" data-act="open-report" data-id="' + esc(d.ref.id) + '">報刀單</button>';
+    return '<span class="muted">手動</span>';
+  }
+  function docParty(d) { return d.type === "in" ? d.vendor : L.locName(S, d.type === "lend" ? d.to : d.from); }
+  function reportDocsHtml(r) {
+    if (!r.docs) return r.status === "approved" ? '<p class="muted" style="margin-top:12px">這張是系統上線前的歷史資料，沒有對應單據。</p>' : "";
+    var x = r.docs, b = [];
+    if (x.ret && L.doc(S, x.ret)) b.push('<button class="btn btn-sm" data-act="open-doc" data-id="' + x.ret + '">借出還回單 ' + esc(L.doc(S, x.ret).no) + "</button>");
+    if (x.sales) b.push('<button class="btn btn-sm" data-act="open-sales" data-id="' + x.sales + '"' + (can("sales_view") ? "" : " disabled") + ">銷貨憑單</button>");
+    if (x.lend && L.doc(S, x.lend)) { var ld = L.doc(S, x.lend); b.push('<button class="btn btn-sm" data-act="open-doc" data-id="' + x.lend + '">補貨借出 ' + esc(ld.no) + "（" + L.DOC_STATUS[ld.status] + "）</button>"); }
+    return '<h4 style="margin-top:16px">產生的單據</h4><div class="row">' + b.join("") + "</div>" +
+      (x.short && x.short.length ? '<p class="muted" style="margin-top:8px">公司倉不足，沒有列入補貨：' + x.short.map(esc).join("、") + "</p>" : "");
+  }
+  function monthsBack(n) {
+    var out = [], d = new Date();
+    for (var i = 0; i < n; i++) { out.push(d.getFullYear() + "-" + ("0" + (d.getMonth() + 1)).slice(-2)); d.setMonth(d.getMonth() - 1); }
+    return out;
+  }
+
+  function renderDocs() {
+    if (!can("stock_view")) return noPerm("查看庫存");
+    var views = [["lend", "借出憑單"], ["ret", "借出還回單"], ["in", "進貨憑單"], ["audit", "訂單審核表"], ["safety", "安全庫存"]];
+    var seg = '<div class="seg" style="margin-bottom:14px">' + views.map(function (v) {
+      return '<button data-act="docs-go" data-v="' + v[0] + '" aria-pressed="' + (docView === v[0]) + '">' + v[1] + "</button>";
+    }).join("") + "</div>";
+    if (docView === "audit") return seg + auditView();
+    if (docView === "safety") return seg + safetyView();
+    var edit = can("stock_edit");
+    var list = S.docs.filter(function (d) { return d.type === docView; });
+    var rows = list.map(function (d) {
+      var qty = d.lines.reduce(function (a, l) { return a + l.qty; }, 0);
+      return '<tr class="click" data-act="open-doc" data-id="' + d.id + '"><td class="code">' + esc(d.no) + "</td><td>" + esc(d.date) + "</td><td>" + esc(docParty(d)) + "</td>" +
+        (docView === "lend" ? "<td>" + esc(d.ship || "") + "</td>" : "") + '<td class="num">' + d.lines.length + " 筆／" + qty + '</td><td><span class="badge ' + (d.status === "posted" ? "approved" : "draft") + '">' + L.DOC_STATUS[d.status] + "</span></td><td>" + docSource(d) + "</td></tr>";
+    }).join("");
+    var heads = ["單號", "日期", docView === "in" ? "廠商" : docView === "lend" ? "借出對象" : "還回自", docView === "lend" ? "配送" : null, "明細／數量", "狀態", "來源"].filter(Boolean);
+    var btn = docView === "lend" ? '<button class="btn btn-primary btn-sm" data-act="lend-new"' + (edit ? "" : " disabled") + ">＋ 新增借出憑單</button>"
+      : docView === "in" ? '<button class="btn btn-primary btn-sm" data-act="gr-new"' + (edit ? "" : " disabled") + ">＋ 新增進貨憑單</button>" : "";
+    var help = { lend: "出貨到醫院寄庫或業務身上，用借出憑單：倉儲目視確認後按「出貨檢查並過帳」，庫存才移出公司倉。報刀審核後會自動產生補貨草稿。",
+      ret: "報刀耗用的品項，系統依報刀的批號自動開借出還回單，接著產生銷貨憑單（金流單）。不需要手動開。",
+      in: "原廠到貨時開進貨憑單：收貨檢查（外觀、標示、數量，溫控品記溫度）全部合格才能入公司倉。" }[docView];
+    return seg + card("DOCS", L.DOC_TYPES[docView], '<p class="muted" style="margin:0 0 12px">' + help + "</p>" +
+      '<div class="table-wrap"><table class="table"><thead><tr>' + heads.map(function (h) { return "<th>" + h + "</th>"; }).join("") + "</tr></thead><tbody>" +
+      (rows || '<tr><td colspan="' + heads.length + '" class="empty">還沒有' + L.DOC_TYPES[docView] + "</td></tr>") + "</tbody></table></div>", btn);
+  }
+
+  function auditView() {
+    var months = monthsBack(6);
+    if (months.indexOf(auditMonth) < 0) auditMonth = months[0];
+    var rows = L.auditRows(S, auditMonth, auditKind);
+    var dates = [];
+    rows.forEach(function (r) { if (dates.indexOf(r.date) < 0) dates.push(r.date); });
+    var body = rows.map(function (r, i) {
+      var first = !i || rows[i - 1].date !== r.date;
+      return "<tr" + (first ? ' class="day-first"' : "") + "><td>" + (first ? esc(r.date) : "") + '</td><td class="code">' + esc(r.no) + '</td><td class="code">' + esc(r.code) + "</td><td>" + esc(r.party) + '</td><td class="code">' + esc(r.sku) + "</td><td>" + esc(r.name) + '</td><td class="num">' + r.qty + "</td><td>" + esc(r.ship) + "</td>" +
+        (first ? '<td><button class="btn btn-sm" data-act="print-audit" data-date="' + esc(r.date) + '">列印這天</button></td>' : "<td></td>") + "</tr>";
+    }).join("");
+    var head = '<div class="row" style="margin-bottom:12px"><div class="seg">' + [["lend", "借出（寄庫）"], ["sales", "銷貨（賣斷、耗用）"]].map(function (k) {
+      return '<button data-act="audit-kind" data-v="' + k[0] + '" aria-pressed="' + (auditKind === k[0]) + '">' + k[1] + "</button>";
+    }).join("") + '</div><label class="field" style="min-width:150px">月份<select data-bind="audit-month">' + options(months.map(function (m) { return { v: m, t: m }; }), auditMonth) + "</select></label>" +
+      '<button class="btn btn-sm" data-act="print-audit" data-date=""' + (rows.length ? "" : " disabled") + ">列印整月</button></div>";
+    return card("FR17-02", "訂單審核表（" + (auditKind === "lend" ? "借出" : "銷貨") + "）", head +
+      '<p class="muted" style="margin:0 0 12px">欄位與正航匯出的相同：日期、單據號碼、對象編號與名稱、產品編號、品名規格、數量。原本要從正航匯出、貼到 Dropbox 的 Excel 再逐日列印，現在直接依日期列印歸檔。共 ' + dates.length + " 天、" + rows.length + " 列。</p>" +
+      '<div class="table-wrap"><table class="table audit"><thead><tr><th>日期</th><th>單據號碼</th><th>對象編號</th><th>對象名稱</th><th>產品編號</th><th>品名規格</th><th class="num">數量</th><th>配送／性質</th><th></th></tr></thead><tbody>' +
+      (body || '<tr><td colspan="9" class="empty">這個月沒有' + (auditKind === "lend" ? "已過帳的借出憑單" : "已出貨的銷貨憑單") + "</td></tr>") + "</tbody></table></div>");
+  }
+
+  function safetyView() {
+    var cfg = can("settings_edit");
+    var ps = S.products.filter(function (p) { return p.kind !== "screw"; });
+    var low = L.lowStock(S), vendors = [];
+    low.forEach(function (x) { if (vendors.indexOf(x.vendor) < 0) vendors.push(x.vendor); });
+    var rows = ps.map(function (p) {
+      var have = L.companyQty(S, p.sku), sf = typeof p.safety === "number" ? p.safety : 0, isLow = sf > 0 && have < sf;
+      return '<tr><td>' + esc(p.vendor || "—") + '</td><td class="code">' + esc(p.sku) + "</td><td>" + esc(p.name) + '</td><td class="num"><b class="' + (isLow ? "mv-down" : "") + '">' + have + '</b></td><td class="num"><input class="cellinput" type="number" min="0" step="1" style="width:76px" value="' + sf + '" data-act="safety" data-sku="' + esc(p.sku) + '"' + (cfg ? "" : " disabled") + "></td><td>" + (isLow ? '<span class="badge expired">低於水位</span>' : sf ? '<span class="badge approved">足夠</span>' : '<span class="muted">未設定</span>') + "</td></tr>";
+    }).join("");
+    var po = vendors.length ? '<div class="row" style="margin-bottom:12px">' + vendors.map(function (v) {
+      return '<button class="btn btn-sm btn-primary" data-act="print-po" data-vendor="' + esc(v) + '">產生訂購單：' + esc(v) + "</button>";
+    }).join("") + "</div>" : '<p class="muted">目前沒有低於安全庫存的品項。</p>';
+    return card("SAFETY", "安全庫存（公司倉）", '<p class="muted" style="margin:0 0 12px">每種規格各自設定水位，公司倉低於水位就在待辦提醒，並依原廠產生訂購單。各原廠的訂購單格式不同，正式版會照你們提供的範本做。</p>' + po +
+      '<div class="table-wrap"><table class="table"><thead><tr><th>原廠</th><th>品號</th><th>品名</th><th class="num">公司倉</th><th class="num">安全庫存</th><th>狀態</th></tr></thead><tbody>' + rows + "</tbody></table></div>");
+  }
+
+  function openDoc(id) {
+    var d = L.doc(S, id);
+    if (!d) return toast("找不到這張單據", true);
+    openDialog(L.DOC_TYPES[d.type] + " " + d.no, function () {
+      d = L.doc(S, id);
+      var priceOn = can("view_price");
+      var rows = d.lines.map(function (l, i) {
+        return '<tr><td class="num">' + (i + 1) + '</td><td class="code">' + esc(l.sku) + "</td><td>" + esc(pName(l.sku)) + '</td><td class="code">' + esc(l.lot) + "</td><td>" + esc(l.mfg || "—") + "</td><td>" + esc(l.exp || "—") + '</td><td class="num">' + l.qty + "</td>" +
+          (d.type === "lend" ? "<td>" + esc(L.locName(S, l.from)) + "</td>" : "") + (priceOn && d.type !== "ret" ? '<td class="num">' + num(l.price) + "</td>" : "") + "<td>" + esc(l.note || "") + "</td></tr>";
+      }).join("");
+      var heads = ["欄號", "產品編號", "品名規格", "批號", "出廠日期", "有效日期", "數量"].concat(d.type === "lend" ? ["倉庫"] : []).concat(priceOn && d.type !== "ret" ? ["單價"] : []).concat(["備註"]);
+      var kv = '<dl class="kv"><dt>單號</dt><dd class="code">' + esc(d.no) + "</dd><dt>日期</dt><dd>" + esc(d.date) + "</dd>" +
+        (d.type === "in" ? "<dt>廠商</dt><dd>" + esc(d.vendor) + "</dd><dt>收貨檢查</dt><dd>外觀 ✓　標示 ✓　數量 ✓" + (d.cold ? "　溫度 " + esc(d.check.temp) : "") + "</dd>" : "") +
+        (d.type === "lend" ? "<dt>借出對象</dt><dd>" + esc(L.locName(S, d.to)) + "</dd><dt>借出類別</dt><dd>" + esc(d.kind || "寄庫") + "</dd><dt>配送方式</dt><dd>" + esc(d.ship) + "</dd><dt>經手人員</dt><dd>" + esc(d.handler || "—") + "</dd>" : "") +
+        (d.type === "ret" ? "<dt>還回自</dt><dd>" + esc(L.locName(S, d.from)) + "</dd>" : "") +
+        "<dt>製單人員</dt><dd>" + esc(d.maker) + "</dd><dt>狀態</dt><dd>" + L.DOC_STATUS[d.status] + (d.checker ? "（" + (d.type === "lend" ? "出貨檢查" : d.type === "in" ? "收貨檢查" : "過帳") + "：" + esc(d.checker) + " " + esc(d.checkedAt) + "）" : "") + "</dd>" +
+        (d.note ? "<dt>備註</dt><dd>" + esc(d.note) + "</dd>" : "") + "</dl>";
+      var post = d.type === "lend" && d.status === "draft"
+        ? '<form data-form="post-lend" data-id="' + esc(d.id) + '" class="post-check"><label class="chk"><input type="checkbox" name="ok" required> 已目視確認品項、批號、數量與包裝（出貨檢查）</label><button class="btn btn-primary"' + (can("stock_edit") ? "" : " disabled") + ">出貨檢查並過帳</button>" +
+          '<button type="button" class="btn" data-act="lend-edit" data-id="' + esc(d.id) + '"' + (can("stock_edit") ? "" : " disabled") + ">修改</button></form>" : "";
+      return kv + tbl(heads, rows) + '<div class="row" style="margin-top:14px">' + docSource(d) + '<button class="btn" data-act="print-doc" data-id="' + esc(d.id) + '">列印' + L.DOC_TYPES[d.type] + "</button></div>" + post;
+    }, true);
+  }
+
+  // ---- 借出憑單 editor ----
+  function companyLines(sku) { return usableLines("co", sku).sort(function (a, b) { return a.exp < b.exp ? -1 : 1; }); }
+  function lendLine() {
+    var p = S.products.filter(function (x) { return x.kind !== "screw" && companyLines(x.sku).length; })[0];
+    if (!p) return null;
+    var l = companyLines(p.sku)[0];
+    return { sku: p.sku, lot: l.lot, exp: l.exp, qty: 1, from: "co" };
+  }
+  function openLend(id) {
+    var d = id ? L.doc(S, id) : null;
+    var dests = S.locations.filter(function (l) { return l.type !== "company"; });
+    DL = d ? deepCopy(d) : { date: L.ymd(new Date()), to: dests[0] ? dests[0].id : "", ship: "自送", kind: "寄庫", handler: "", due: "", note: "", lines: [] };
+    if (!DL.lines.length) { var first = lendLine(); if (first) DL.lines.push(first); }
+    openDialog(d ? "修改借出憑單 " + d.no : "新增借出憑單（寄庫）", lendHtml, true);
+  }
+  function lendHtml() {
+    var dests = S.locations.filter(function (l) { return l.type !== "company"; });
+    var skus = S.products.filter(function (x) { return x.kind !== "screw" && companyLines(x.sku).length; });
+    var rows = DL.lines.map(function (l, i) {
+      var ls = companyLines(l.sku);
+      return '<tr><td class="num">' + (i + 1) + '</td><td><select data-bind="dl-sku" data-i="' + i + '">' + options(skus.map(function (p) { return { v: p.sku, t: p.sku + "　" + p.name }; }), l.sku) + "</select></td>" +
+        '<td><select data-bind="dl-lot" data-i="' + i + '">' + options(ls.map(function (x) { return { v: x.lot, t: x.lot + "｜效期 " + x.exp + "｜剩 " + x.qty }; }), l.lot) + "</select></td>" +
+        '<td><input type="number" min="1" step="1" style="width:72px" value="' + l.qty + '" data-bind="dl-qty" data-i="' + i + '"></td><td><button type="button" class="btn btn-sm" data-act="dl-rm" data-i="' + i + '">移除</button></td></tr>';
+    }).join("");
+    return '<form data-form="lend"><div class="grid">' +
+      '<label class="field">借出日期<input type="date" data-bind="dl-date" value="' + esc(DL.date) + '"></label>' +
+      '<label class="field">借出對象<select data-bind="dl-to">' + locOptions(dests, DL.to) + "</select></label>" +
+      '<label class="field">借出類別<input data-bind="dl-kind" value="' + esc(DL.kind) + '"></label>' +
+      '<label class="field">配送方式<select data-bind="dl-ship">' + options(L.SHIP_MODES.map(function (m) { return { v: m, t: m + (m === "自送" ? "（親送）" : "（郵局、物流）") }; }), DL.ship) + "</select></label>" +
+      '<label class="field">經手人員<select data-bind="dl-handler">' + options([{ v: "", t: "—" }].concat(S.users.map(function (u) { return { v: u.name, t: u.name }; })), DL.handler) + "</select></label>" +
+      '<label class="field">預還日期<input type="date" data-bind="dl-due" value="' + esc(DL.due) + '"></label>' +
+      '<label class="field wide">備註<input data-bind="dl-note" value="' + esc(DL.note) + '"></label></div>' +
+      '<h4>明細（從公司倉出貨，批號依效期由近到遠）</h4><div class="table-wrap"><table class="table detail-table"><thead><tr><th class="num">欄號</th><th>產品</th><th>批號</th><th>數量</th><th></th></tr></thead><tbody>' +
+      (rows || '<tr><td colspan="5" class="empty">公司倉沒有可借出的庫存</td></tr>') + "</tbody></table></div>" +
+      '<div class="row" style="margin-top:12px"><button type="button" class="btn btn-sm" data-act="dl-add">＋ 新增明細</button><span style="flex:1"></span><button class="btn btn-primary">儲存借出憑單（草稿）</button></div>' +
+      '<p class="muted" style="margin-top:8px">儲存後還沒有移動庫存，要到單據內做出貨檢查並過帳。骨釘請用骨釘盒整盒調撥或在盒子上補格。</p></form>';
+  }
+
+  // ---- 進貨憑單 editor ----
+  function openReceive() {
+    var p = S.products.filter(function (x) { return x.kind !== "screw"; })[0];
+    GR = { date: L.ymd(new Date()), vendor: p && p.vendor || "", cold: false, look: false, label: false, count: false, temp: "", note: "",
+      lines: [{ sku: p ? p.sku : "", lot: "", mfg: "", exp: L.addDays(720), qty: 1 }] };
+    openDialog("新增進貨憑單", receiveHtml, true);
+  }
+  function receiveHtml() {
+    var ps = S.products.filter(function (x) { return x.kind !== "screw"; });
+    var vendors = [];
+    S.products.forEach(function (x) { if (x.vendor && vendors.indexOf(x.vendor) < 0) vendors.push(x.vendor); });
+    var rows = GR.lines.map(function (l, i) {
+      return '<tr><td class="num">' + (i + 1) + '</td><td><select data-bind="gr-sku" data-i="' + i + '">' + options(ps.map(function (p) { return { v: p.sku, t: p.sku + "　" + p.name }; }), l.sku) + "</select></td>" +
+        '<td><input data-bind="gr-lot" data-i="' + i + '" value="' + esc(l.lot) + '" style="width:120px"></td><td><input type="date" data-bind="gr-mfg" data-i="' + i + '" value="' + esc(l.mfg) + '"></td>' +
+        '<td><input type="date" data-bind="gr-exp" data-i="' + i + '" value="' + esc(l.exp) + '"></td><td><input type="number" min="1" step="1" style="width:72px" data-bind="gr-qty" data-i="' + i + '" value="' + l.qty + '"></td>' +
+        '<td><button type="button" class="btn btn-sm" data-act="gr-rm" data-i="' + i + '">移除</button></td></tr>';
+    }).join("");
+    var ck = function (k, t) { return '<label class="chk"><input type="checkbox" data-bind="gr-' + k + '"' + (GR[k] ? " checked" : "") + "> " + t + "</label>"; };
+    return '<form data-form="receive"><div class="grid">' +
+      '<label class="field">進貨日期<input type="date" data-bind="gr-date" value="' + esc(GR.date) + '"></label>' +
+      '<label class="field">廠商（原廠）<input list="grVendors" data-bind="gr-vendor" value="' + esc(GR.vendor) + '"><datalist id="grVendors">' + vendors.map(function (v) { return '<option value="' + esc(v) + '">'; }).join("") + "</datalist></label>" +
+      '<label class="field wide">備註<input data-bind="gr-note" value="' + esc(GR.note) + '"></label></div>' +
+      '<h4>明細（依原廠銷貨單逐筆輸入）</h4><div class="table-wrap"><table class="table detail-table"><thead><tr><th class="num">欄號</th><th>產品</th><th>批號</th><th>出廠日期</th><th>有效日期</th><th>數量</th><th></th></tr></thead><tbody>' + rows + "</tbody></table></div>" +
+      '<div class="row" style="margin-top:10px"><button type="button" class="btn btn-sm" data-act="gr-add">＋ 新增明細</button></div>' +
+      '<h4>收貨檢查</h4><div class="check-grid">' + ck("look", "外觀、包裝完整") + ck("label", "標示、批號、效期正確") + ck("count", "數量與原廠銷貨單相符") + ck("cold", "溫控產品") +
+      (GR.cold ? '<label class="field" style="max-width:200px">進貨溫度<input data-bind="gr-temp" value="' + esc(GR.temp) + '" placeholder="例如 18°C"></label>' : "") + "</div>" +
+      '<div class="row" style="margin-top:14px"><span class="muted" style="flex:1">檢查全部合格才能入庫；不合格請拒收或另行隔離。</span><button class="btn btn-primary"' + (can("stock_edit") ? "" : " disabled") + ">收貨檢查合格，入公司倉</button></div></form>";
+  }
+
+  // ---- printing: a separate window laid out like the 正航 forms ----
+  var PRINT_CSS = "@page{size:A4;margin:12mm}*{box-sizing:border-box}body{font:12px/1.45 'Microsoft JhengHei','PingFang TC','Noto Sans TC',sans-serif;color:#000;margin:0}" +
+    ".pg{page-break-after:always;padding:2mm 0}.pg:last-child{page-break-after:auto}h1{font-size:20px;font-weight:500;text-align:center;margin:0;letter-spacing:.06em}" +
+    "h2{font-size:17px;font-weight:500;text-align:center;margin:2px auto 8px;width:max-content;border-bottom:1.5px solid #000;padding:0 6px}" +
+    ".hd{display:grid;grid-template-columns:1.2fr 1fr 1fr;gap:1px 16px;border-top:1px solid #000;padding:4px 0 6px}.hd div{white-space:nowrap;overflow:hidden}" +
+    ".top{display:flex;justify-content:space-between}table{width:100%;border-collapse:collapse}th{background:#d9d9d9;font-weight:400;text-align:left;padding:3px 4px;border-top:1px solid #000;border-bottom:1px solid #000;white-space:nowrap}" +
+    "td{padding:4px;vertical-align:top}.n{text-align:right}.lot td{padding:0 4px 6px}.lot span{display:inline-block;min-width:110px;border-bottom:1px solid #000;margin-right:14px}" +
+    ".line td{border-top:1px solid #000;padding-top:6px}.ft{border-top:1px solid #000;margin-top:6px;padding-top:4px}.ft3{display:grid;grid-template-columns:2fr 1fr 1fr;border-top:1px solid #000;border-bottom:1px solid #000;margin-top:8px}" +
+    ".ft3>div{padding:4px 6px}.ft3>div+div{border-left:1px solid #000}.stamp{display:inline-block;border:1px dashed #000;width:120px;height:60px;margin-top:8px;text-align:center;padding-top:20px;color:#555}" +
+    ".sig{display:flex;gap:28px;margin-top:14px}.sig div{border-top:1px solid #000;min-width:110px;text-align:center;padding-top:3px}";
+  function phead(title, left, right) {
+    return '<h1>' + esc(COMPANY.name) + "</h1><h2>" + esc(title) + '</h2><div class="top"><div>列印日期: ' + L.ymd(new Date()) + "</div><div>頁碼: 1</div></div>";
+  }
+  function cells(arr) { return arr.map(function (x) { return x[0] ? "<div>" + esc(x[0]) + ": " + esc(x[1] == null ? "" : x[1]) + "</div>" : "<div></div>"; }).join(""); }
+  function lotRow(l, span) { return '<tr class="lot"><td></td><td colspan="' + span + '"><span>批號 ' + esc(l.lot) + "</span><span>批號數量 " + l.qty + "</span><span>出廠日期 " + esc(l.mfg || "") + "</span><span>有效日期 " + esc(l.exp || "") + "</span></td></tr>"; }
+  function printLend(d) {
+    var priceOn = can("view_price"), c = d.type === "in" ? null : L.partyCustomer(S, d.type === "lend" ? d.to : d.from);
+    var title = L.DOC_TYPES[d.type], isIn = d.type === "in";
+    var hd = isIn
+      ? cells([["進貨日期", d.date], ["進貨單號", d.no], ["公司電話", COMPANY.tel], ["廠商名稱", d.vendor], ["幣別編號", "NTD"], ["製單人員", d.maker], ["收貨檢查", d.checker + " " + d.checkedAt], ["溫控", d.cold ? "是，進貨溫度 " + d.check.temp : "否"], ["", ""]])
+      : cells([[d.type === "lend" ? "借出日期" : "還回日期", d.date], [d.type === "lend" ? "借出單號" : "還回單號", d.no], ["公司電話", COMPANY.tel], ["對象名稱", c.name], ["", ""], [d.type === "lend" ? "借出類別" : "還回類別", d.type === "lend" ? (d.kind || "寄庫") : "報刀耗用"],
+        ["聯絡電話", c.tel], ["", ""], ["傳真號碼", COMPANY.fax], ["幣別編號", "NTD"], ["經手人員", d.handler || ""], ["製單人員", d.maker], ["統一編號", ""], ["", ""], ["產品單價", "未稅"], ["聯絡地址", c.addr], ["配送方式", d.ship || ""], ["", ""]]);
+    var total = 0, qty = 0;
+    var body = d.lines.map(function (l, i) {
+      var amt = l.qty * (l.price || 0); total += amt; qty += l.qty;
+      return '<tr class="line"><td>' + (i + 1) + "</td><td>" + esc(l.sku) + "</td><td>" + esc(pName(l.sku)) + "</td><td>" + esc(isIn ? "公司倉" : L.locName(S, l.from || "co")) + '</td><td class="n">' + l.qty + "</td><td>PCS</td>" +
+        '<td class="n">' + (priceOn ? num(l.price || 0) : "") + '</td><td class="n">' + (priceOn ? num(amt) : "") + '</td><td class="n">' + (priceOn ? num(Math.round(amt * 1.05)) : "") + "</td><td>" + esc(d.due || "") + "</td><td>" + esc(l.note || "") + "</td></tr>" + lotRow(l, 10);
+    }).join("");
+    return '<div class="pg">' + phead(title) + '<div class="hd">' + hd + "</div><table><thead><tr><th>欄號</th><th>產品編號</th><th>品名規格</th><th>倉庫</th><th class=\"n\">數量</th><th>單位</th><th class=\"n\">單價</th><th class=\"n\">金額</th><th class=\"n\">含稅金額</th><th>預還日期</th><th>分錄備註</th></tr></thead><tbody>" + body + "</tbody></table>" +
+      '<div class="ft">合計: ' + qty + (priceOn ? "　　金額 " + num(total) + "　含稅 " + num(Math.round(total * 1.05)) : "") + "</div><div>備註: " + esc(d.note || "") + "</div>" +
+      (d.type === "ret" ? "" : '<div class="stamp">' + (isIn ? "收貨檢查章" : "出貨檢查章") + "</div>") + "</div>";
+  }
+  function printSales(o) {
+    var priceOn = can("view_price"), c = L.customer(S, o.customer) || {}, t = L.salesTotals(o);
+    var hd = cells([["銷貨日期", o.date], ["公司電話", COMPANY.tel], ["銷貨單號", o.no], ["客戶名稱", c.name], ["", ""], ["統一編號", ""], ["聯絡電話", c.tel], ["傳真號碼", COMPANY.fax], ["產品單價", o.taxMode === "incl" ? "含稅" : "未稅"],
+      ["幣別編號", "NTD"], ["業務人員", o.salesRep], ["所屬部門", o.dept], ["送貨地址", c.addr], ["", ""], ["製單人員", o.maker], ["發票地址", c.addr], ["", ""], ["", ""], ["收款條件", "月結"], ["預收日期", ""], ["預兌日期", ""]]);
+    var body = o.lines.map(function (l, i) {
+      var amt = l.qty * l.price, net = o.taxMode === "incl" ? Math.round(amt / 1.05) : amt, gross = o.taxMode === "incl" ? amt : Math.round(amt * 1.05);
+      var exp = l.exp || (S.lots.filter(function (z) { return z.sku === l.sku && z.lot === l.lot; })[0] || {}).exp || "";
+      return '<tr class="line"><td>' + (i + 1) + "</td><td>" + esc(l.sku) + "</td><td>" + esc(pName(l.sku)) + '</td><td class="n">' + l.qty + "</td><td>" + esc(l.lot) + "</td><td>" + esc(exp) + '</td><td class="n">' + (priceOn ? num(l.price) : "") + '</td><td class="n">' + (priceOn ? num(net) : "") + '</td><td class="n">' + (priceOn ? num(gross) : "") + "</td><td></td></tr>";
+    }).join("");
+    return '<div class="pg">' + phead("銷貨憑單") + '<div class="hd">' + hd + "</div><table><thead><tr><th>欄號</th><th>產品編號</th><th>品名規格</th><th class=\"n\">數量</th><th>批號</th><th>有效日期</th><th class=\"n\">單價</th><th class=\"n\">金額</th><th class=\"n\">含稅金額</th><th>分錄備註</th></tr></thead><tbody>" + body + "</tbody></table>" +
+      '<div class="ft3"><div>' + cells([["發票日期", o.invoice ? o.confirmedAt.slice(0, 10) : ""], ["課稅類別", "應稅"], ["發票號碼", o.invoice || ""], ["發票聯式", "三聯式"], ["備註", o.note || ""]]) + "</div><div>" +
+      cells([["折讓", priceOn ? "0" : ""], ["現收", ""], ["未收款", priceOn ? num(L.orderBalance(S, o)) : ""]]) + "</div><div>" + cells([["合計", priceOn ? num(t.net) : ""], ["稅金", priceOn ? num(t.tax) : ""], ["總計", priceOn ? num(t.total) : ""]]) + "</div></div></div>";
+  }
+  function printAudit(date) {
+    var rows = L.auditRows(S, auditMonth, auditKind).filter(function (r) { return !date || r.date === date; });
+    var days = [];
+    rows.forEach(function (r) { if (days.indexOf(r.date) < 0) days.push(r.date); });
+    var kind = auditKind === "lend" ? "借出" : "銷貨";
+    return days.map(function (day) {
+      var rs = rows.filter(function (r) { return r.date === day; });
+      return '<div class="pg">' + phead("訂單審核表（" + kind + "）") + '<div class="top"><div>表單編號: FR17-02</div><div>日期: ' + day + "</div></div>" +
+        "<table><thead><tr><th>" + (auditKind === "lend" ? "借出日期" : "銷貨日期") + "</th><th>單據號碼</th><th>對象編號</th><th>對象名稱</th><th>產品編號</th><th>品名規格</th><th class=\"n\">數量</th><th>" + (auditKind === "lend" ? "配送方式" : "性質") + "</th></tr></thead><tbody>" +
+        rs.map(function (r) { return '<tr class="line"><td>' + esc(r.date) + "</td><td>" + esc(r.no) + "</td><td>" + esc(r.code) + "</td><td>" + esc(r.party) + "</td><td>" + esc(r.sku) + "</td><td>" + esc(r.name) + '</td><td class="n">' + r.qty + "</td><td>" + esc(r.ship) + "</td></tr>"; }).join("") +
+        '</tbody></table><div class="sig"><div>製表</div><div>倉儲審核</div><div>品保審核</div></div></div>';
+    }).join("");
+  }
+  function printPO(vendor) {
+    var low = L.lowStock(S).filter(function (x) { return x.vendor === vendor; });
+    return '<div class="pg">' + phead("訂購單") + '<div class="hd">' + cells([["訂購日期", L.ymd(new Date())], ["廠商名稱", vendor], ["公司電話", COMPANY.tel], ["製單人員", S.operator], ["", ""], ["", ""]]) + "</div>" +
+      "<table><thead><tr><th>欄號</th><th>產品編號</th><th>品名規格</th><th class=\"n\">公司倉現有</th><th class=\"n\">安全庫存</th><th class=\"n\">訂購數量</th></tr></thead><tbody>" +
+      low.map(function (x, i) { return '<tr class="line"><td>' + (i + 1) + "</td><td>" + esc(x.sku) + "</td><td>" + esc(x.name) + '</td><td class="n">' + x.have + '</td><td class="n">' + x.safety + '</td><td class="n">' + (x.safety * 2 - x.have) + "</td></tr>"; }).join("") +
+      '</tbody></table><div class="ft">訂購數量預設補到安全庫存的兩倍，可依原廠規定調整。各原廠的訂購單格式不同，正式版依原廠範本產生。</div><div class="sig"><div>申請人</div><div>主管核准</div></div></div>';
+  }
+  function printHtml(kind, key) {
+    var title = "", inner = "";
+    if (kind === "doc") { var d = L.doc(S, key); if (!d) return ""; title = L.DOC_TYPES[d.type] + " " + d.no; inner = printLend(d); }
+    else if (kind === "sales") { var o = S.sales.filter(function (x) { return x.id === key; })[0]; if (!o) return ""; title = "銷貨憑單 " + o.no; inner = printSales(o); }
+    else if (kind === "audit") { title = "訂單審核表 " + (key || auditMonth); inner = printAudit(key); }
+    else if (kind === "po") { title = "訂購單 " + key; inner = printPO(key); }
+    return '<!DOCTYPE html><html lang="zh-Hant"><head><meta charset="UTF-8"><title>' + esc(title) + "</title><style>" + PRINT_CSS + "</style></head><body>" + inner + "</body></html>";
+  }
+  function openPrint(kind, key) {
+    var html = printHtml(kind, key);
+    if (!html) return toast("找不到要列印的資料", true);
+    var w = window.open("", "_blank");
+    if (!w) return toast("瀏覽器擋住了列印視窗，請允許彈出視窗", true);
+    w.document.open(); w.document.write(html); w.document.close();
+    w.focus();
+    setTimeout(function () { try { w.print(); } catch (e) { /* the user can still print from the window */ } }, 300);
+  }
+  window.HSPrint = printHtml;
+
+  document.addEventListener("click", function (e) {
+    var el = e.target.closest && e.target.closest("[data-act]");
+    if (!el) return;
+    var a = el.getAttribute("data-act"), g = function (k) { return el.getAttribute("data-" + k); };
+    if (a === "docs-go") { docView = g("v"); tab = "docs"; closeDialog(); render(); }
+    else if (a === "audit-kind") { auditKind = g("v"); render(); }
+    else if (a === "open-doc") openDoc(g("id"));
+    else if (a === "lend-new") openLend(null);
+    else if (a === "lend-edit") openLend(g("id"));
+    else if (a === "gr-new") openReceive();
+    else if (a === "dl-add") { var ln = lendLine(); if (!ln) return toast("公司倉沒有可借出的庫存", true); DL.lines.push(ln); refreshDlg(); }
+    else if (a === "dl-rm") { DL.lines.splice(+g("i"), 1); refreshDlg(); }
+    else if (a === "gr-add") { var last = GR.lines[GR.lines.length - 1]; GR.lines.push({ sku: last ? last.sku : "", lot: "", mfg: "", exp: L.addDays(720), qty: 1 }); refreshDlg(); }
+    else if (a === "gr-rm") { GR.lines.splice(+g("i"), 1); refreshDlg(); }
+    else if (a === "print-doc") openPrint("doc", g("id"));
+    else if (a === "print-sales") openPrint("sales", g("id"));
+    else if (a === "print-audit") openPrint("audit", g("date"));
+    else if (a === "print-po") openPrint("po", g("vendor"));
+  });
+  function onDocBind(e) {
+    var t = e.target, b = t.getAttribute && t.getAttribute("data-bind");
+    if (!b) return;
+    var i = +t.getAttribute("data-i"), val = t.type === "checkbox" ? t.checked : t.value;
+    if (b === "audit-month") { auditMonth = val; render(); return; }
+    if (b.indexOf("dl-") === 0 && DL) {
+      var k = b.slice(3), l = DL.lines[i];
+      if (k === "sku") { l.sku = val; var first = companyLines(val)[0]; l.lot = first ? first.lot : ""; l.exp = first ? first.exp : ""; }
+      else if (k === "lot") { l.lot = val; var cur = companyLines(l.sku).filter(function (x) { return x.lot === val; })[0]; l.exp = cur ? cur.exp : ""; }
+      else if (k === "qty") l.qty = Math.floor(Number(val));
+      else DL[k] = val;
+      if (e.type === "change" && (k === "sku" || k === "lot")) refreshDlg();
+    } else if (b.indexOf("gr-") === 0 && GR) {
+      var k2 = b.slice(3);
+      if (["sku", "lot", "mfg", "exp", "qty"].indexOf(k2) >= 0) GR.lines[i][k2] = k2 === "qty" ? Math.floor(Number(val)) : val;
+      else GR[k2] = val;
+      if (k2 === "sku" && e.type === "change") { var pv = L.product(S, val); if (pv && pv.vendor && !GR.vendor) GR.vendor = pv.vendor; }
+      if (k2 === "cold" && e.type === "change") refreshDlg();
+    }
+  }
+  document.addEventListener("input", onDocBind);
+  document.addEventListener("change", function (e) {
+    onDocBind(e);
+    var t = e.target;
+    if (t.getAttribute && t.getAttribute("data-act") === "safety") {
+      var sku = t.getAttribute("data-sku");
+      if (!run(function () { L.setSafety(S, sku, Number(t.value)); }, "已更新安全庫存")) render();
+    }
+  });
+  document.addEventListener("submit", function (e) {
+    var f = e.target.getAttribute && e.target.getAttribute("data-form");
+    if (f === "lend") {
+      e.preventDefault();
+      var x = run(function () { return L.saveLend(S, DL); }, "借出憑單已儲存（草稿）");
+      if (x) { docView = "lend"; openDoc(x.id); }
+    } else if (f === "receive") {
+      e.preventDefault();
+      var y = run(function () { return L.receiveGoods(S, { date: GR.date, vendor: GR.vendor, cold: GR.cold, note: GR.note, check: { look: GR.look, label: GR.label, count: GR.count, temp: GR.temp }, lines: GR.lines }); }, "進貨完成，已入公司倉");
+      if (y) { docView = "in"; tab = "docs"; render(); openDoc(y.id); }
+    } else if (f === "post-lend") {
+      e.preventDefault();
+      var id = e.target.getAttribute("data-id");
+      if (run(function () { L.postLend(S, id); }, "出貨檢查完成，已過帳")) openDoc(id);
+    }
   });
 
   render();

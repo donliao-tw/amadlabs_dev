@@ -1,6 +1,6 @@
 // Offline shell for the demo. Network first, so a deploy is picked up on the next load;
 // the cache is only the fallback when there is no signal (e.g. in an operating room).
-var CACHE = "hs-service-demo-shell-v1";
+var CACHE = "hs-service-demo-shell-v2";
 var SHELL = ["./", "index.html", "style.css", "logic.js", "tw-map.js", "app.js", "logo.png", "manifest.webmanifest", "icon-192.png", "icon-512.png"];
 
 self.addEventListener("install", function (e) {

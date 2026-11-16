@@ -524,3 +524,10 @@ select { max-width: 100%; text-overflow: ellipsis; }
   .slot { width: 22px; height: 22px; }
   .bgrid.thumb .slot { width: 4px; height: 4px; }
 }
+
+/* ---------- GDP 單據 ---------- */
+.post-check { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; margin-top: 16px; padding: 12px 14px; border: 1px dashed var(--accent); border-radius: 10px; background: var(--accent-soft); }
+.chk { display: inline-flex; align-items: center; gap: 8px; font-size: 0.9rem; }
+.chk input { width: 18px; height: 18px; accent-color: var(--accent); }
+.check-grid { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 22px; }
+.table.audit tr.day-first td { border-top: 2px solid var(--line); }
