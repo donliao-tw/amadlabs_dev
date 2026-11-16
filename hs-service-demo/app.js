@@ -123,7 +123,7 @@
       "<h2>" + esc(title) + "</h2></div>" + (headExtra || "") + '</div><div class="card-b">' + body + "</div></section>";
   }
   function noPerm(what) {
-    return '<div class="card"><div class="empty">目前身分是「' + esc(S.operator) + "」，沒有「" + esc(what) + "」的權限。到「設定」由負責人調整。</div></div>";
+    return '<div class="card"><div class="empty">目前身分是「' + esc(S.operator) + "」，沒有「" + esc(what) + "」的權限。到「設定」由負責人或系統管理員調整。</div></div>";
   }
 
   // ---------------- 骨釘盒: a physical rack drawn as a lamp grid ----------------
@@ -1338,8 +1338,8 @@
       var head = c[2] !== lastGroup ? '<tr class="group"><td colspan="' + (L.ROLES.length + 1) + '">' + esc(c[2]) + "</td></tr>" : "";
       lastGroup = c[2];
       return head + "<tr><td>" + esc(c[1]) + "</td>" + L.ROLES.map(function (r) {
-        var fixed = r === L.OWNER || c[0] === "manage_perms";
-        var on = r === L.OWNER || (c[0] !== "manage_perms" && !!(S.perms[r] && S.perms[r][c[0]]));
+        var fixed = L.isTop(r) || c[0] === "manage_perms";
+        var on = L.isTop(r) || (c[0] !== "manage_perms" && !!(S.perms[r] && S.perms[r][c[0]]));
         return '<td><input type="checkbox" data-act="perm" data-role="' + r + '" data-cap="' + c[0] + '"' + (on ? " checked" : "") + (admin && !fixed ? "" : " disabled") + "></td>";
       }).join("") + "</tr>";
     }).join("");

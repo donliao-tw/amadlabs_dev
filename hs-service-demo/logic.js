@@ -4,11 +4,14 @@
 })(typeof self !== "undefined" ? self : this, function () {
   "use strict";
 
-  var KEY = "hs-service-demo-v10";
+  var KEY = "hs-service-demo-v11";
   var VERSION = 6;
   // The client's seven roles (spec v34). 負責人 holds everything, including the permission matrix.
-  var ROLES = ["業務", "經銷商", "倉儲部", "業務助理", "帳務部", "主管", "負責人"];
+  var ROLES = ["業務", "經銷商", "倉儲部", "業務助理", "帳務部", "主管", "負責人", "系統管理員"];
   var OWNER = "負責人";
+  // 系統管理員 (admin) is ours, not one of the client's roles: full access, like 負責人, for setup and support.
+  var ADMIN = "系統管理員";
+  function isTop(r) { return r === OWNER || r === ADMIN; }
   var TAX = 0.05;
 
   // key, label, group — the order here is the order shown in the matrix.
@@ -38,9 +41,10 @@
     "業務助理": { report_all: true, report_approve: true, report_confirm: true, report_status: true, stock_view: true, stock_edit: true, settings_edit: true, audit_view: true },
     "帳務部": { report_submit: true, report_all: true, report_approve: true, report_confirm: true, report_status: true, stock_view: true, view_price: true, sales_view: true, sales_edit: true, sales_confirm: true, settings_edit: true, acct_view: true, acct_edit: true, stats_view: true, audit_view: true },
     "主管": { report_all: true, report_status: true, stock_view: true, view_price: true, sales_view: true, acct_view: true, stats_view: true, audit_view: true },
-    "負責人": {}
+    "負責人": {},
+    "系統管理員": {}
   };
-  CAPS.forEach(function (c) { DEFAULT_PERMS[OWNER][c[0]] = true; });
+  CAPS.forEach(function (c) { DEFAULT_PERMS[OWNER][c[0]] = true; DEFAULT_PERMS[ADMIN][c[0]] = true; });
   // 異動確認 units (spec v34 §4.10): 帳務部 is one unit, 倉儲部 and 業務助理 together are the other.
   function unitOf(r) { return r === "帳務部" ? "acct" : (r === "倉儲部" || r === "業務助理") ? "wh" : ""; }
 
@@ -73,7 +77,7 @@
   // manage_perms is pinned to 負責人 so the matrix can never lock everyone out.
   function can(S, cap) {
     var r = role(S);
-    if (cap === "manage_perms") return r === OWNER;
+    if (cap === "manage_perms") return isTop(r);
     return !!(S.perms[r] && S.perms[r][cap]);
   }
   function need(S, cap) {
@@ -86,7 +90,7 @@
     need(S, "manage_perms");
     if (cap === "manage_perms") throw new Error("這項權限固定只給負責人");
     if (ROLES.indexOf(r) < 0) throw new Error("沒有這個角色");
-    if (r === OWNER) throw new Error("負責人的權限不能調整");
+    if (isTop(r)) throw new Error(r + "的權限不能調整");
     S.perms[r][cap] = !!on;
     log(S, "權限調整", r + "｜" + cap + " → " + (on ? "開" : "關"));
   }
@@ -103,7 +107,7 @@
     need(S, "manage_perms");
     var u = user(S, name);
     if (!u) throw new Error("找不到人員");
-    if (u.role === OWNER && S.users.filter(function (x) { return x.role === OWNER; }).length < 2 && r !== OWNER) throw new Error("至少要保留一位負責人");
+    if (isTop(u.role) && S.users.filter(function (x) { return isTop(x.role); }).length < 2 && !isTop(r)) throw new Error("至少要保留一位負責人或系統管理員");
     u.role = r;
     log(S, "人員角色", name + " → " + r);
   }
@@ -1371,7 +1375,7 @@
         // The client's seven people from the spec v34 (第三章 角色與權限).
         { name: "黃紹翔", role: "業務" }, { name: "日釩", role: "經銷商" },
         { name: "林旻萱", role: "倉儲部" }, { name: "周洛城", role: "業務助理" }, { name: "張喧婷", role: "帳務部" },
-        { name: "廖明雅", role: "主管" }, { name: "廖珈櫻", role: "負責人" }
+        { name: "廖明雅", role: "主管" }, { name: "廖珈櫻", role: "負責人" }, { name: "admin", role: "系統管理員" }
       ],
       perms: JSON.parse(JSON.stringify(DEFAULT_PERMS)),
       locations: [{ id: "co", name: "公司倉", type: "company" }],
@@ -1642,7 +1646,7 @@
   return {
     company: company, updateCompany: updateCompany, UNITS: UNITS, productUsage: productUsage, addProduct: addProduct, updateProduct: updateProduct,
     setProductActive: setProductActive, deleteProduct: deleteProduct,
-    ROLES: ROLES, OWNER: OWNER, CAPS: CAPS, SHIFTS: SHIFTS, PT_TBD: PT_TBD, FLAG_STATES: FLAG_STATES, ERROR_TYPES: ERROR_TYPES, MAIN_FIELDS: MAIN_FIELDS,
+    ROLES: ROLES, OWNER: OWNER, ADMIN: ADMIN, isTop: isTop, CAPS: CAPS, SHIFTS: SHIFTS, PT_TBD: PT_TBD, FLAG_STATES: FLAG_STATES, ERROR_TYPES: ERROR_TYPES, MAIN_FIELDS: MAIN_FIELDS,
     unitOf: unitOf, isDealer: isDealer, tableOf: tableOf, unitsAuto: unitsAuto, unitsOf: unitsOf, report: report, canSeeReport: canSeeReport, visibleReports: visibleReports, isOwner: isOwner,
     myNotifs: myNotifs, markRead: markRead, editReport: editReport, pendingChanges: pendingChanges, confirmChange: confirmChange, flagText: flagText,
     setReportFlags: setReportFlags, setUnits: setUnits, deleteReport: deleteReport, STATUS: STATUS, SALES_STATUS: SALES_STATUS, TAX: TAX, 
