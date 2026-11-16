@@ -4,7 +4,7 @@
 })(typeof self !== "undefined" ? self : this, function () {
   "use strict";
 
-  var KEY = "hs-service-demo-v9";
+  var KEY = "hs-service-demo-v10";
   var VERSION = 6;
   // The client's seven roles (spec v34). 負責人 holds everything, including the permission matrix.
   var ROLES = ["業務", "經銷商", "倉儲部", "業務助理", "帳務部", "主管", "負責人"];
@@ -1366,11 +1366,12 @@
   function seed() {
     var r = rng(20261031);
     var S = {
-      v: VERSION, operator: "帳務-小美",
+      v: VERSION, operator: "張喧婷",
       users: [
-        { name: "業務-小胖", role: "業務" }, { name: "業務-阿明", role: "業務" }, { name: "經銷商-示範醫材", role: "經銷商" },
-        { name: "倉儲-小芳", role: "倉儲部" }, { name: "業助-小周", role: "業務助理" }, { name: "帳務-小美", role: "帳務部" },
-        { name: "主管-王經理", role: "主管" }, { name: "負責人-陳董", role: "負責人" }
+        // The client's seven people from the spec v34 (第三章 角色與權限).
+        { name: "黃紹翔", role: "業務" }, { name: "日釩", role: "經銷商" },
+        { name: "林旻萱", role: "倉儲部" }, { name: "周洛城", role: "業務助理" }, { name: "張喧婷", role: "帳務部" },
+        { name: "廖明雅", role: "主管" }, { name: "廖珈櫻", role: "負責人" }
       ],
       perms: JSON.parse(JSON.stringify(DEFAULT_PERMS)),
       locations: [{ id: "co", name: "公司倉", type: "company" }],
@@ -1389,7 +1390,7 @@
     ["中榮", "員基", "鹿基", "彰基", "803", "二基"].forEach(function (n, i) {
       S.locations.push({ id: "h" + i, name: n, type: "hospital" });
     });
-    S.locations.push({ id: "r0", name: "小胖移動庫存", type: "rep" });
+    S.locations.push({ id: "r0", name: "黃紹翔移動庫存", type: "rep" });
     applyGeoDefaults(S);
 
     var holes = [[3, "046"], [5, "058"], [7, "074"], [9, "086"], [11, "102"]];
@@ -1441,7 +1442,7 @@
     mkBox("3.5 VA 上肢器械（中榮）", "h0", "SL35-2403", two, 0.28);
     mkBox("3.5 VA 上肢器械（員基）", "h1", "SL35-2403", two, 0.25);
     mkBox("3.5 VA 上肢器械（803）", "h4", "SL35-2406", two, 0.3);
-    mkBox("3.5 VA 上肢器械（小胖）", "r0", "SL35-2403", two, 0.3);
+    mkBox("3.5 VA 上肢器械（黃紹翔）", "r0", "SL35-2403", two, 0.3);
     mkBox("2.7 小骨釘盒", "co", "SL27-2404", [["2.7 骨釘", 11]], 0.4);
     S.lots = S.lots.filter(function (l) { return l.qty > 0; });
 
@@ -1463,18 +1464,18 @@
     seedDealer(S);
     seedSales(S);
     seedHistory(S);
-    S.operator = "帳務-小美";
+    S.operator = "張喧婷";
     S.notifs.forEach(function (n) { n.read = []; });
     return S;
   }
 
   function seedDocs(S) {
-    S.operator = "倉儲-小芳";
+    S.operator = "林旻萱";
     receiveGoods(S, { date: addDays(-12), vendor: "示範生技", cold: true, check: { look: true, label: true, count: true, temp: "18°C" },
       lines: [{ sku: "PRP-20", lot: "PRP-2609-2", mfg: addDays(-60), exp: addDays(540), qty: 6 }] });
     var pl = plates(S).filter(function (p) { return fefoLot(S, p.sku, 1); }).slice(0, 2);
     if (pl.length) {
-      var x = saveLend(S, { date: addDays(-6), to: "h3", ship: "自送", kind: "寄庫", handler: "業務-阿明",
+      var x = saveLend(S, { date: addDays(-6), to: "h3", ship: "自送", kind: "寄庫", handler: "黃紹翔",
         lines: pl.map(function (p) { var l = fefoLot(S, p.sku, 1); return { sku: p.sku, lot: l.lot, exp: l.exp, qty: 1, from: "co" }; }) });
       postLend(S, x.id);
     }
@@ -1482,7 +1483,7 @@
 
   function seedReports(S) {
     var docs = ["林醫師", "陳醫師", "黃醫師"];
-    var reps = ["業務-小胖", "業務-阿明", "業務-小胖"];
+    var reps = ["黃紹翔", "黃紹翔", "黃紹翔"];
     ["h4", "h0", "h1"].forEach(function (hid, i) {
       var plate = null;
       S.lots.forEach(function (l) {
@@ -1501,11 +1502,11 @@
         main: [{ sku: plate.sku, lot: plate.lot, qty: 1 }],
         screws: [{ sku: slots[0].sku, lot: bx.lot, qty: 1, slots: [slots[0].id] }, { sku: slots[1].sku, lot: bx.lot, qty: 1, scrap: true, slots: [slots[1].id] }]
       });
-      if (i < 2) { S.operator = "倉儲-小芳"; approveReport(S, rep.id); }
+      if (i < 2) { S.operator = "林旻萱"; approveReport(S, rep.id); }
       if (i === 0) {
         S.operator = reps[0];
         editReport(S, rep.id, { doctor: "林O成", shift: "夜刀" });
-        S.operator = "倉儲-小芳";
+        S.operator = "林旻萱";
         confirmChange(S, S.changes[0].id);
       }
     });
@@ -1516,14 +1517,14 @@
   // A dealer case: the dealer bought the goods outright, so no company stock moves.
   function seedDealer(S) {
     var p = S.products.filter(function (x) { return x.kind === "plate"; })[3];
-    S.operator = "經銷商-示範醫材";
+    S.operator = "日釩";
     submitReport(S, { date: addDays(-2), hospital: "h5", doctor: "許醫師", patient: "張O德", mrn: "1209933", main: [{ sku: p.sku, lot: "", qty: 1 }], screws: [] });
   }
 
   function seedHistory(S) {
     var r = rng(77123);
     var docs = ["林醫師", "陳醫師", "黃醫師", "吳醫師", "張醫師", "李醫師", "周醫師", "蔡醫師"];
-    var reps = ["業務-小胖", "業務-阿明"];
+    var reps = ["黃紹翔", "黃紹翔"];
     var pl = plates(S);
     var screws = S.products.filter(function (p) { return p.kind === "screw"; });
     var hospitals = S.locations.filter(function (l) { return l.type === "hospital"; });
@@ -1550,11 +1551,11 @@
       S.reports.push({ id: uid("R"), date: date, hospital: hosp.id, doctor: docs[Math.floor(r() * docs.length)], loc: hosp.id, note: "", status: "approved",
         shift: r() < 0.3 ? "夜刀" : "日刀", patient: "病患" + (100 + i), mrn: String(1000000 + Math.floor(r() * 8999999)), deliverer: r() < 0.5 ? "小李" : "阿德", rep: who, src: "內部", dealer: "", flags: fl, units: null,
         history: [{ ts: date + " 09:00:00", user: who, role: "業務", sec: "建立", ch: [["建立報刀", "—", "系統上線前的歷史資料"]] }],
-        main: main, screws: sc, createdBy: who, createdAt: (late ? shiftDate(date, 3) : date) + " 09:00:00", reviewedBy: "倉儲-小芳", reviewedAt: date + " 17:00:00" });
+        main: main, screws: sc, createdBy: who, createdAt: (late ? shiftDate(date, 3) : date) + " 09:00:00", reviewedBy: "林旻萱", reviewedAt: date + " 17:00:00" });
     }
     S.reports.sort(function (a, b) { return a.date < b.date ? 1 : a.date > b.date ? -1 : 0; });
 
-    S.operator = "帳務-小美";
+    S.operator = "張喧婷";
     var invN = S.sales.filter(function (o) { return o.invoice; }).length;
     for (var j = 0; j < 10; j++) {
       var d2 = addDays(-(8 + Math.floor(r() * 150)));
@@ -1566,7 +1567,7 @@
       }
       invN++;
       var o = { id: uid("S"), no: nextSalesNo(S, d2), date: d2, customer: cust.id, currency: "NTD", taxMode: "incl", salesRep: reps[Math.floor(r() * 2)], dept: "業務部", note: "",
-        status: "confirmed", maker: "帳務-小美", reviewer: "帳務-小美", invoice: "ZZ" + String(10000000 + invN * 37), createdAt: d2 + " 10:00:00", confirmedAt: d2 + " 15:00:00", lines: ls };
+        status: "confirmed", maker: "張喧婷", reviewer: "張喧婷", invoice: "ZZ" + String(10000000 + invN * 37), createdAt: d2 + " 10:00:00", confirmedAt: d2 + " 15:00:00", lines: ls };
       S.sales.push(o);
       postSalesJournal(S, o, d2);
       var total = orderTotal(o), roll = r();
@@ -1578,20 +1579,20 @@
   }
   function addPaymentSeed(S, o, date, amount) {
     if (date > ymd(new Date())) return;
-    var pay = { id: uid("P"), orderId: o.id, date: date, amount: amount, method: "匯款", by: "帳務-小美" };
+    var pay = { id: uid("P"), orderId: o.id, date: date, amount: amount, method: "匯款", by: "張喧婷" };
     S.payments.push(pay);
     postJournal(S, date, "收款 " + o.no, "pay:" + pay.id, [{ acct: "1100", dr: amount }, { acct: "1200", cr: amount }]);
   }
 
   function seedSales(S) {
-    S.operator = "帳務-小美";
+    S.operator = "張喧婷";
     var line = S.lots.filter(function (l) {
       var p = product(S, l.sku);
       return l.loc === "co" && p && p.kind === "plate" && !isExpired(l.exp) && l.qty >= 2;
     })[0];
     if (!line) return;
     var o = saveSales(S, {
-      date: addDays(-3), customer: "c101", taxMode: "incl", salesRep: "業務-小胖", dept: "業務部", note: "",
+      date: addDays(-3), customer: "c101", taxMode: "incl", salesRep: "黃紹翔", dept: "業務部", note: "",
       lines: [{ sku: line.sku, loc: "co", lot: line.lot, qty: 2, price: product(S, line.sku).price }]
     });
     confirmSales(S, o.id);

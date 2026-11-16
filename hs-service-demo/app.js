@@ -1230,8 +1230,8 @@
   function renderIntro() {
     var hero = '<section class="intro-hero"><div class="eyebrow">AMAD Labs · DEMO</div><h2>從刀房到帳本，同一份資料</h2>' +
       '<p>業務在醫院報刀，倉儲確認，庫存自動扣、銷貨憑單、發票、傳票、應收跟著走，批號隨時查得到去向。取代現在的 Excel 加正航的來回整理。</p>' +
-      '<div class="row"><button class="btn btn-primary" data-act="intro-as" data-name="業務-小胖" data-tab="report">以業務身分報一張刀</button>' +
-      '<button class="btn" data-act="intro-as" data-name="倉儲-小芳" data-tab="todo">以倉儲身分確認</button>' +
+      '<div class="row"><button class="btn btn-primary" data-act="intro-as" data-name="黃紹翔" data-tab="report">以業務身分報一張刀</button>' +
+      '<button class="btn" data-act="intro-as" data-name="林旻萱" data-tab="todo">以倉儲身分確認</button>' +
       '<button class="btn" data-act="intro-go" data-tab="stock">看庫存與地圖</button></div></section>';
 
     var flow = card("FLOW", "一張單怎麼走", '<div class="flow-wrap">' + flowSvg() + "</div>" + flowList() +
@@ -1249,9 +1249,9 @@
       GDP.map(function (r) { return "<tr><td><b>" + r[0] + '</b></td><td class="wrap">' + r[1] + '</td><td class="wrap">' + r[2] + "</td></tr>"; }).join("") + "</tbody></table></div>" +
       '<p class="muted" style="margin-top:10px">系統提供的是紀錄與管制的工具。GDP 認證還需要文件化的 SOP 與稽核，不是裝了系統就通過。這個示範版資料存在瀏覽器；正式版會放在伺服器的資料庫。</p>');
 
-    var tour = card("TRY", "三分鐘體驗", '<ol class="tour"><li><b>業務報刀</b><span>以「業務-小胖」報一張刀，選醫院、醫師，加骨板，再到骨釘盒點用掉的格子。</span></li>' +
-      '<li><b>倉儲確認</b><span>換成「倉儲-小芳」，在待辦按「確認並扣庫」：寄庫扣庫，並自動產生借出還回單、銷貨憑單與補貨借出草稿。</span></li>' +
-      '<li><b>送出後修改</b><span>換回「業務-小胖」開啟自己的報刀改醫師或刀別：系統標記報錯、列入異動待確認；再用「帳務-小美」確認。</span></li>' +
+    var tour = card("TRY", "三分鐘體驗", '<ol class="tour"><li><b>業務報刀</b><span>以「黃紹翔」報一張刀，選醫院、醫師，加骨板，再到骨釘盒點用掉的格子。</span></li>' +
+      '<li><b>倉儲確認</b><span>換成「林旻萱」，在待辦按「確認並扣庫」：寄庫扣庫，並自動產生借出還回單、銷貨憑單與補貨借出草稿。</span></li>' +
+      '<li><b>送出後修改</b><span>換回「黃紹翔」開啟自己的報刀改醫師或刀別：系統標記報錯、列入異動待確認；再用「張喧婷」確認。</span></li>' +
       '<li><b>回頭查</b><span>到「庫存」的「最新異動」看到剛剛那筆扣庫，點「報刀單」回到來源；再到「追溯」查批號。</span></li></ol>' +
       '<p class="muted">所有資料都是示範用的假資料，隨時可以在「設定」重設。</p>');
     return hero + flow + feats + '<div class="stat-grid intro-two">' + cmp + gdp + "</div>" + tour;
