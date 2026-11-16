@@ -2034,9 +2034,12 @@
     tip.style.left = Math.min(box.width - 190, Math.max(4, e.clientX - box.left + 12)) + "px";
     tip.style.top = Math.max(4, e.clientY - box.top + 14) + "px";
   }
+  // Mouse only. On iPhone a first tap that makes content appear (this tooltip) is treated as a hover
+  // and the click never fires, so a marker needed two taps and the first one just "flashed".
+  var HOVER = !window.matchMedia || window.matchMedia("(hover: hover) and (pointer: fine)").matches;
   document.addEventListener("mouseover", function (e) {
     var tip = document.querySelector(".tw-tip");
-    if (!tip) return;
+    if (!tip || !HOVER) return;
     var mk = e.target.closest && e.target.closest(".mk");
     if (mk) { tip.textContent = mk.getAttribute("data-tip"); tip.hidden = false; placeTip(e, tip); } else tip.hidden = true;
   });
