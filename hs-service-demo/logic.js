@@ -4,7 +4,7 @@
 })(typeof self !== "undefined" ? self : this, function () {
   "use strict";
 
-  var KEY = "hs-service-demo-v12";
+  var KEY = "hs-service-demo-v13";
   var VERSION = 6;
   // The client's seven roles (spec v34). 負責人 holds everything, including the permission matrix.
   var ROLES = ["業務", "經銷商", "倉儲部", "業務助理", "帳務部", "主管", "負責人", "系統管理員"];
@@ -94,7 +94,7 @@
     S.perms[r][cap] = !!on;
     log(S, "權限調整", r + "｜" + cap + " → " + (on ? "開" : "關"));
   }
-  function addUser(S, name, r) {
+  function addUserLegacy(S, name, r) {
     need(S, "manage_perms");
     name = String(name || "").trim();
     if (!name) throw new Error("請填名稱");
@@ -635,7 +635,7 @@
       id: uid("R"), date: d.date, hospital: d.hospital, doctor: String(d.doctor).trim(),
       table: table, sub: sub, dept: table === "綜合" ? String(d.dept || "").trim() : "",
       shift: withShift ? d.shift : null, patient: String(d.patient).trim(), mrn: String(d.mrn || "").trim(), deliverer: withShift ? String(d.deliverer || "").trim() : "",
-      rep: dealer ? "" : rep, src: dealer ? "經銷商" : nhi ? "健保貨" : "內部", dealer: dealer ? S.operator : "", proxy: role(S) === "帳務部" && !nhi, whNote: "",
+      rep: dealer ? "" : rep, src: dealer ? "經銷商" : nhi ? "健保貨" : "內部", dealer: dealer ? (dealerOf(S) ? dealerOf(S).name : S.operator) : "", proxy: role(S) === "帳務部" && !nhi, whNote: "",
       loc: dealer || nhi ? null : d.loc, note: d.note || "", status: "pending", flags: [], units: null, history: [],
       main: d.main.map(function (x) {
         var pp = product(S, x.sku), o = { sku: x.sku, lot: x.lot || "", qty: x.qty, scrap: !!x.scrap };
@@ -749,7 +749,11 @@
   }
   function unitsOf(S, r) { return r.units != null ? r.units : unitsAuto(S, r); }
   function report(S, id) { return S.reports.filter(function (x) { return x.id === id; })[0] || null; }
-  function canSeeReport(S, r) { return can(S, "report_all") || r.createdBy === S.operator || r.rep === S.operator; }
+  function canSeeReport(S, r) {
+    if (can(S, "report_all") || r.createdBy === S.operator || r.rep === S.operator) return true;
+    var dl = role(S) === "經銷商" && dealerOf(S);
+    return !!dl && r.src === "經銷商" && r.dealer === dl.name;
+  }
   function visibleReports(S) { return S.reports.filter(function (r) { return canSeeReport(S, r); }); }
   function isOwner(S, r) { return r.createdBy === S.operator || (r.src === "內部" && r.rep === S.operator); }
 
@@ -1021,6 +1025,195 @@
     o.invoice = "ZZ" + String(10000000 + n * 37);
     log(S, "開立發票(示範)", o.no + "｜" + o.invoice);
     return o;
+  }
+
+  // ---------- 基本資料：醫院、經銷商、帳號（spec v34 第十三章待討論 2、4 的提案） ----------
+  // Hospitals are hospital-type locations (a hospital always has a 寄庫 location, even if it holds nothing).
+  function hospitals(S, all) { return S.locations.filter(function (l) { return l.type === "hospital" && (all || l.active !== false); }); }
+  function hospitalUsage(S, id) {
+    var u = { stock: 0, reports: 0 };
+    S.lots.forEach(function (l) { if (l.loc === id) u.stock += l.qty; });
+    S.reports.forEach(function (r) { if (r.hospital === id || r.loc === id) u.reports++; });
+    return u;
+  }
+  var HOSP_FIELDS = [["name", "簡稱"], ["fullName", "全名"], ["code", "院所代碼"], ["addr", "地址"], ["tel", "電話"], ["contact", "聯絡窗口"]];
+  function cleanHospital(S, d, id) {
+    var name = String(d.name || "").trim();
+    if (!name) throw new Error("醫院簡稱必填（報刀選單顯示這個名稱）");
+    if (S.locations.some(function (l) { return l.id !== id && l.name === name; })) throw new Error("已經有同名的醫院或庫位");
+    var o = {};
+    HOSP_FIELDS.forEach(function (f) { o[f[0]] = String(d[f[0]] || "").trim(); });
+    o.name = name;
+    return o;
+  }
+  function addHospital(S, d) {
+    need(S, "settings_edit");
+    var o = cleanHospital(S, d, null);
+    var h = Object.assign({ id: uid("h"), type: "hospital", active: true }, o);
+    S.locations.push(h);
+    applyGeoDefaults(S);
+    log(S, "新增醫院", h.name + (h.fullName ? "（" + h.fullName + "）" : ""));
+    return h;
+  }
+  function updateHospital(S, id, d) {
+    need(S, "settings_edit");
+    var h = location(S, id);
+    if (!h || h.type !== "hospital") throw new Error("找不到醫院");
+    var o = cleanHospital(S, d, id), ch = [];
+    HOSP_FIELDS.forEach(function (f) { if ((h[f[0]] || "") !== o[f[0]]) { ch.push(f[1] + " " + (h[f[0]] || "（空白）") + " → " + (o[f[0]] || "（空白）")); h[f[0]] = o[f[0]]; } });
+    if (h.pending) { h.pending = false; ch.push("完成建檔"); notify(S, h.requestedBy ? [role0(S, h.requestedBy)] : [], "醫院已建檔", h.name + " 已完成建檔，報刀可以正常選取", null); }
+    if (ch.length) log(S, "醫院資料", h.name + "｜" + ch.join("；"));
+    return h;
+  }
+  function role0(S, name) { var u = user(S, name); return u ? u.role : ""; }
+  function setHospitalActive(S, id, on) {
+    need(S, "settings_edit");
+    var h = location(S, id);
+    if (!h || h.type !== "hospital") throw new Error("找不到醫院");
+    h.active = !!on;
+    log(S, on ? "醫院啟用" : "醫院停用", h.name);
+    return h;
+  }
+  function deleteHospital(S, id) {
+    need(S, "settings_edit");
+    var h = location(S, id), u = hospitalUsage(S, id);
+    if (!h || h.type !== "hospital") throw new Error("找不到醫院");
+    if (u.stock || u.reports) throw new Error("這間醫院有寄庫庫存或報刀紀錄，不能刪除，請改用停用");
+    S.locations = S.locations.filter(function (l) { return l.id !== id; });
+    log(S, "刪除醫院", h.name);
+  }
+  // A hospital that is not in the list: the reporter asks for it, can report right away, and 內勤 later
+  // either completes its record or merges it into an existing hospital (moving the reports over).
+  function requestHospital(S, name, note) {
+    need(S, "report_submit");
+    name = String(name || "").trim();
+    if (!name) throw new Error("請輸入醫院名稱");
+    var dup = S.locations.filter(function (l) { return l.type === "hospital" && l.name === name; })[0];
+    if (dup) return dup;
+    var h = { id: uid("h"), type: "hospital", name: name, fullName: "", code: "", addr: "", tel: "", contact: "", active: true, pending: true, requestedBy: S.operator, requestNote: String(note || "").trim(), requestedAt: nowStr() };
+    S.locations.push(h);
+    notify(S, ["帳務部", "倉儲部", "業務助理"], "新增醫院申請", S.operator + " 申請新增醫院「" + name + "」" + (h.requestNote ? "（" + h.requestNote + "）" : "") + "，請到基本資料建檔或合併", null);
+    log(S, "申請新增醫院", name);
+    return h;
+  }
+  function mergeHospital(S, fromId, toId) {
+    need(S, "settings_edit");
+    var a = location(S, fromId), b = location(S, toId);
+    if (!a || !b || a.type !== "hospital" || b.type !== "hospital" || a === b) throw new Error("請選要合併到哪一間醫院");
+    if (hospitalUsage(S, fromId).stock) throw new Error("這間醫院有寄庫庫存，不能合併");
+    var n = 0;
+    S.reports.forEach(function (r) {
+      if (r.hospital === fromId) { r.hospital = toId; n++; if (r.history) r.history.unshift({ ts: nowStr(), user: S.operator, role: role(S), sec: "手術主紀錄", ch: [["醫院", a.name + "（申請）", b.name]] }); }
+      if (r.loc === fromId) r.loc = toId;
+    });
+    S.locations = S.locations.filter(function (l) { return l.id !== fromId; });
+    log(S, "合併醫院", a.name + " → " + b.name + "｜" + n + " 張報刀");
+    return n;
+  }
+
+  // 經銷商: company records; a dealer may have several login accounts (users with role 經銷商 and a dealerId).
+  var DEALER_FIELDS = [["name", "簡稱"], ["fullName", "全名"], ["taxId", "統一編號"], ["contact", "聯絡人"], ["tel", "電話"], ["addr", "地址"]];
+  function dealer(S, id) { return (S.dealers || []).filter(function (x) { return x.id === id; })[0] || null; }
+  function cleanDealer(S, d, id) {
+    var name = String(d.name || "").trim();
+    if (!name) throw new Error("經銷商簡稱必填");
+    if ((S.dealers || []).some(function (x) { return x.id !== id && x.name === name; })) throw new Error("已經有同名的經銷商");
+    var term = d.term === "" || d.term == null ? 0 : Number(d.term);
+    if (!isFinite(term) || term < 0 || Math.floor(term) !== term) throw new Error("帳期要是 0 以上的整數（發票月份 + N 個月）");
+    var o = { term: term };
+    DEALER_FIELDS.forEach(function (f) { o[f[0]] = String(d[f[0]] || "").trim(); });
+    o.name = name;
+    return o;
+  }
+  function addDealer(S, d) {
+    need(S, "settings_edit");
+    var x = Object.assign({ id: uid("D"), active: true }, cleanDealer(S, d, null));
+    if (!S.dealers) S.dealers = [];
+    S.dealers.push(x);
+    log(S, "新增經銷商", x.name);
+    return x;
+  }
+  function updateDealer(S, id, d) {
+    need(S, "settings_edit");
+    var x = dealer(S, id);
+    if (!x) throw new Error("找不到經銷商");
+    var o = cleanDealer(S, d, id), oldName = x.name;
+    Object.keys(o).forEach(function (k) { x[k] = o[k]; });
+    if (oldName !== x.name) S.reports.forEach(function (r) { if (r.dealer === oldName) r.dealer = x.name; });
+    log(S, "經銷商資料", x.name);
+    return x;
+  }
+  function setDealerActive(S, id, on) {
+    need(S, "settings_edit");
+    var x = dealer(S, id);
+    if (!x) throw new Error("找不到經銷商");
+    x.active = !!on;
+    if (!on) S.users.forEach(function (u) { if (u.dealerId === id) u.active = false; });
+    log(S, on ? "經銷商啟用" : "經銷商停用", x.name + (on ? "" : "｜所屬帳號一併停用"));
+    return x;
+  }
+  function dealerOf(S, name) { var u = user(S, name || S.operator); return u && u.dealerId ? dealer(S, u.dealerId) : null; }
+
+  // 帳號: one per person. The demo checks a shared demo password; production stores hashed passwords,
+  // locks after repeated failures, and adds a second factor for roles that see money.
+  var DEMO_PASS = "1234";
+  function cleanLogin(v) { return String(v || "").trim().toLowerCase(); }
+  function userByLogin(S, login) { login = cleanLogin(login); return S.users.filter(function (u) { return cleanLogin(u.login) === login; })[0] || null; }
+  function saveUser(S, d, name) {
+    need(S, "manage_perms");
+    var u = name ? user(S, name) : null;
+    if (name && !u) throw new Error("找不到帳號");
+    var nm = String(d.name || (u && u.name) || "").trim(), login = cleanLogin(d.login);
+    if (!nm) throw new Error("姓名必填");
+    if (!login || !/^[a-z0-9._-]{3,30}$/.test(login)) throw new Error("帳號要 3–30 個英數字（可用 . _ -）");
+    if (!u && user(S, nm)) throw new Error("已有同名人員");
+    var other = userByLogin(S, login);
+    if (other && other !== u) throw new Error("這個帳號已經有人用了");
+    if (ROLES.indexOf(d.role) < 0) throw new Error("請選角色");
+    if (d.role === "經銷商" && !dealer(S, d.dealerId)) throw new Error("經銷商帳號要選所屬經銷商");
+    if (u && isTop(u.role) && !isTop(d.role) && S.users.filter(function (x) { return isTop(x.role) && x.active !== false; }).length < 2) throw new Error("至少要保留一位負責人或系統管理員");
+    var email = String(d.email || "").trim();
+    if (email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) throw new Error("Email 格式不正確");
+    if (!u) { u = { name: nm, active: true, pass: DEMO_PASS, createdAt: nowStr() }; S.users.push(u); }
+    u.login = login; u.role = d.role; u.email = email; u.dealerId = d.role === "經銷商" ? d.dealerId : "";
+    log(S, name ? "帳號修改" : "新增帳號", u.name + "｜" + login + "｜" + u.role);
+    return u;
+  }
+  function setUserActive(S, name, on) {
+    need(S, "manage_perms");
+    var u = user(S, name);
+    if (!u) throw new Error("找不到帳號");
+    if (name === S.operator && !on) throw new Error("不能停用自己正在使用的帳號");
+    if (!on && isTop(u.role) && S.users.filter(function (x) { return isTop(x.role) && x.active !== false; }).length < 2) throw new Error("至少要保留一位負責人或系統管理員");
+    u.active = !!on;
+    log(S, on ? "帳號啟用" : "帳號停用", u.name + "（" + u.login + "）");
+    return u;
+  }
+  function resetPassword(S, name) {
+    need(S, "manage_perms");
+    var u = user(S, name);
+    if (!u) throw new Error("找不到帳號");
+    u.pass = DEMO_PASS; u.mustChange = true;
+    log(S, "重設密碼", u.name);
+    return DEMO_PASS;
+  }
+  function login(S, loginId, pass) {
+    var u = userByLogin(S, loginId);
+    if (!S.logins) S.logins = [];
+    var ok = !!u && u.active !== false && pass === (u.pass || DEMO_PASS);
+    S.logins.unshift({ ts: nowStr(), login: cleanLogin(loginId), user: u ? u.name : "", ok: ok });
+    if (S.logins.length > 300) S.logins.length = 300;
+    if (!u || pass !== (u.pass || DEMO_PASS)) throw new Error("帳號或密碼不正確");
+    if (u.active === false) throw new Error("這個帳號已停用，請聯絡系統管理員");
+    u.lastLogin = nowStr();
+    S.operator = u.name;
+    return u;
+  }
+  function roleCounts(S) {
+    var m = {};
+    ROLES.forEach(function (r) { m[r] = 0; });
+    S.users.forEach(function (u) { if (u.active !== false) m[u.role] = (m[u.role] || 0) + 1; });
+    return m;
   }
 
   // ---------- 開票公司（spec v34：禾翔、和祥、晉昇） ----------
@@ -1478,9 +1671,9 @@
       v: VERSION, operator: "張喧婷",
       users: [
         // The client's seven people from the spec v34 (第三章 角色與權限).
-        { name: "黃紹翔", role: "業務" }, { name: "日釩", role: "經銷商" },
-        { name: "林旻萱", role: "倉儲部" }, { name: "周洛城", role: "業務助理" }, { name: "張喧婷", role: "帳務部" },
-        { name: "廖明雅", role: "主管" }, { name: "廖珈櫻", role: "負責人" }, { name: "admin", role: "系統管理員" }
+        { name: "黃紹翔", role: "業務", login: "huang.sx" }, { name: "日釩", role: "經銷商", login: "rifan", dealerId: "D1" },
+        { name: "林旻萱", role: "倉儲部", login: "lin.mx" }, { name: "周洛城", role: "業務助理", login: "zhou.lc" }, { name: "張喧婷", role: "帳務部", login: "zhang.xt" },
+        { name: "廖明雅", role: "主管", login: "liao.my" }, { name: "廖珈櫻", role: "負責人", login: "liao.jy" }, { name: "admin", role: "系統管理員", login: "admin" }
       ],
       perms: JSON.parse(JSON.stringify(DEFAULT_PERMS)),
       locations: [{ id: "co", name: "公司倉", type: "company" }],
@@ -1489,6 +1682,11 @@
         { id: "c102", code: "102", name: "範例醫療器材行", addr: "彰化縣範例鎮示範街 28 號", contact: "李先生", tel: "04-7000-0002" },
         { id: "c103", code: "103", name: "測試聯合診所", addr: "雲林縣示範市測試路 5 號", contact: "陳先生", tel: "05-5000-0003" }
       ],
+      dealers: [
+        { id: "D1", name: "日釩", fullName: "日釩（全名待客戶提供）", taxId: "", contact: "", tel: "", addr: "", term: 1, active: true },
+        { id: "D2", name: "示範醫材行", fullName: "示範醫材行（示範資料）", taxId: "", contact: "王先生", tel: "04-0000-1234", addr: "", term: 0, active: true }
+      ],
+      logins: [],
       companies: [
         { id: "HX", short: "禾翔", name: "禾翔醫藥生技有限公司", tel: "04-0000-0000", fax: "04-0000-0001", taxId: "00000000", addr: "台中市示範區範例路 1 號" },
         { id: "HS", short: "和祥", name: "和祥（全名待客戶提供）", tel: "", fax: "", taxId: "", addr: "" },
@@ -1496,10 +1694,10 @@
       ],
       products: [], categories: [], lots: [], moves: [], docs: [], changes: [], notifs: [], reports: [], sales: [], payments: [], journals: [], log: []
     };
-    ["中榮", "員基", "鹿基", "彰基", "803", "二基"].forEach(function (n, i) {
-      S.locations.push({ id: "h" + i, name: n, type: "hospital" });
+    [["中榮", "臺中榮民總醫院"], ["員基", "員林基督教醫院"], ["鹿基", "鹿港基督教醫院"], ["彰基", "彰化基督教醫院"], ["803", "國軍臺中總醫院"], ["二基", "二林基督教醫院"]].forEach(function (n, i) {
+      S.locations.push({ id: "h" + i, name: n[0], fullName: n[1], code: "", addr: "", tel: "", contact: "", type: "hospital", active: true });
     });
-    S.locations.push({ id: "h6", name: "北榮", type: "hospital" });
+    S.locations.push({ id: "h6", name: "北榮", fullName: "臺北榮民總醫院", code: "", addr: "", tel: "", contact: "", type: "hospital", active: true });
     S.locations.push({ id: "r0", name: "黃紹翔移動庫存", type: "rep" });
     applyGeoDefaults(S);
 
@@ -1576,6 +1774,7 @@
     seedHistory(S);
     S.operator = "張喧婷";
     S.notifs.forEach(function (n) { n.read = []; });
+    S.users.forEach(function (u) { u.active = true; u.pass = DEMO_PASS; u.email = u.email || ""; u.dealerId = u.dealerId || ""; });
     return S;
   }
 
@@ -1731,6 +1930,7 @@
         if (S && !S.changes) S.changes = [];
         if (S && !S.notifs) S.notifs = [];
         if (S && !S.companies) S.companies = [];
+        if (S && !S.dealers) S.dealers = [];
         if (S && S.v === VERSION) return S;
       }
     } catch (e) { /* fall through to a fresh seed */ }
@@ -1759,6 +1959,9 @@
   confirmSales = tracked(confirmSales, function (S, o) { return { kind: "銷貨出貨", ref: { kind: "sales", id: o.id }, note: o.no }; });
 
   return {
+    hospitals: hospitals, hospitalUsage: hospitalUsage, addHospital: addHospital, updateHospital: updateHospital, setHospitalActive: setHospitalActive, deleteHospital: deleteHospital,
+    requestHospital: requestHospital, mergeHospital: mergeHospital, dealer: dealer, addDealer: addDealer, updateDealer: updateDealer, setDealerActive: setDealerActive, dealerOf: dealerOf,
+    DEMO_PASS: DEMO_PASS, userByLogin: userByLogin, saveUser: saveUser, setUserActive: setUserActive, resetPassword: resetPassword, login: login, roleCounts: roleCounts,
     company: company, updateCompany: updateCompany, UNITS: UNITS, productUsage: productUsage, addProduct: addProduct, updateProduct: updateProduct,
     setProductActive: setProductActive, deleteProduct: deleteProduct,
     ROLES: ROLES, OWNER: OWNER, ADMIN: ADMIN, isTop: isTop, CAPS: CAPS, SHIFTS: SHIFTS, PT_TBD: PT_TBD, FLAG_STATES: FLAG_STATES, ERROR_TYPES: ERROR_TYPES, MAIN_FIELDS: MAIN_FIELDS,
@@ -1768,7 +1971,7 @@
     myNotifs: myNotifs, markRead: markRead, editReport: editReport, pendingChanges: pendingChanges, confirmChange: confirmChange, flagText: flagText,
     setReportFlags: setReportFlags, setUnits: setUnits, deleteReport: deleteReport, STATUS: STATUS, SALES_STATUS: SALES_STATUS, TAX: TAX, 
     ymd: ymd, addDays: addDays, expDays: expDays, isExpired: isExpired, posInt: posInt,
-    user: user, role: role, can: can, need: need, setPerm: setPerm, addUser: addUser, setUserRole: setUserRole,
+    user: user, role: role, can: can, need: need, setPerm: setPerm, setUserRole: setUserRole,
     product: product, location: location, locName: locName, customer: customer, plates: plates,
     findLine: findLine, lines: lines, lineQty: lineQty, totalQty: totalQty,
     FIELD_TYPES: FIELD_TYPES, category: category, categoryProducts: categoryProducts, sellable: sellable, kindName: kindName,

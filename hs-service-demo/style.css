@@ -615,3 +615,19 @@ textarea { width: 100%; padding: 8px 10px; border: 1px solid var(--line); border
 .rf-table [data-bind="rf-s-series"] { min-width: 170px; }
 .rf-table [data-bind="rf-s-len"] { min-width: 96px; }
 .rf-table [data-bind$="-lot"] { min-width: 150px; }
+
+/* 基本資料 + 登入 */
+.linkbtn { align-self: flex-start; margin-top: 4px; padding: 0; border: none; background: none; color: var(--accent); font: 600 0.78rem var(--sans); cursor: pointer; text-decoration: underline; }
+.role-counts { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+.role-counts .rc { display: inline-flex; align-items: baseline; gap: 6px; padding: 6px 12px; border: 1px solid var(--line); border-radius: 999px; background: var(--panel); font-size: 0.82rem; color: var(--muted); }
+.role-counts .rc b { color: var(--ink); font-size: 1rem; }
+.who .logout { margin-top: 4px; }
+.login { position: fixed; inset: 0; z-index: 200; display: grid; place-items: center; padding: 16px; background: var(--bg, #0b0f17); overflow-y: auto; }
+.login[hidden] { display: none; }
+.login-card { display: flex; flex-direction: column; gap: 12px; width: min(420px, 100%); padding: 24px; border: 1px solid var(--line); border-radius: 14px; background: var(--surface); box-shadow: var(--shadow); }
+.login-card .brand { margin-bottom: 6px; }
+.login-err { margin: 0; color: #dc2626; font-size: 0.86rem; }
+.login-demo { display: flex; flex-direction: column; gap: 8px; margin-top: 6px; padding-top: 12px; border-top: 1px solid var(--line); }
+.login-demo > div { display: flex; flex-wrap: wrap; gap: 6px; }
+.login-demo .btn small { margin-left: 4px; color: var(--muted); font-weight: 500; }
+@media (max-width: 720px) { .who .logout { margin: 0; } }

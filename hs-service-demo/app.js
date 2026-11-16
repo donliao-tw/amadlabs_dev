@@ -22,6 +22,7 @@
   
   var repFilter = "all";
   var RE = null;
+  var masterView = "hosp";
   var repTable = "all", repQ = "", repFrom = "", repTo = "", repHosp = "", repFlag = "", repSrc = "";
   var itemKind = "all", itemQ = "", itemCo = "", itemOff = false, PE = null;
   var traceQ = "";
@@ -38,6 +39,7 @@
     acct: '<path d="M5 4h12a2 2 0 012 2v14H7a2 2 0 01-2-2z"/><path d="M9 9h6M9 13h6M9 17h3"/>',
     stats: '<path d="M5 20V10M12 20V4M19 20v-7"/>',
     sales: '<path d="M6 3h12v18l-3-2-3 2-3-2-3 2z"/><path d="M9 8h6M9 12h6"/>',
+    master: '<path d="M4 6h16v12H4z"/><path d="M8 10h3M8 14h8"/><circle cx="16" cy="10" r="1.5"/>',
     items: '<path d="M4 7h16M4 12h16M4 17h10"/><circle cx="19" cy="17" r="2"/>',
     docs: '<path d="M7 3h7l5 5v13H7z"/><path d="M14 3v5h5M10 13h6M10 17h6"/>',
     stock: '<path d="M3 8l9-5 9 5v8l-9 5-9-5z"/><path d="M3 8l9 5 9-5M12 13v8"/>',
@@ -59,6 +61,7 @@
     { id: "acct", group: "fin", label: "會計", title: "會計", sub: "銷貨覆核後自動入帳：應收、收款、銷項發票、傳票與試算表。", show: function () { return L.can(S, "acct_view"); } },
     { id: "stats", group: "ana", label: "統計", title: "數據統計", sub: "報刀、銷貨、庫存的近況，用來看趨勢與找出問題。", show: function () { return L.can(S, "stats_view"); } },
     { id: "trace", group: "ana", label: "追溯", title: "批號追溯", sub: "一個批號現在在哪、用在哪家醫院哪位醫師。召回時直接查。", show: function () { return L.can(S, "audit_view"); } },
+    { id: "master", group: "sys", label: "基本資料", title: "基本資料", sub: "醫院、經銷商與帳號的建檔與維護。", show: function () { return L.can(S, "report_all") || L.can(S, "settings_edit") || L.can(S, "manage_perms"); } },
     { id: "settings", group: "sys", label: "設定", title: "設定", sub: "庫位、客戶、品項，以及誰能看到什麼、做什麼。", show: function () { return true; } }
   ];
 
@@ -346,14 +349,15 @@
     "北榮": "醫院是北榮的所有報刀。先選這次是鐿鈦品項還是綜合品項，一筆報刀不能混合。"
   };
   function hospitalSelect() {
-    var hospitals = S.locations.filter(function (l) { return l.type === "hospital"; }), fav = L.favHosp(S);
+    var hospitals = L.hospitals(S), fav = L.favHosp(S);
     if (D.table === "北榮") return '<label class="field">醫院<input readonly value="北榮（北榮刀表固定）"></label>';
     var list = hospitals.filter(function (h) { return !L.isBV(S, h.id); });
     var favs = list.filter(function (h) { return fav.indexOf(h.id) >= 0; }), rest = list.filter(function (h) { return fav.indexOf(h.id) < 0; });
+    var hn = function (h) { return h.name + (h.pending ? "（待建檔）" : ""); };
     var on = fav.indexOf(D.hospital) >= 0;
-    return '<label class="field">醫院<span class="hosp-pick"><select data-bind="hospital">' + (favs.length ? '<optgroup label="常用醫院">' + options(favs.map(function (h) { return { v: h.id, t: "★ " + h.name }; }), D.hospital) + "</optgroup>" : "") +
-      '<optgroup label="' + (favs.length ? "其他醫院" : "醫院") + '">' + options(rest.map(function (h) { return { v: h.id, t: h.name }; }), D.hospital) + "</optgroup></select>" +
-      '<button type="button" class="btn btn-sm star' + (on ? " on" : "") + '" data-act="fav-hosp" title="' + (on ? "取消常用" : "設為常用醫院") + '">' + (on ? "★" : "☆") + "</button></span></label>";
+    return '<label class="field">醫院<span class="hosp-pick"><select data-bind="hospital">' + (favs.length ? '<optgroup label="常用醫院">' + options(favs.map(function (h) { return { v: h.id, t: "★ " + hn(h) }; }), D.hospital) + "</optgroup>" : "") +
+      '<optgroup label="' + (favs.length ? "其他醫院" : "醫院") + '">' + options(rest.map(function (h) { return { v: h.id, t: hn(h) }; }), D.hospital) + "</optgroup></select>" +
+      '<button type="button" class="btn btn-sm star' + (on ? " on" : "") + '" data-act="fav-hosp" title="' + (on ? "取消常用" : "設為常用醫院") + '">' + (on ? "★" : "☆") + '</button></span><button type="button" class="linkbtn" data-act="hosp-request">找不到醫院？申請新增</button></label>';
   }
   function lotSelect(bind, i, sku, cur) {
     if (noStock()) return '<input data-bind="' + bind + '" data-i="' + i + '" value="' + esc(cur || "") + '" placeholder="選填" style="width:110px">';
@@ -1550,9 +1554,7 @@
     return (ok && admin ? "" : '<div class="card"><div class="empty">目前身分是「' + esc(S.operator) + "」：" + (ok ? "" : "庫位／客戶／品項只能檢視；") + (admin ? "" : "權限只有管理員能調整。") + "</div></div>") +
       card("PERMISSIONS", "權限設定", '<p class="muted" style="margin-bottom:12px">勾選代表這個角色可以。例如要讓業務看不到金額，就取消「查看金額與單價」。調整後切換上方操作人員就能馬上看到差異。</p>' +
         '<div class="table-wrap"><table class="table perm-table"><thead><tr><th>權限</th>' + L.ROLES.map(function (r) { return "<th>" + r + "</th>"; }).join("") + "</tr></thead><tbody>" + permRows + "</tbody></table></div>" +
-        "<h4>人員</h4>" + '<div class="table-wrap"><table class="table"><thead><tr><th>名稱</th><th>角色</th></tr></thead><tbody>' + userRows + "</tbody></table></div>" +
-        '<form data-form="adduser" class="row" style="margin-top:14px"><label class="field">新人員名稱<input name="name" required></label>' +
-        '<label class="field">角色<select name="role">' + options(L.ROLES.map(function (r) { return { v: r, t: r }; }), "業務") + '</select></label><button class="btn btn-primary"' + (admin ? "" : " disabled") + ">新增人員</button></form>") +
+        '<p class="muted" style="margin-top:12px">人員帳號的新增、停用、重設密碼在左側「基本資料 → 帳號」。</p><button class="btn btn-sm" data-act="master-go" data-v="acct">前往帳號管理</button>') +
       card("LOCATIONS", "庫位管理", '<p class="muted" style="margin-bottom:12px">醫院寄庫、業務的移動庫存都在這裡設定，新增後報刀和庫存頁會自動出現這個庫位。</p>' +
         '<div class="table-wrap"><table class="table"><thead><tr><th>名稱</th><th>類型</th><th>緯度</th><th>經度</th><th>執勤中</th><th class="num">庫存支數</th><th></th></tr></thead><tbody>' + locRows + "</tbody></table></div>" +
         '<form data-form="addloc" class="row" style="margin-top:14px"><label class="field">新庫位名稱<input name="name" required' + dis + '></label>' +
@@ -1662,7 +1664,7 @@
     var visible = NAV.filter(function (n) { return n.show(); });
     if (!visible.some(function (n) { return n.id === tab; })) tab = defaultTab();
 
-    document.getElementById("operator").innerHTML = options(S.users.map(function (u) { return { v: u.name, t: u.name }; }), S.operator);
+    document.getElementById("operator").innerHTML = options(S.users.filter(function (u) { return u.active !== false || u.name === S.operator; }).map(function (u) { return { v: u.name, t: u.name }; }), S.operator);
     document.getElementById("roleChip").textContent = L.role(S);
     var navBtn = function (n) {
       return '<button data-tab="' + n.id + '"' + (n.id === tab ? ' aria-current="page"' : "") + '><svg viewBox="0 0 24 24" aria-hidden="true">' + ICONS[n.id] + "</svg><span>" + n.label + "</span></button>";
@@ -1687,7 +1689,7 @@
     document.querySelector(".main").classList.toggle("wide-page", tab === "stock");
     document.getElementById("pageHead").innerHTML = '<div class="eyebrow">' + esc(cur.id) + "</div><h1>" + esc(cur.title) + "</h1><p>" + esc(cur.sub) + "</p>";
 
-    var html = tab === "intro" ? renderIntro() : tab === "todo" ? renderTodo() : tab === "report" ? renderReport() : tab === "sales" ? renderSales() : tab === "stock" ? renderStock() : tab === "docs" ? renderDocs() : tab === "items" ? renderItems() : tab === "acct" ? renderAcct() : tab === "stats" ? renderStats() : tab === "trace" ? renderTrace() : renderSettings();
+    var html = tab === "intro" ? renderIntro() : tab === "todo" ? renderTodo() : tab === "report" ? renderReport() : tab === "sales" ? renderSales() : tab === "stock" ? renderStock() : tab === "docs" ? renderDocs() : tab === "items" ? renderItems() : tab === "master" ? renderMaster() : tab === "acct" ? renderAcct() : tab === "stats" ? renderStats() : tab === "trace" ? renderTrace() : renderSettings();
     // Only the same page keeps its scroll; a page change starts from the top.
     if (tab !== renderedTab) { renderedTab = tab; view.innerHTML = html; labelTables(view); }
     else keepScroll(view, function () { view.innerHTML = html; labelTables(view); });
@@ -2093,6 +2095,178 @@
       e.preventDefault();
       var el2 = e.target.elements;
       if (run(function () { L.setUnits(S, id, Number(el2.units.value), el2.reason.value.trim()); }, "已更新使用台數，已通知主管、負責人")) refreshDlg();
+    }
+  });
+
+  // ---------------- 基本資料：醫院、經銷商、帳號 ----------------
+  function renderMaster() {
+    var tabs = [["hosp", "醫院"], ["dealer", "經銷商"], ["acct", "帳號"]];
+    if (!tabs.some(function (t) { return t[0] === masterView; })) masterView = "hosp";
+    var seg = '<div class="seg" style="margin-bottom:14px">' + tabs.map(function (t) {
+      var n = t[0] === "hosp" ? L.hospitals(S, true).filter(function (h) { return h.pending; }).length : 0;
+      return '<button data-act="master-go" data-v="' + t[0] + '" aria-pressed="' + (masterView === t[0]) + '"' + (n ? ' class="seg-alert"' : "") + ">" + t[1] + (n ? "（" + n + " 待建檔）" : "") + "</button>";
+    }).join("") + "</div>";
+    return seg + (masterView === "hosp" ? hospMaster() : masterView === "dealer" ? dealerMaster() : acctMaster());
+  }
+  function stateBadge(on) { return on ? '<span class="badge approved">啟用</span>' : '<span class="badge expired">停用</span>'; }
+
+  function hospMaster() {
+    var edit = can("settings_edit"), all = L.hospitals(S, true), pend = all.filter(function (h) { return h.pending; }), done = all.filter(function (h) { return !h.pending; });
+    var pendCard = pend.length ? card("REQUESTS", "待建檔的醫院（" + pend.length + "）", tbl(["申請的名稱", "申請人", "說明", "已用在報刀", "處理"], pend.map(function (h) {
+      return "<tr><td><b>" + esc(h.name) + "</b></td><td>" + esc(h.requestedBy || "") + '<small class="sub2">' + esc((h.requestedAt || "").slice(0, 16)) + '</small></td><td class="wrap">' + esc(h.requestNote || "—") + '</td><td class="num">' + L.hospitalUsage(S, h.id).reports + " 張</td>" +
+        '<td><div class="row" style="gap:6px"><button class="btn btn-sm btn-primary" data-act="hosp-edit" data-id="' + h.id + '"' + (edit ? "" : " disabled") + ">補資料、完成建檔</button>" +
+        '<select data-bind="merge-to" data-id="' + h.id + '"' + (edit ? "" : " disabled") + ">" + options([{ v: "", t: "或合併到既有醫院…" }].concat(done.map(function (x) { return { v: x.id, t: x.name }; })), "") + "</select></div></td></tr>";
+    }).join("")) + '<p class="muted" style="margin-top:10px">申請後業務可以先用這個名稱報刀。內勤確認是新醫院就補資料建檔；如果其實是既有醫院（例如寫成別名），選「合併」，那些報刀會改到既有醫院並記在修改歷程。</p>') : "";
+    var rows = done.map(function (h) {
+      var u = L.hospitalUsage(S, h.id);
+      return '<tr class="click' + (h.active === false ? " row-off" : "") + '" data-act="hosp-edit" data-id="' + h.id + '"><td><b>' + esc(h.name) + "</b></td><td>" + esc(h.fullName || "—") + '</td><td class="code">' + esc(h.code || "—") + "</td><td>" + esc(h.tel || "—") + "</td><td>" + esc(h.contact || "—") + '</td><td class="num">' + u.stock + '</td><td class="num">' + u.reports + "</td><td>" + stateBadge(h.active !== false) + "</td></tr>";
+    }).join("");
+    return pendCard + card("HOSPITALS", "醫院清單", '<p class="muted" style="margin:0 0 12px">報刀時醫院只能從這份清單選（可搜尋、可設常用），不能自己打字，避免同一間醫院出現好幾種寫法。清單裡沒有的醫院，業務在報刀表單按「找不到醫院？申請新增」。每間醫院同時是一個寄庫庫位。</p>' +
+      tbl(["簡稱（報刀顯示）", "全名", "院所代碼", "電話", "聯絡窗口", "寄庫庫存", "報刀數", "狀態"], rows) + '<p class="muted" style="margin-top:10px">點一列編輯。有寄庫庫存或報刀紀錄的醫院不能刪除，只能停用；停用後報刀選不到，過去的資料不受影響。</p>',
+      '<button class="btn btn-primary btn-sm" data-act="hosp-edit" data-id=""' + (edit ? "" : " disabled") + ">＋ 新增醫院</button>");
+  }
+  function openHospital(id) {
+    var h = id ? L.location(S, id) : null;
+    openDialog(h ? (h.pending ? "建檔：" : "編輯醫院：") + h.name : "新增醫院", function () {
+      h = id ? L.location(S, id) : null;
+      var f = function (k, label, ph) { return '<label class="field">' + label + '<input name="' + k + '" value="' + esc(h ? h[k] || "" : "") + '" placeholder="' + (ph || "") + '"></label>'; };
+      return '<form data-form="hosp" data-id="' + esc(id || "") + '"><div class="grid">' + f("name", "簡稱（報刀顯示）", "例如 中榮") + f("fullName", "全名", "例如 臺中榮民總醫院") + f("code", "院所代碼", "健保醫事機構代碼") +
+        f("tel", "電話") + f("contact", "聯絡窗口", "例如 開刀房 王小姐") + '<label class="field wide">地址<input name="addr" value="' + esc(h ? h.addr || "" : "") + '"></label></div>' +
+        (h ? '<p class="muted" style="margin-top:8px">寄庫庫存 ' + L.hospitalUsage(S, h.id).stock + "、報刀 " + L.hospitalUsage(S, h.id).reports + " 張。" + (h.pending ? "由 " + esc(h.requestedBy) + " 申請；儲存即完成建檔。" : "") + "</p>" : "") +
+        '<div class="row" style="margin-top:14px">' + (h && !h.pending ? '<button type="button" class="btn btn-sm" data-act="hosp-toggle" data-id="' + h.id + '">' + (h.active === false ? "重新啟用" : "停用") + '</button><button type="button" class="btn btn-sm btn-danger" data-act="hosp-del" data-id="' + h.id + '">刪除</button>' : "") +
+        '<span style="flex:1"></span><button type="button" class="btn" data-close>取消</button><button class="btn btn-primary">' + (h && h.pending ? "完成建檔" : "儲存") + "</button></div></form>";
+    });
+  }
+
+  function dealerMaster() {
+    var edit = can("settings_edit");
+    var rows = (S.dealers || []).map(function (x) {
+      var accts = S.users.filter(function (u) { return u.dealerId === x.id; }).length, reps = S.reports.filter(function (r) { return r.src === "經銷商" && r.dealer === x.name; }).length;
+      return '<tr class="click' + (x.active === false ? " row-off" : "") + '" data-act="dealer-edit" data-id="' + x.id + '"><td><b>' + esc(x.name) + "</b></td><td>" + esc(x.fullName || "—") + '</td><td class="code">' + esc(x.taxId || "—") + "</td><td>" + esc(x.contact || "—") + "</td><td>" + esc(x.tel || "—") + "</td><td>發票月份" + (x.term ? " + " + x.term + " 個月" : "") + '</td><td class="num">' + accts + '</td><td class="num">' + reps + "</td><td>" + stateBadge(x.active !== false) + "</td></tr>";
+    }).join("");
+    return card("DEALERS", "經銷商清單", '<p class="muted" style="margin:0 0 12px">經銷商是公司資料；同一家經銷商可以有好幾個登入帳號（在「帳號」新增，角色選經銷商並指定所屬經銷商）。帳期用在應付帳款表：帳款月份＝發票月份＋N 個月。停用經銷商時，所屬帳號會一併停用。</p>' +
+      tbl(["簡稱", "全名", "統一編號", "聯絡人", "電話", "帳期", "帳號數", "報刀數", "狀態"], rows), '<button class="btn btn-primary btn-sm" data-act="dealer-edit" data-id=""' + (edit ? "" : " disabled") + ">＋ 新增經銷商</button>");
+  }
+  function openDealer(id) {
+    var x = id ? L.dealer(S, id) : null;
+    openDialog(x ? "編輯經銷商：" + x.name : "新增經銷商", function () {
+      x = id ? L.dealer(S, id) : null;
+      var f = function (k, label, ph, type) { return '<label class="field">' + label + '<input name="' + k + '"' + (type ? ' type="' + type + '" min="0" step="1"' : "") + ' value="' + esc(x ? (x[k] == null ? "" : x[k]) : "") + '" placeholder="' + (ph || "") + '"></label>'; };
+      return '<form data-form="dealer" data-id="' + esc(id || "") + '"><div class="grid">' + f("name", "簡稱", "例如 日釩") + f("fullName", "全名") + f("taxId", "統一編號") + f("contact", "聯絡人") + f("tel", "電話") + f("term", "帳期（發票月份 + N 個月）", "0", "number") +
+        '<label class="field wide">地址<input name="addr" value="' + esc(x ? x.addr || "" : "") + '"></label></div>' +
+        '<div class="row" style="margin-top:14px">' + (x ? '<button type="button" class="btn btn-sm" data-act="dealer-toggle" data-id="' + x.id + '">' + (x.active === false ? "重新啟用" : "停用（含所屬帳號）") + "</button>" : "") +
+        '<span style="flex:1"></span><button type="button" class="btn" data-close>取消</button><button class="btn btn-primary">儲存</button></div></form>';
+    });
+  }
+
+  var LOGIN_PLAN = [
+    ["帳號", "每人一個帳號，不共用。帳號用英數字（例如 zhang.xt），姓名另外記，離職改名都不影響過去的紀錄。"],
+    ["密碼", "至少 8 碼；第一次登入與重設後必須自己改密碼；連續錯 5 次鎖 15 分鐘。"],
+    ["兩步驟驗證", "看得到金額的角色（帳務部、主管、負責人、系統管理員）加簡訊或驗證 App 的一次性密碼。是否其他角色也要，待討論。"],
+    ["其他登入方式", "可再加 Google 或 LINE 登入（業務在手機上比較方便），帳號仍由公司開通。"],
+    ["離職與異動", "離職停用、不刪除，過去的報刀與單據仍顯示他的名字；角色異動直接改角色，權限立即生效。"],
+    ["稽核", "保留登入紀錄（時間、帳號、成功或失敗）與所有操作紀錄，符合 GDP 對電腦化系統的人員權責要求。"]
+  ];
+  function acctMaster() {
+    var admin = can("manage_perms"), counts = L.roleCounts(S);
+    var chips = '<div class="role-counts">' + L.ROLES.map(function (r) { return '<span class="rc"><b>' + counts[r] + "</b>" + esc(r) + "</span>"; }).join("") + "</div>";
+    var rows = S.users.map(function (u) {
+      var dl = u.dealerId ? L.dealer(S, u.dealerId) : null;
+      return '<tr class="click' + (u.active === false ? " row-off" : "") + '" data-act="acct-edit" data-name="' + esc(u.name) + '"><td><b>' + esc(u.name) + '</b></td><td class="code">' + esc(u.login || "—") + "</td><td>" + esc(u.role) + "</td><td>" + esc(dl ? dl.name : "—") + "</td><td>" + esc(u.email || "—") + "</td><td>" + stateBadge(u.active !== false) + (u.mustChange ? ' <span class="badge draft">待改密碼</span>' : "") + "</td><td>" + esc((u.lastLogin || "—").slice(0, 16)) + "</td></tr>";
+    }).join("");
+    var logins = (S.logins || []).slice(0, 8).map(function (x) { return "<tr><td>" + esc(x.ts.slice(5, 16)) + '</td><td class="code">' + esc(x.login) + "</td><td>" + esc(x.user || "—") + "</td><td>" + (x.ok ? '<span class="badge approved">成功</span>' : '<span class="badge expired">失敗</span>') + "</td></tr>"; }).join("");
+    return card("ACCOUNTS", "帳號（啟用中的各角色人數）", chips + tbl(["姓名", "帳號", "角色", "所屬經銷商", "Email", "狀態", "最後登入"], rows) +
+        '<p class="muted" style="margin-top:10px">點一列修改角色、Email、重設密碼或停用。示範版所有帳號的密碼都是 ' + L.DEMO_PASS + "。各角色能做什麼在「設定 → 權限設定」勾選。</p>",
+        '<button class="btn btn-primary btn-sm" data-act="acct-edit" data-name=""' + (admin ? "" : " disabled") + ">＋ 新增帳號</button>") +
+      '<div class="stat-grid intro-two">' + card("LOGIN", "登入方式（提案，待確認）", tbl(["項目", "做法"], LOGIN_PLAN.map(function (x) { return "<tr><td><b>" + x[0] + '</b></td><td class="wrap">' + x[1] + "</td></tr>"; }).join(""))) +
+      card("LOG", "最近登入紀錄", logins ? tbl(["時間", "帳號", "人員", "結果"], logins) : '<div class="empty">還沒有登入紀錄。按左下角「登出」再登入就會出現。</div>') + "</div>";
+  }
+  function openAccount(name) {
+    var u = name ? L.user(S, name) : null;
+    openDialog(u ? "帳號：" + u.name : "新增帳號", function () {
+      u = name ? L.user(S, name) : null;
+      var role = u ? u.role : "業務";
+      return '<form data-form="acct" data-name="' + esc(name || "") + '"><div class="grid">' +
+        '<label class="field">姓名<input name="name" value="' + esc(u ? u.name : "") + '"' + (u ? " readonly" : "") + "></label>" +
+        '<label class="field">帳號<input name="login" value="' + esc(u ? u.login || "" : "") + '" placeholder="英數字，例如 wang.xm"></label>' +
+        '<label class="field">角色<select name="role">' + options(L.ROLES.map(function (r) { return { v: r, t: r }; }), role) + "</select></label>" +
+        '<label class="field">所屬經銷商（經銷商才要選）<select name="dealerId">' + options([{ v: "", t: "—" }].concat((S.dealers || []).filter(function (x) { return x.active !== false; }).map(function (x) { return { v: x.id, t: x.name }; })), u ? u.dealerId || "" : "") + "</select></label>" +
+        '<label class="field wide">Email（重設密碼、通知用）<input name="email" value="' + esc(u ? u.email || "" : "") + '"></label></div>' +
+        (u ? "" : '<p class="muted" style="margin-top:8px">新帳號的初始密碼是 ' + L.DEMO_PASS + "，第一次登入後必須自己修改（正式版）。</p>") +
+        '<div class="row" style="margin-top:14px">' + (u ? '<button type="button" class="btn btn-sm" data-act="acct-reset" data-name="' + esc(u.name) + '">重設密碼</button><button type="button" class="btn btn-sm' + (u.active === false ? "" : " btn-danger") + '" data-act="acct-toggle" data-name="' + esc(u.name) + '">' + (u.active === false ? "重新啟用" : "停用帳號") + "</button>" : "") +
+        '<span style="flex:1"></span><button type="button" class="btn" data-close>取消</button><button class="btn btn-primary">儲存</button></div></form>';
+    });
+  }
+
+  // ---- 登入畫面（示範：密碼都是 1234；正式版由伺服器驗證） ----
+  var AUTH_KEY = "hs-service-demo-auth";
+  function authed() { try { return sessionStorage.getItem(AUTH_KEY) === "1"; } catch (e) { return true; } }
+  function showLogin(msg) {
+    var box = document.getElementById("login");
+    if (!box) return;
+    var demo = S.users.filter(function (u) { return u.active !== false; });
+    box.innerHTML = '<form class="login-card" data-form="login"><div class="brand"><span class="brand-mark logo"><img src="logo.png" alt=""></span><div><b>報刀與庫存</b><small>AMAD Labs · DEMO</small></div></div>' +
+      '<label class="field">帳號<input name="login" autocomplete="username" required></label><label class="field">密碼<input name="pass" type="password" autocomplete="current-password" required></label>' +
+      (msg ? '<p class="login-err">' + esc(msg) + "</p>" : "") + '<button class="btn btn-primary">登入</button>' +
+      '<div class="login-demo"><span class="muted">示範帳號（密碼都是 ' + L.DEMO_PASS + "，點一下帶入）</span><div>" + demo.map(function (u) { return '<button type="button" class="btn btn-sm" data-act="login-fill" data-login="' + esc(u.login) + '">' + esc(u.name) + "<small>" + esc(u.role) + "</small></button>"; }).join("") + "</div></div></form>";
+    box.hidden = false;
+  }
+  document.addEventListener("click", function (e) {
+    var el = e.target.closest && e.target.closest("[data-act]");
+    if (!el) return;
+    var a = el.getAttribute("data-act"), id = el.getAttribute("data-id"), nm = el.getAttribute("data-name");
+    if (a === "master-go") { masterView = el.getAttribute("data-v"); tab = "master"; render(); }
+    else if (a === "hosp-edit") openHospital(id);
+    else if (a === "hosp-toggle") { var h = L.location(S, id); run(function () { L.setHospitalActive(S, id, h.active === false); }, h.active === false ? "已啟用" : "已停用，報刀選不到這間醫院"); }
+    else if (a === "hosp-del") { if (window.confirm("確定刪除這間醫院？") && run(function () { L.deleteHospital(S, id); }, "已刪除")) closeDialog(); }
+    else if (a === "dealer-edit") openDealer(id);
+    else if (a === "dealer-toggle") { var x = L.dealer(S, id); run(function () { L.setDealerActive(S, id, x.active === false); }, x.active === false ? "已啟用" : "已停用經銷商與所屬帳號"); }
+    else if (a === "acct-edit") { if (!can("manage_perms") && !nm) return; openAccount(nm); }
+    else if (a === "acct-reset") { var pw = run(function () { return L.resetPassword(S, nm); }); if (pw) toast("已重設，暫時密碼 " + pw + "，對方登入後要自己修改"); }
+    else if (a === "acct-toggle") { var u0 = L.user(S, nm); run(function () { L.setUserActive(S, nm, u0.active === false); }, u0.active === false ? "已啟用帳號" : "已停用帳號，無法再登入"); }
+    else if (a === "hosp-request") {
+      var name = window.prompt("醫院名稱（例如 新竹馬偕）");
+      if (name === null) return;
+      var note = window.prompt("補充說明（選填，例如 科別、地址）") || "";
+      var hh = run(function () { return L.requestHospital(S, name, note); }, "已送出新增申請，可以先用這個名稱報刀；內勤會補資料建檔");
+      if (hh) { D.hospital = hh.id; render(); }
+    } else if (a === "login-fill") {
+      var f = document.querySelector('#login form'); if (f) { f.elements.login.value = el.getAttribute("data-login"); f.elements.pass.value = ""; f.elements.pass.focus(); }
+    } else if (a === "logout") {
+      try { sessionStorage.removeItem(AUTH_KEY); } catch (err) { /* ignore */ }
+      showLogin("");
+    }
+  });
+  document.addEventListener("change", function (e) {
+    var t = e.target;
+    if (t.getAttribute && t.getAttribute("data-bind") === "merge-to" && t.value) {
+      var from = t.getAttribute("data-id"), to = t.value, fromName = L.locName(S, from), toName = L.locName(S, to);
+      if (window.confirm("把「" + fromName + "」合併到「" + toName + "」？用這個名稱的報刀會改到「" + toName + "」。")) run(function () { var n = L.mergeHospital(S, from, to); toast("已合併，" + n + " 張報刀改到 " + toName); });
+      else t.value = "";
+    }
+  });
+  document.addEventListener("submit", function (e) {
+    var f = e.target.getAttribute && e.target.getAttribute("data-form");
+    if (!f || ["hosp", "dealer", "acct", "login"].indexOf(f) < 0) return;
+    e.preventDefault();
+    var el = e.target.elements, val = function (k) { return el[k] ? el[k].value : ""; }, id = e.target.getAttribute("data-id");
+    if (f === "hosp") {
+      var d = { name: val("name"), fullName: val("fullName"), code: val("code"), tel: val("tel"), contact: val("contact"), addr: val("addr") };
+      if (run(function () { return id ? L.updateHospital(S, id, d) : L.addHospital(S, d); }, id ? "已儲存醫院資料" : "已新增醫院")) closeDialog();
+    } else if (f === "dealer") {
+      var dd = { name: val("name"), fullName: val("fullName"), taxId: val("taxId"), contact: val("contact"), tel: val("tel"), term: val("term"), addr: val("addr") };
+      if (run(function () { return id ? L.updateDealer(S, id, dd) : L.addDealer(S, dd); }, id ? "已儲存經銷商" : "已新增經銷商")) closeDialog();
+    } else if (f === "acct") {
+      var nm = e.target.getAttribute("data-name");
+      if (run(function () { return L.saveUser(S, { name: val("name"), login: val("login"), role: val("role"), dealerId: val("dealerId"), email: val("email") }, nm || null); }, nm ? "已儲存帳號" : "已新增帳號")) closeDialog();
+    } else if (f === "login") {
+      try {
+        L.login(S, val("login"), val("pass"));
+        try { sessionStorage.setItem(AUTH_KEY, "1"); } catch (err) { /* ignore */ }
+        L.save(S);
+        document.getElementById("login").hidden = true;
+        tab = defaultTab(); render(); window.scrollTo(0, 0);
+      } catch (err) { L.save(S); showLogin(err.message); }
     }
   });
 
@@ -2620,4 +2794,5 @@
   });
 
   render();
+  if (!authed()) showLogin("");
 })();
