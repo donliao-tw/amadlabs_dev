@@ -946,6 +946,9 @@
     return lines.join("\n");
   }
 
+  // Markers keep a constant screen size; on touch screens they are drawn bigger and every marker has an
+  // invisible hit circle around it, so a fingertip does not have to land exactly on the shape.
+  var MK_SCALE = window.matchMedia && window.matchMedia("(pointer: coarse)").matches ? 1.6 : 1.2;
   function markerSvg(m) {
     var l = m.l, sel = stockLoc === l.id, dim = !inScope(l.id) && !sel;
     var status = m.minDays !== null && m.minDays < 0 ? " exp" : m.minDays !== null && m.minDays <= 90 ? " warn" : "";
@@ -954,12 +957,21 @@
     else if (l.type === "rep") { shape = '<circle class="pulse" r="13"/><path class="mk-shape" d="M0 -9L9 0L0 9L-9 0Z"/>'; ly = -16; }
     else { shape = '<circle class="mk-shape" r="' + r.toFixed(1) + '"/>'; ly = -(r + 6); }
     return '<g class="mk mk-' + l.type + status + (sel ? " sel" : "") + (dim ? " dim" : "") + '" transform="translate(' + m.x.toFixed(1) + " " + m.y.toFixed(1) + ')" data-act="map-pick" data-id="' + esc(l.id) + '" data-tip="' + esc(markerTip(m)) + '">' +
-      '<g class="mk-s" transform="scale(' + (1 / mapView.k).toFixed(4) + ')">' + shape + '<text class="mk-label" y="' + ly + '" text-anchor="middle">' + esc(l.name) + "</text></g></g>";
+      '<g class="mk-s" transform="scale(' + (MK_SCALE / mapView.k).toFixed(4) + ')"><circle class="mk-hit" r="20"/>' + shape + '<text class="mk-label" y="' + ly + '" text-anchor="middle">' + esc(l.name) + "</text></g></g>";
   }
 
+  // The same locations as big buttons: markers in 台中/彰化 sit close together, so on a phone a button is the easy target.
+  function mapChipsHtml() {
+    var locs = sortedLocs().filter(function (l) { return mapLayers[l.type] !== false && (l.type !== "hospital" || l.active !== false); });
+    return '<div class="map-chips">' + locs.map(function (l) {
+      var n = 0;
+      S.lots.forEach(function (x) { if (x.loc === l.id) n += x.qty; });
+      return '<button type="button" class="map-chip mc-' + l.type + (stockLoc === l.id ? " on" : "") + '" data-act="map-pick" data-id="' + esc(l.id) + '" aria-pressed="' + (stockLoc === l.id) + '"><i></i>' + esc(l.name) + "<small>" + n + "</small></button>";
+    }).join("") + "</div>";
+  }
   function mapDetailHtml() {
     var l = stockLoc && L.location(S, stockLoc);
-    if (!l) return '<p class="muted">點標記，左邊的庫存就只顯示那個位置。滾輪縮放、拖曳移動，右上按鈕可以回到全台。</p>';
+    if (!l) return '<p class="muted">點地圖標記或下面的地點按鈕，庫存就只顯示那個位置；再點一次取消。滾輪縮放、拖曳移動，右上按鈕可以回到全台。</p>';
     var m = mapMarkers(true).filter(function (x) { return x.l.id === l.id; })[0];
     var boxes = S.boxes.filter(function (b) { return b.loc === l.id; });
     return '<div class="tw-sel"><div class="tw-sel-h"><b>' + esc(l.name) + "</b>" + locBadge(l) + "</div>" +
@@ -979,7 +991,7 @@
       '<g class="tw-pan" transform="translate(' + mapView.x.toFixed(2) + " " + mapView.y.toFixed(2) + ") scale(" + mapView.k.toFixed(4) + ')"><g class="tw-land">' + land + '</g><g class="tw-markers">' + ms.map(markerSvg).join("") + "</g></g></svg>" +
       '<div class="tw-ctl"><button type="button" class="btn btn-sm" data-act="map-zoom-in" aria-label="放大">＋</button><button type="button" class="btn btn-sm" data-act="map-zoom-out" aria-label="縮小">−</button>' +
       '<button type="button" class="btn btn-sm" data-act="map-fit">聚焦</button><button type="button" class="btn btn-sm" data-act="map-all">全台</button></div><div class="tw-tip" hidden></div></div>' +
-      '<div class="tw-layers">' + layers + "</div>" + '<div id="mapDetail">' + mapDetailHtml() + "</div>" +
+      '<div class="tw-layers">' + layers + "</div>" + mapChipsHtml() + '<div id="mapDetail">' + mapDetailHtml() + "</div>" +
       '<p class="muted tw-note">座標是依院名推測的示範值，業務位置是模擬的。實際版本的業務位置要靠手機定位，且需要員工同意。地圖：內政部，經 taiwan-atlas 整理。</p>';
     return card("MAP", "位置地圖", body);
   }
@@ -988,7 +1000,7 @@
     var g = document.querySelector(".tw-pan");
     if (!g) return;
     g.setAttribute("transform", "translate(" + mapView.x.toFixed(2) + " " + mapView.y.toFixed(2) + ") scale(" + mapView.k.toFixed(4) + ")");
-    var inv = (1 / mapView.k).toFixed(4);
+    var inv = (MK_SCALE / mapView.k).toFixed(4);
     Array.prototype.forEach.call(document.querySelectorAll(".mk-s"), function (el) { el.setAttribute("transform", "scale(" + inv + ")"); });
     var svg = document.querySelector(".tw-svg");
     if (svg) svg.classList.toggle("show-labels", mapView.k >= 2.4);
