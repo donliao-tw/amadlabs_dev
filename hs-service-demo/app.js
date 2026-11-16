@@ -45,18 +45,20 @@
   };
   function canAct() { return can("report_approve") || can("report_confirm") || can("report_status") || can("sales_confirm") || can("stock_edit") || can("acct_edit"); }
   function defaultTab() { return canAct() ? "todo" : "report"; }
+  // Sidebar groups. The phase tag says which project phase a group belongs to (1: 報刀＋庫存, 2: 取代正航).
+  var NAV_GROUPS = { report: ["報刀", "階段 1"], stock: ["庫存與物流（GDP）", "階段 1"], fin: ["財會", "階段 2"], ana: ["分析", ""], sys: ["系統", ""] };
   var NAV = [
     { id: "intro", label: "介紹", title: "系統介紹", sub: "這套系統做了什麼、一張單怎麼從刀房走到帳上。", show: function () { return true; } },
     { id: "todo", label: "待辦", title: "待辦", sub: "需要你動手的事，處理完就會從這裡消失。", show: function () { return canAct(); } },
-    { id: "report", label: "報刀", title: "報刀", sub: "跟刀後回報這台刀用了什麼。送出後內勤確認才扣庫；送出後再修改會列入異動待確認。", show: function () { return true; } },
-    { id: "stock", label: "庫存", title: "庫存", sub: "先選範圍：公司的庫存可以立即調動，醫院寄庫要先調回公司。", show: function () { return L.can(S, "stock_view"); } },
-    { id: "items", label: "品項", title: "品項主檔", sub: "公司賣的每一個品項：新增、修改、停用。開票公司、原廠、單位、單價、安全庫存都在這裡設定。", show: function () { return L.can(S, "stock_view") || L.can(S, "settings_edit"); } },
-    { id: "docs", label: "單據", title: "GDP 單據", sub: "進貨、借出（寄庫）、借出還回與每月訂單審核表。格式比照正航，報刀審核後自動產生。", show: function () { return L.can(S, "stock_view"); } },
-    { id: "sales", label: "銷貨憑單", title: "銷貨憑單", sub: "對應正航的銷貨憑單：客戶、明細、稅額，覆核後出貨扣庫並自動產生傳票。", show: function () { return L.can(S, "sales_view"); } },
-    { id: "acct", label: "會計", title: "會計", sub: "銷貨覆核後自動入帳：應收、收款、銷項發票、傳票與試算表。", show: function () { return L.can(S, "acct_view"); } },
-    { id: "stats", label: "統計", title: "數據統計", sub: "報刀、銷貨、庫存的近況，用來看趨勢與找出問題。", show: function () { return L.can(S, "stats_view"); } },
-    { id: "trace", label: "追溯", title: "批號追溯", sub: "一個批號現在在哪、用在哪家醫院哪位醫師。召回時直接查。", show: function () { return L.can(S, "audit_view"); } },
-    { id: "settings", label: "設定", title: "設定", sub: "庫位、客戶、品項，以及誰能看到什麼、做什麼。", show: function () { return true; } }
+    { id: "report", group: "report", label: "報刀", title: "報刀", sub: "跟刀後回報這台刀用了什麼。送出後內勤確認才扣庫；送出後再修改會列入異動待確認。", show: function () { return true; } },
+    { id: "stock", group: "stock", label: "庫存", title: "庫存", sub: "先選範圍：公司的庫存可以立即調動，醫院寄庫要先調回公司。", show: function () { return L.can(S, "stock_view"); } },
+    { id: "items", group: "stock", label: "品項", title: "品項主檔", sub: "公司賣的每一個品項：新增、修改、停用。開票公司、原廠、單位、單價、安全庫存都在這裡設定。", show: function () { return L.can(S, "stock_view") || L.can(S, "settings_edit"); } },
+    { id: "docs", group: "stock", label: "物流單據", title: "GDP 物流單據", sub: "進貨、借出（寄庫）、借出還回與每月訂單審核表。格式比照正航，報刀審核後自動產生。", show: function () { return L.can(S, "stock_view"); } },
+    { id: "sales", group: "fin", label: "銷貨憑單", title: "銷貨憑單", sub: "對應正航的銷貨憑單：客戶、明細、稅額，覆核後出貨扣庫並自動產生傳票。", show: function () { return L.can(S, "sales_view"); } },
+    { id: "acct", group: "fin", label: "會計", title: "會計", sub: "銷貨覆核後自動入帳：應收、收款、銷項發票、傳票與試算表。", show: function () { return L.can(S, "acct_view"); } },
+    { id: "stats", group: "ana", label: "統計", title: "數據統計", sub: "報刀、銷貨、庫存的近況，用來看趨勢與找出問題。", show: function () { return L.can(S, "stats_view"); } },
+    { id: "trace", group: "ana", label: "追溯", title: "批號追溯", sub: "一個批號現在在哪、用在哪家醫院哪位醫師。召回時直接查。", show: function () { return L.can(S, "audit_view"); } },
+    { id: "settings", group: "sys", label: "設定", title: "設定", sub: "庫位、客戶、品項，以及誰能看到什麼、做什麼。", show: function () { return true; } }
   ];
 
   var view = document.getElementById("view");
@@ -1160,55 +1162,102 @@
   }
 
   // ---------------- 介紹 ----------------
-  var FLOW = [
-    { lane: 0, t: "報刀", d: "醫院、醫師、用了哪些品項與批號" },
-    { lane: 1, t: "倉儲確認", d: "確認批號；修改進異動待確認" },
-    { lane: 2, t: "借出還回", d: "寄庫扣庫，批號和報刀一致" },
-    { lane: 2, t: "銷貨憑單", d: "金流單，自動產生並入帳" },
-    { lane: 1, t: "補貨借出", d: "出貨檢查後過帳，補回醫院" },
-    { lane: 1, t: "訂單審核表", d: "FR17-02 每月自動彙整列印" },
-    { lane: 1, t: "登記收款", d: "沖銷應收，帳齡自動更新" }
+  // Four swimlane diagrams. Each node sits in a lane (who does it) and a column (when); edges are listed explicitly.
+  var FLOWS = [
+    { id: "main", tab: "報刀到出帳", title: "報刀到出帳（主流程）", lanes: ["業務／經銷商", "倉儲部／業務助理", "帳務部", "系統自動"], sys: 3,
+      nodes: [
+        { c: 0, l: 0, t: "報刀", d: "刀別、病人、品項批號；骨釘點盒子格子" },
+        { c: 1, l: 0, t: "送出前檢查", d: "列出所有欄位，確認後送出" },
+        { c: 2, l: 3, t: "判斷與通知", d: "分刀表、晚報標記、通知內勤" },
+        { c: 3, l: 1, t: "確認並扣庫", d: "核對品項與批號，寄庫扣庫" },
+        { c: 4, l: 3, t: "借出還回單", d: "耗用退回公司帳，批號同報刀" },
+        { c: 5, l: 3, t: "銷貨憑單", d: "依開票公司拆單，自動入帳" },
+        { c: 5, l: 1, t: "補貨借出", d: "依耗用量建議，出貨檢查後過帳" },
+        { c: 6, l: 2, t: "開發票、收款", d: "沖銷應收，帳齡自動更新" },
+        { c: 6, l: 1, t: "送達醫院寄庫", d: "自送或委外；下一台刀有貨可用" }
+      ], edges: [[0, 1], [1, 2], [2, 3], [3, 4], [4, 5], [4, 6], [5, 7], [6, 8]],
+      note: "經銷商報刀用的是經銷商買斷的貨：確認後不扣公司庫存、不產生單據。報廢的品項會還回，但不開銷貨。" },
+    { id: "gdp", tab: "進貨與寄庫", title: "進貨與寄庫（GDP 物流）", lanes: ["原廠／醫院", "倉儲部／業務助理", "系統自動"], sys: 2,
+      nodes: [
+        { c: 0, l: 0, t: "原廠到貨", d: "附原廠銷貨單" },
+        { c: 1, l: 1, t: "收貨檢查", d: "外觀、標示、數量；溫控品記溫度" },
+        { c: 2, l: 1, t: "進貨憑單", d: "批號、出廠日期、有效日期" },
+        { c: 3, l: 2, t: "入公司倉", d: "記異動帳；不合格不能入庫" },
+        { c: 4, l: 1, t: "借出憑單", d: "寄庫；配送自送或委外" },
+        { c: 5, l: 1, t: "出貨檢查", d: "目視確認品項、批號、數量" },
+        { c: 6, l: 2, t: "過帳", d: "公司倉移到醫院寄庫" },
+        { c: 7, l: 0, t: "醫院寄庫", d: "開刀房、醫材室備貨" }
+      ], edges: [[0, 1], [1, 2], [2, 3], [3, 4], [4, 5], [5, 6], [6, 7]],
+      note: "列印的進貨憑單、借出憑單保留「收貨檢查章」「出貨檢查章」的位置，紙本照現行方式蓋章歸檔。" },
+    { id: "change", tab: "送出後修改", title: "送出後修改（異動待確認）", lanes: ["業務／經銷商", "系統自動", "帳務部", "倉儲部／業務助理", "主管／負責人"], sys: 1,
+      nodes: [
+        { c: 0, l: 0, t: "修改報刀", d: "改醫師、刀別、病人、日期…" },
+        { c: 1, l: 1, t: "記錄與標記", d: "逐欄位前後紀錄；業務自改標報錯" },
+        { c: 2, l: 2, t: "帳務部確認", d: "單位內任一人即可" },
+        { c: 2, l: 3, t: "倉儲／業助確認", d: "修改人的單位視為已確認" },
+        { c: 3, l: 1, t: "移出清單", d: "兩單位都確認；逾 24 小時標示" },
+        { c: 2, l: 4, t: "收到通知", d: "可人工更改報刀狀況、台數（填原因）" }
+      ], edges: [[0, 1], [1, 2], [1, 3], [2, 4], [3, 4], [1, 5]],
+      note: "只補上「待補病人資料」或改備註，不算報錯、不需確認，只通知相關部門。刪除報刀要填原因，已確認扣庫的不能刪。" },
+    { id: "month", tab: "每月與例行", title: "每月與例行作業", lanes: ["倉儲部／業務助理", "帳務部", "系統自動"], sys: 2,
+      nodes: [
+        { c: 0, l: 2, t: "安全庫存檢查", d: "公司倉低於水位就提醒" },
+        { c: 1, l: 0, t: "訂購單", d: "依原廠產生，向原廠下單" },
+        { c: 2, l: 0, t: "到貨進貨", d: "回到「進貨與寄庫」" },
+        { c: 3, l: 2, t: "FR17-02 彙整", d: "借出、銷貨訂單審核表" },
+        { c: 4, l: 0, t: "逐日列印歸檔", d: "不用再從正航匯出貼 Excel" },
+        { c: 4, l: 1, t: "應收帳齡", d: "逾期未收在待辦提醒" }
+      ], edges: [[0, 1], [1, 2], [3, 4], [3, 5]],
+      note: "訂購單格式、FR17-02 範本目前是示範版面，正式版照你們提供的範本做。" }
   ];
-  var LANES = ["業務／經銷商", "內勤", "系統自動"];
-  function flowSvg() {
-    var X0 = 96, STEP = 146, NW = 134, NH = 66, LH = 104, LY = 16, W = 1116, H = LY + LH * 3 + 78;
-    var cy = function (lane) { return LY + LH * lane + LH / 2; };
-    var out = '<svg class="flow-svg" viewBox="0 0 ' + W + " " + H + '" role="img" aria-label="從報刀到收款的流程圖">' +
-      '<defs><marker id="flArrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 1l9 4-9 4z" class="fl-head"/></marker></defs>';
-    LANES.forEach(function (n, i) {
-      out += '<rect class="fl-lane' + (i === 2 ? " sys" : "") + '" x="0" y="' + (LY + LH * i) + '" width="' + W + '" height="' + LH + '" rx="10"/>' +
-        '<text class="fl-lane-t" x="16" y="' + (cy(i) + 5) + '">' + n + "</text>";
+  var introFlow = "main";
+  function flowSvg(F) {
+    var X0 = 128, STEP = 150, NW = 134, NH = 68, LH = 92, LY = 8;
+    var cols = 0;
+    F.nodes.forEach(function (n) { cols = Math.max(cols, n.c + 1); });
+    var W = X0 + cols * STEP, H = LY + LH * F.lanes.length + 8;
+    var nx = function (n) { return X0 + n.c * STEP; }, ny = function (n) { return LY + LH * n.l + (LH - NH) / 2; };
+    var out = '<svg class="flow-svg" viewBox="0 0 ' + W + " " + H + '" role="img" aria-label="' + esc(F.title) + '流程圖">' +
+      '<defs><marker id="flArrow-' + F.id + '" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 1l9 4-9 4z" class="fl-head"/></marker></defs>';
+    F.lanes.forEach(function (name, i) {
+      out += '<rect class="fl-lane' + (i === F.sys ? " sys" : "") + '" x="0" y="' + (LY + LH * i) + '" width="' + W + '" height="' + (LH - 4) + '" rx="10"/>' +
+        '<foreignObject x="10" y="' + (LY + LH * i) + '" width="' + (X0 - 18) + '" height="' + (LH - 4) + '"><div xmlns="http://www.w3.org/1999/xhtml" class="fl-lane-h">' + esc(name) + "</div></foreignObject>";
     });
-    FLOW.forEach(function (n, i) {
-      var x = X0 + i * STEP, y = cy(n.lane) - NH / 2;
-      if (i) {
-        var p = FLOW[i - 1], x1 = X0 + (i - 1) * STEP + NW, y1 = cy(p.lane), x2 = x, y2 = cy(n.lane), xm = (x1 + x2) / 2;
-        out += '<path class="fl-arrow" marker-end="url(#flArrow)" d="M' + x1 + " " + y1 + (y1 === y2 ? " H" + x2 : " H" + xm + " V" + y2 + " H" + x2) + '"/>';
+    F.edges.forEach(function (e) {
+      var a = F.nodes[e[0]], b = F.nodes[e[1]], d;
+      if (b.c === a.c) {
+        var x = nx(a) + NW / 2, down = b.l > a.l;
+        d = "M" + x + " " + (down ? ny(a) + NH : ny(a)) + " V" + (down ? ny(b) : ny(b) + NH);
+      } else {
+        var x1 = nx(a) + NW, y1 = ny(a) + NH / 2, x2 = nx(b), y2 = ny(b) + NH / 2, xm = x2 - 10;
+        d = "M" + x1 + " " + y1 + (y1 === y2 ? " H" + x2 : " H" + xm + " V" + y2 + " H" + x2);
       }
-      out += '<g><rect class="fl-node' + (n.lane === 2 ? " sys" : "") + '" x="' + x + '" y="' + y + '" width="' + NW + '" height="' + NH + '" rx="9"/>' +
-        '<text class="fl-n" x="' + (x + 12) + '" y="' + (y + 22) + '">' + (i + 1) + '</text><text class="fl-t" x="' + (x + 32) + '" y="' + (y + 22) + '">' + n.t + "</text>" +
-        '<foreignObject x="' + (x + 10) + '" y="' + (y + 28) + '" width="' + (NW - 18) + '" height="' + (NH - 30) + '"><div xmlns="http://www.w3.org/1999/xhtml" class="fl-d">' + n.d + "</div></foreignObject></g>";
+      out += '<path class="fl-arrow" marker-end="url(#flArrow-' + F.id + ')" d="' + d + '"/>';
     });
-    var by = LY + LH * 3 + 12;
-    out += '<rect class="fl-base" x="0" y="' + by + '" width="' + W + '" height="52" rx="10"/><text class="fl-lane-t" x="16" y="' + (by + 31) + '">全程</text>' +
-      '<text class="fl-base-t" x="96" y="' + (by + 31) + '">進貨收貨檢查　·　安全庫存與訂購單　·　每次庫存變動都留下紀錄　·　批號追溯　·　權限依角色</text>';
+    F.nodes.forEach(function (n, i) {
+      var x = nx(n), y = ny(n);
+      out += '<g><rect class="fl-node' + (n.l === F.sys ? " sys" : "") + '" x="' + x + '" y="' + y + '" width="' + NW + '" height="' + NH + '" rx="9"/>' +
+        '<text class="fl-n" x="' + (x + 10) + '" y="' + (y + 20) + '">' + (i + 1) + '</text><text class="fl-t" x="' + (x + 28) + '" y="' + (y + 20) + '">' + esc(n.t) + "</text>" +
+        '<foreignObject x="' + (x + 8) + '" y="' + (y + 26) + '" width="' + (NW - 14) + '" height="' + (NH - 28) + '"><div xmlns="http://www.w3.org/1999/xhtml" class="fl-d">' + esc(n.d) + "</div></foreignObject></g>";
+    });
     return out + "</svg>";
   }
-  function flowList() {
-    return '<ol class="flow-list">' + FLOW.map(function (n) {
-      return '<li><span class="badge">' + LANES[n.lane] + "</span><b>" + n.t + '</b><span class="muted">' + n.d + "</span></li>";
+  function flowList(F) {
+    return '<ol class="flow-list">' + F.nodes.map(function (n) {
+      return '<li><span class="badge">' + esc(F.lanes[n.l]) + "</span><b>" + esc(n.t) + '</b><span class="muted">' + esc(n.d) + "</span></li>";
     }).join("") + "</ol>";
   }
 
   var FEATURES = [
     ["report", "報刀", "照你們 v34 的流程：刀別、病人與病例號、送器械人員、送出前檢查；晚報與報錯自動標記，可人工更改並留原因；送出後修改列入異動待確認，由帳務部與倉儲部／業務助理確認；逐欄位修改歷程；使用台數；經銷商報刀。骨釘直接在盒子上點格子。"],
     ["stock", "庫存與骨釘盒", "公司倉、醫院寄庫、業務移動庫存分開看，公司的可以立即調動。骨釘盒可自訂排列，像座位圖一樣一格一格看。有效期警示、位置地圖、最新異動帳。"],
-    ["docs", "GDP 單據", "進貨憑單含收貨檢查與溫度；借出憑單（寄庫）出貨檢查後過帳；報刀審核自動開借出還回單，批號和報刀一致。每月 FR17-02 訂單審核表直接列印，不用再從正航匯出貼 Excel。低於安全庫存時提醒並產生訂購單。"],
-    ["sales", "銷貨憑單", "對應正航的銷貨憑單：客戶、明細、稅額。覆核後出貨扣庫，並可開立發票。"],
+    ["items", "品項主檔", "每個品項的產品編號、品名規格、開票公司（禾翔、和祥、晉昇）、原廠、單位、單價、安全庫存。可新增、修改、停用；用過的品項不能刪，只能停用，過去的單據不受影響。"],
+    ["docs", "GDP 物流單據", "進貨憑單含收貨檢查與溫度；借出憑單（寄庫）出貨檢查後過帳；報刀確認自動開借出還回單，批號和報刀一致。每月 FR17-02 訂單審核表直接列印，不用再從正航匯出貼 Excel。低於安全庫存時提醒並產生訂購單。"],
+    ["sales", "銷貨憑單", "對應正航的銷貨憑單版面。報刀耗用自動產生，同一台刀用到不同開票公司的品項會拆成各公司一張；經銷商賣斷可手動開立。列印抬頭依開立公司。"],
     ["acct", "會計", "覆核出貨後自動產生傳票。應收帳款與帳齡、收款登記、銷項發票、試算表。"],
     ["stats", "數據統計", "報刀趨勢、每月銷貨額、各醫院與醫師排行、效期分布。每種資訊用最適合的圖或表。"],
     ["trace", "批號追溯", "輸入批號就看到它現在在哪、用在哪家醫院哪位醫師。每筆庫存異動都能點回來源單據。"],
-    ["settings", "權限與設定", "角色對應功能可自行調整，例如業務看不到任何金額。醫院、業務移動庫存、客戶都能自己新增，也能新增產品別（例如 PRP）並自訂欄位，業務就能報這個產品。"]
+    ["settings", "權限與設定", "照你們規格書的七種角色，另加系統管理員。每個角色能做什麼可以勾選調整，例如倉儲、業務看不到任何金額。庫位、客戶、開票公司、產品別（例如 PRP）都能自己新增。"]
   ];
   var COMPARE = [
     ["報刀", "業務傳 Excel 或訊息，內勤再重打一次", "業務自己報，送出後修改會留下前後紀錄並由兩個單位確認"],
@@ -1227,15 +1276,29 @@
     ["儲存與調撥", "公司、醫院寄庫、業務庫存分區；調撥留紀錄", "場所環境（溫濕度等）不在系統範圍"]
   ];
 
+  var ROLE_ROWS = [
+    ["業務", "黃紹翔", "報刀、看自己的報刀與晚報報錯、修改或刪除自己未扣庫的報刀", "不可"],
+    ["經銷商", "日釩", "報刀（經銷商自有貨）、只看自己提交的報刀", "不可"],
+    ["倉儲部", "林旻萱", "確認報刀並扣庫、補批號、進貨、借出出貨檢查、確認異動", "不可"],
+    ["業務助理", "周洛城", "權限同倉儲部（同一個確認單位）", "不可"],
+    ["帳務部", "張喧婷", "代業務報刀、確認異動、銷貨憑單、開票與收款", "可以"],
+    ["主管", "廖明雅", "看全部、更改報刀狀況與使用台數、收到異動與狀況通知", "可以（不能改帳務）"],
+    ["負責人", "廖珈櫻", "全部功能，管理權限", "可以"],
+    ["系統管理員", "admin", "我們用來設定與支援，全部功能", "可以"]
+  ];
   function renderIntro() {
     var hero = '<section class="intro-hero"><div class="eyebrow">AMAD Labs · DEMO</div><h2>從刀房到帳本，同一份資料</h2>' +
-      '<p>業務在醫院報刀，倉儲確認，庫存自動扣、銷貨憑單、發票、傳票、應收跟著走，批號隨時查得到去向。取代現在的 Excel 加正航的來回整理。</p>' +
+      '<p>業務在醫院報刀，倉儲確認後寄庫自動扣庫，借出還回單、銷貨憑單、補貨借出跟著產生，批號隨時查得到去向。第一階段是報刀、庫存與 GDP 物流單據；第二階段是銷貨、發票與會計，取代正航。</p>' +
       '<div class="row"><button class="btn btn-primary" data-act="intro-as" data-name="黃紹翔" data-tab="report">以業務身分報一張刀</button>' +
       '<button class="btn" data-act="intro-as" data-name="林旻萱" data-tab="todo">以倉儲身分確認</button>' +
       '<button class="btn" data-act="intro-go" data-tab="stock">看庫存與地圖</button></div></section>';
 
-    var flow = card("FLOW", "一張單怎麼走", '<div class="flow-wrap">' + flowSvg() + "</div>" + flowList() +
-      '<p class="muted" style="margin-top:12px">報刀審核與銷貨覆核，都會用同一套規則檢查批號與效期，通過才扣庫，並各記下一筆異動。</p>');
+    var F = FLOWS.filter(function (f) { return f.id === introFlow; })[0] || FLOWS[0];
+    var flowTabs = '<div class="seg" style="margin-bottom:14px">' + FLOWS.map(function (f, i) {
+      return '<button data-act="intro-flow" data-v="' + f.id + '" aria-pressed="' + (f.id === F.id) + '">' + (i + 1) + "．" + f.tab + "</button>";
+    }).join("") + "</div>";
+    var flow = card("FLOW", "流程圖：" + F.title, flowTabs + '<div class="flow-wrap">' + flowSvg(F) + "</div>" + flowList(F) +
+      '<p class="muted" style="margin-top:12px">' + esc(F.note) + "　每一格的編號就是步驟順序；底色較深的那一列是系統自動完成的。</p>");
 
     var feats = card("WHAT", "我們做了什麼", '<div class="feat-grid">' + FEATURES.map(function (f) {
       return '<div class="feat"><svg viewBox="0 0 24 24" aria-hidden="true">' + ICONS[f[0]] + "</svg><h3>" + f[1] + "</h3><p>" + f[2] + '</p><button class="btn btn-sm" data-act="intro-go" data-tab="' + f[0] + '">看看</button></div>';
@@ -1249,12 +1312,16 @@
       GDP.map(function (r) { return "<tr><td><b>" + r[0] + '</b></td><td class="wrap">' + r[1] + '</td><td class="wrap">' + r[2] + "</td></tr>"; }).join("") + "</tbody></table></div>" +
       '<p class="muted" style="margin-top:10px">系統提供的是紀錄與管制的工具。GDP 認證還需要文件化的 SOP 與稽核，不是裝了系統就通過。這個示範版資料存在瀏覽器；正式版會放在伺服器的資料庫。</p>');
 
-    var tour = card("TRY", "三分鐘體驗", '<ol class="tour"><li><b>業務報刀</b><span>以「黃紹翔」報一張刀，選醫院、醫師，加骨板，再到骨釘盒點用掉的格子。</span></li>' +
+    var tour = card("TRY", "三分鐘體驗", '<ol class="tour"><li><b>業務報刀</b><span>以「黃紹翔」報一張刀：選醫院、刀別，填病人，加骨板，再到骨釘盒點用掉的格子，按送出後先看「送出前檢查」。</span></li>' +
       '<li><b>倉儲確認</b><span>換成「林旻萱」，在待辦按「確認並扣庫」：寄庫扣庫，並自動產生借出還回單、銷貨憑單與補貨借出草稿。</span></li>' +
       '<li><b>送出後修改</b><span>換回「黃紹翔」開啟自己的報刀改醫師或刀別：系統標記報錯、列入異動待確認；再用「張喧婷」確認。</span></li>' +
+      '<li><b>看單據</b><span>到「物流單據」看自動產生的借出還回單與補貨借出，按「列印」看和正航一樣的版面；「訂單審核表」可逐日列印 FR17-02。</span></li>' +
       '<li><b>回頭查</b><span>到「庫存」的「最新異動」看到剛剛那筆扣庫，點「報刀單」回到來源；再到「追溯」查批號。</span></li></ol>' +
       '<p class="muted">所有資料都是示範用的假資料，隨時可以在「設定」重設。</p>');
-    return hero + flow + feats + '<div class="stat-grid intro-two">' + cmp + gdp + "</div>" + tour;
+    var roleCard = card("ROLES", "誰做什麼", tbl(["角色", "示範人員", "主要工作", "看得到金額"], ROLE_ROWS.map(function (r) {
+      return "<tr><td><b>" + r[0] + '</b></td><td><button class="btn btn-sm" data-act="intro-as" data-name="' + esc(r[1]) + '" data-tab="todo">以 ' + esc(r[1]) + " 登入</button></td><td class=\"wrap\">" + esc(r[2]) + "</td><td>" + esc(r[3]) + "</td></tr>";
+    }).join("")) + '<p class="muted" style="margin-top:10px">角色與權限照你們的需求規格 v34 第三章；左上角的「操作人員」可以隨時切換。</p>');
+    return hero + flow + roleCard + feats + '<div class="stat-grid intro-two">' + cmp + gdp + "</div>" + tour;
   }
 
   // ---------------- 批號追溯 ----------------
@@ -1464,7 +1531,16 @@
     var navBtn = function (n) {
       return '<button data-tab="' + n.id + '"' + (n.id === tab ? ' aria-current="page"' : "") + '><svg viewBox="0 0 24 24" aria-hidden="true">' + ICONS[n.id] + "</svg><span>" + n.label + "</span></button>";
     };
-    document.getElementById("nav").innerHTML = visible.map(navBtn).join("");
+    var lastG = null;
+    document.getElementById("nav").innerHTML = visible.map(function (n) {
+      var head = "";
+      if (n.group && n.group !== lastG) {
+        var gdef = NAV_GROUPS[n.group];
+        head = '<div class="nav-group"><span>' + gdef[0] + "</span>" + (gdef[1] ? '<i class="ph' + (gdef[1] === "階段 2" ? " ph2" : "") + '">' + gdef[1] + "</i>" : "") + "</div>";
+      }
+      lastG = n.group || null;
+      return head + navBtn(n);
+    }).join("");
     // A phone has room for about five: the rest go behind 更多.
     var shown = visible.length > 5 ? visible.slice(0, 4) : visible;
     moreItems = visible.length > 5 ? visible.slice(4) : [];
@@ -1555,6 +1631,7 @@
     }
     else if (a === "cprod-new") openCustomProduct(g("cat"));
     else if (a === "cprod-edit") { var cp0 = L.product(S, g("sku")); if (cp0) openCustomProduct(cp0.cat, cp0.sku); }
+    else if (a === "intro-flow") { introFlow = g("v"); render(); }
     else if (a === "intro-go") { tab = g("tab"); render(); window.scrollTo(0, 0); }
     else if (a === "intro-as") { S.operator = g("name"); persist(); tab = g("tab"); render(); window.scrollTo(0, 0); }
     else if (a === "open-report") openReport(g("id"));
