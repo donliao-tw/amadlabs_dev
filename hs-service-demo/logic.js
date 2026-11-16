@@ -4,15 +4,20 @@
 })(typeof self !== "undefined" ? self : this, function () {
   "use strict";
 
-  var KEY = "hs-service-demo-v7";
+  var KEY = "hs-service-demo-v8";
   var VERSION = 6;
-  var ROLES = ["業務", "內勤", "管理員"];
+  // The client's seven roles (spec v34). 負責人 holds everything, including the permission matrix.
+  var ROLES = ["業務", "經銷商", "倉儲部", "業務助理", "帳務部", "主管", "負責人"];
+  var OWNER = "負責人";
   var TAX = 0.05;
 
   // key, label, group — the order here is the order shown in the matrix.
   var CAPS = [
     ["report_submit", "送出報刀", "報刀"],
-    ["report_approve", "審核報刀（扣庫）", "報刀"],
+    ["report_all", "查看所有人的報刀", "報刀"],
+    ["report_approve", "確認報刀並扣庫（產生還回、銷貨單）", "報刀"],
+    ["report_confirm", "確認報刀異動", "報刀"],
+    ["report_status", "更改報刀狀況、使用台數", "報刀"],
     ["stock_view", "查看庫存", "庫存"],
     ["stock_edit", "入庫／調撥／盤點", "庫存"],
     ["view_price", "查看金額與單價", "金額"],
@@ -27,11 +32,17 @@
     ["manage_perms", "管理人員與權限", "權限"]
   ];
   var DEFAULT_PERMS = {
-    "業務": { report_submit: true, stock_view: true, audit_view: true },
-    "內勤": { report_submit: true, report_approve: true, stock_view: true, stock_edit: true, view_price: true, sales_view: true, sales_edit: true, sales_confirm: true, settings_edit: true, acct_view: true, acct_edit: true, stats_view: true, audit_view: true },
-    "管理員": {}
+    "業務": { report_submit: true, stock_view: true },
+    "經銷商": { report_submit: true },
+    "倉儲部": { report_all: true, report_approve: true, report_confirm: true, report_status: true, stock_view: true, stock_edit: true, settings_edit: true, audit_view: true },
+    "業務助理": { report_all: true, report_approve: true, report_confirm: true, report_status: true, stock_view: true, stock_edit: true, settings_edit: true, audit_view: true },
+    "帳務部": { report_submit: true, report_all: true, report_approve: true, report_confirm: true, report_status: true, stock_view: true, view_price: true, sales_view: true, sales_edit: true, sales_confirm: true, settings_edit: true, acct_view: true, acct_edit: true, stats_view: true, audit_view: true },
+    "主管": { report_all: true, report_status: true, stock_view: true, view_price: true, sales_view: true, acct_view: true, stats_view: true, audit_view: true },
+    "負責人": {}
   };
-  CAPS.forEach(function (c) { DEFAULT_PERMS["管理員"][c[0]] = true; });
+  CAPS.forEach(function (c) { DEFAULT_PERMS[OWNER][c[0]] = true; });
+  // 異動確認 units (spec v34 §4.10): 帳務部 is one unit, 倉儲部 and 業務助理 together are the other.
+  function unitOf(r) { return r === "帳務部" ? "acct" : (r === "倉儲部" || r === "業務助理") ? "wh" : ""; }
 
   function pad(n) { return n < 10 ? "0" + n : "" + n; }
   function ymd(d) { return d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate()); }
@@ -59,10 +70,10 @@
     return null;
   }
   function role(S) { var u = user(S, S.operator); return u ? u.role : ""; }
-  // manage_perms is pinned to 管理員 so the matrix can never lock everyone out.
+  // manage_perms is pinned to 負責人 so the matrix can never lock everyone out.
   function can(S, cap) {
     var r = role(S);
-    if (cap === "manage_perms") return r === "管理員";
+    if (cap === "manage_perms") return r === OWNER;
     return !!(S.perms[r] && S.perms[r][cap]);
   }
   function need(S, cap) {
@@ -73,9 +84,9 @@
   }
   function setPerm(S, r, cap, on) {
     need(S, "manage_perms");
-    if (cap === "manage_perms") throw new Error("這項權限固定只給管理員");
+    if (cap === "manage_perms") throw new Error("這項權限固定只給負責人");
     if (ROLES.indexOf(r) < 0) throw new Error("沒有這個角色");
-    if (r === "管理員") throw new Error("管理員的權限不能調整");
+    if (r === OWNER) throw new Error("負責人的權限不能調整");
     S.perms[r][cap] = !!on;
     log(S, "權限調整", r + "｜" + cap + " → " + (on ? "開" : "關"));
   }
@@ -92,7 +103,7 @@
     need(S, "manage_perms");
     var u = user(S, name);
     if (!u) throw new Error("找不到人員");
-    if (name === "管理員") throw new Error("內建管理員不能改角色");
+    if (u.role === OWNER && S.users.filter(function (x) { return x.role === OWNER; }).length < 2 && r !== OWNER) throw new Error("至少要保留一位負責人");
     u.role = r;
     log(S, "人員角色", name + " → " + r);
   }
@@ -557,18 +568,27 @@
   // ---------- 報刀 ----------
   function reportItems(r) { return r.main.concat(r.screws); }
 
+  var SHIFTS = ["日刀", "夜刀"];
+  var PT_TBD = "待補病人資料";
+  function isDealer(S) { return role(S) === "經銷商"; }
   function submitReport(S, d) {
     need(S, "report_submit");
-    if (!d.date) throw new Error("請填日期");
+    var dealer = isDealer(S);
+    if (!d.date) throw new Error("請填手術日期");
+    if (d.date > ymd(new Date())) throw new Error("手術日期不可晚於今天");
     if (!location(S, d.hospital)) throw new Error("請選醫院");
     if (!String(d.doctor || "").trim()) throw new Error("請填醫師");
-    if (!location(S, d.loc)) throw new Error("請選扣庫來源");
+    if (!String(d.patient || "").trim()) throw new Error("請填病人姓名（還不知道可填「" + PT_TBD + "」）");
+    if (!dealer && SHIFTS.indexOf(d.shift) < 0) throw new Error("請選刀別");
+    if (!dealer && !location(S, d.loc)) throw new Error("請選扣庫來源");
+    var rep = role(S) === "業務" ? S.operator : String(d.rep || "").trim();
+    if (!dealer && !rep) throw new Error("代業務報刀請選業務人員");
     var items = d.main.concat(d.screws);
     if (!items.length) throw new Error("至少要有一個品項");
     var seen = {};
     items.forEach(function (it) {
       if (!product(S, it.sku)) throw new Error("品項不存在：" + it.sku);
-      if (!it.lot) throw new Error("品項缺批號：" + it.sku);
+      if (!it.lot && !dealer) throw new Error("品項缺批號：" + it.sku);
       if (!posInt(it.qty)) throw new Error("數量必須是正整數：" + it.sku);
       if (it.slots) {
         if (it.slots.length !== it.qty) throw new Error("格子數與數量不一致：" + it.sku);
@@ -585,13 +605,19 @@
     });
     var r = {
       id: uid("R"), date: d.date, hospital: d.hospital, doctor: String(d.doctor).trim(),
-      loc: d.loc, note: d.note || "", status: "pending",
-      main: d.main.map(function (x) { return { sku: x.sku, lot: x.lot, qty: x.qty, scrap: !!x.scrap }; }),
+      shift: dealer ? null : d.shift, patient: String(d.patient).trim(), mrn: String(d.mrn || "").trim(), deliverer: dealer ? "" : String(d.deliverer || "").trim(),
+      rep: dealer ? "" : rep, src: dealer ? "經銷商" : "內部", dealer: dealer ? S.operator : "", proxy: role(S) === "帳務部",
+      loc: dealer ? null : d.loc, note: d.note || "", status: "pending", flags: [], units: null, history: [],
+      main: d.main.map(function (x) { return { sku: x.sku, lot: x.lot || "", qty: x.qty, scrap: !!x.scrap }; }),
       screws: d.screws.map(function (x) { return { sku: x.sku, lot: x.lot, qty: x.qty, scrap: !!x.scrap, slots: x.slots ? x.slots.slice() : undefined }; }),
-      createdBy: S.operator, createdAt: nowStr(), reviewedBy: "", reviewedAt: ""
+      createdBy: S.operator, createdAt: d.createdAt || nowStr(), reviewedBy: "", reviewedAt: ""
     };
+    // 晚報 (provisional rule until 業務助理 supplies the real one): submitted after the day following surgery.
+    if (r.src === "內部" && !r.proxy && r.createdAt.slice(0, 10) > shiftDate(r.date, 1)) r.flags.push({ t: "晚報", n: "暫定規則：手術隔天之後才提交（" + r.createdAt.slice(0, 16) + "）" });
+    r.history.push({ ts: r.createdAt, user: S.operator, role: role(S), sec: "建立", ch: [["建立報刀", "—", "主紀錄 1 筆、產品 " + items.length + " 項"]] });
     S.reports.unshift(r);
     log(S, "報刀送出", r.date + "｜" + locName(S, r.hospital) + "｜" + r.doctor + "｜" + items.length + " 項");
+    notify(S, ["帳務部", "倉儲部", "業務助理"], "新增報刀", tableOf(S, r) + "刀表 " + locName(S, r.hospital) + " " + r.date.slice(5) + " " + r.patient + "（" + r.src + "，提交人：" + S.operator + "）", r.id);
     return r;
   }
 
@@ -600,6 +626,13 @@
     var r = S.reports.filter(function (x) { return x.id === id; })[0];
     if (!r) throw new Error("找不到報刀單");
     if (r.status !== "pending") throw new Error("這張單已處理過");
+    if (r.deleted) throw new Error("這張報刀已刪除");
+    if (r.src === "經銷商") {
+      r.status = "approved"; r.reviewedBy = S.operator; r.reviewedAt = nowStr();
+      r.history.unshift({ ts: nowStr(), user: S.operator, role: role(S), sec: "確認", ch: [["報刀確認", "待確認", "已確認（經銷商自有貨，不扣公司庫存）"]] });
+      log(S, "報刀確認", "經銷商報刀｜" + r.date + "｜" + locName(S, r.hospital));
+      return r;
+    }
     var byLine = r.main.slice(), slotIds = [];
     r.screws.forEach(function (it) { if (it.slots) it.slots.forEach(function (sid) { slotIds.push(sid); }); else byLine.push(it); });
     slotIds.forEach(function (sid) {
@@ -621,6 +654,7 @@
     r.status = "approved"; r.reviewedBy = S.operator; r.reviewedAt = nowStr();
     log(S, "報刀審核通過", r.date + "｜" + locName(S, r.hospital) + "｜" + r.doctor + "｜扣庫 " + locName(S, r.loc));
     reportDocs(S, r, expOf);
+    if (r.history) r.history.unshift({ ts: nowStr(), user: S.operator, role: role(S), sec: "確認", ch: [["報刀確認", "待確認", "已扣庫，產生借出還回單與銷貨憑單"]] });
     return r;
   }
 
@@ -630,7 +664,156 @@
     if (!r || r.status !== "pending") throw new Error("這張單已處理過");
     r.status = "rejected"; r.reviewedBy = S.operator; r.reviewedAt = nowStr();
     if (reason) r.note = (r.note ? r.note + "；" : "") + "退回原因：" + reason;
+    if (r.history) r.history.unshift({ ts: nowStr(), user: S.operator, role: role(S), sec: "退回", ch: [["退回", "待確認", reason || "（未填原因）"]] });
     log(S, "報刀退回", r.date + "｜" + locName(S, r.hospital) + "｜" + r.doctor + (reason ? "｜" + reason : ""));
+    return r;
+  }
+
+  // ---------- 報刀：刀表、使用台數、修改與異動確認、報刀狀況、刪除、通知（spec v34） ----------
+  // 刀表 follows the client's split: 北榮 by hospital; otherwise 骨板/骨釘 go to 鐿鈦 and other products to 綜合.
+  function tableOf(S, r) {
+    if (/北榮/.test(locName(S, r.hospital))) return "北榮";
+    var anyCustom = reportItems(r).some(function (it) { var p = product(S, it.sku); return p && p.kind === "custom"; });
+    var anyBone = reportItems(r).some(function (it) { var p = product(S, it.sku); return p && p.kind !== "custom"; });
+    return anyCustom && !anyBone ? "綜合" : "鐿鈦";
+  }
+  // 鐿鈦: one case with a main product is 1 台, screws only is 0; 綜合 counts used quantity. Dealer cases are not counted.
+  function unitsAuto(S, r) {
+    if (r.src !== "內部") return null;
+    var n = 0, plate = false;
+    reportItems(r).forEach(function (it) {
+      var p = product(S, it.sku);
+      if (!p || it.scrap) return;
+      if (p.kind === "plate") plate = true;
+      else if (p.kind === "custom") n += it.qty;
+    });
+    return n + (plate ? 1 : 0);
+  }
+  function unitsOf(S, r) { return r.units != null ? r.units : unitsAuto(S, r); }
+  function report(S, id) { return S.reports.filter(function (x) { return x.id === id; })[0] || null; }
+  function canSeeReport(S, r) { return can(S, "report_all") || r.createdBy === S.operator || r.rep === S.operator; }
+  function visibleReports(S) { return S.reports.filter(function (r) { return canSeeReport(S, r); }); }
+  function isOwner(S, r) { return r.createdBy === S.operator || (r.src === "內部" && r.rep === S.operator); }
+
+  function notify(S, to, title, text, reportId) {
+    if (!S.notifs) S.notifs = [];
+    S.notifs.unshift({ id: uid("N"), ts: nowStr(), by: S.operator, to: to, title: title, text: text, ref: reportId || null, read: [] });
+    if (S.notifs.length > 300) S.notifs.length = 300;
+  }
+  function myNotifs(S) {
+    var r = role(S);
+    return (S.notifs || []).filter(function (n) { return n.to.indexOf(r) >= 0 && n.by !== S.operator; });
+  }
+  function markRead(S, id) {
+    (S.notifs || []).forEach(function (n) { if ((!id || n.id === id) && n.read.indexOf(S.operator) < 0) n.read.push(S.operator); });
+  }
+
+  var MAIN_FIELDS = [["date", "手術日期"], ["doctor", "醫師"], ["shift", "刀別"], ["patient", "病人姓名"], ["mrn", "病例號"], ["deliverer", "送器械人員"], ["note", "報刀備註"]];
+  // Editing the 手術主紀錄 after submission. Every change is kept field by field; a change by
+  // 業務 marks the case 報錯 and, like any general change, waits for both units to confirm.
+  function editReport(S, id, patch) {
+    var r = report(S, id);
+    if (!r || r.deleted) throw new Error("找不到報刀單");
+    var owner = isOwner(S, r), staff = can(S, "report_status");
+    if (!owner && !staff) throw new Error("只有報刀人或內勤可以修改");
+    if (patch.date && patch.date > ymd(new Date())) throw new Error("手術日期不可晚於今天");
+    if (r.src !== "內部" && patch.shift) delete patch.shift;
+    var ch = [];
+    MAIN_FIELDS.forEach(function (f) {
+      if (!(f[0] in patch)) return;
+      var a = r[f[0]] == null ? "" : String(r[f[0]]), b = String(patch[f[0]] == null ? "" : patch[f[0]]).trim();
+      if (f[0] === "patient" && !b) throw new Error("病人姓名不能空白");
+      if (f[0] === "shift" && r.src === "內部" && SHIFTS.indexOf(b) < 0) throw new Error("刀別只能是日刀或夜刀");
+      if (a !== b) ch.push({ k: f[0], label: f[1], a: a, b: b });
+    });
+    if (!ch.length) return { changed: false };
+    // 補上「待補病人資料」(and a blank 病例號 at the same time) is not an error and needs no confirmation.
+    var ptFill = r.patient === PT_TBD && ch.every(function (c) { return c.k === "patient" || (c.k === "mrn" && !c.a) || c.k === "note"; });
+    var quiet = ptFill || ch.every(function (c) { return c.k === "note"; });
+    ch.forEach(function (c) { r[c.k] = c.b; });
+    r.history.unshift({ ts: nowStr(), user: S.operator, role: role(S), sec: "手術主紀錄", ch: ch.map(function (c) { return [c.label, c.a || "（空白）", c.b || "（空白）"]; }) });
+    var head = locName(S, r.hospital) + " " + r.date.slice(5) + " " + r.patient;
+    var txt = head + "：" + ch.map(function (c) { return c.label + " " + (c.a || "（空白）") + " → " + (c.b || "（空白）"); }).slice(0, 2).join("；") + "（修改人：" + S.operator + "）";
+    var out = { changed: true, pending: false, flagged: false };
+    if (ptFill) notify(S, ["帳務部", "倉儲部", "業務助理", "主管", "負責人"], "補上病人資料", txt, r.id);
+    if (!quiet) {
+      var u = unitOf(role(S)), by = { by: S.operator, at: nowStr().slice(5, 16) };
+      var c = { id: uid("C"), reportId: r.id, who: S.operator, role: role(S), at: nowStr(), diffs: ch.map(function (x) { return [x.label, x.a, x.b]; }),
+        acct: u === "acct" ? by : null, wh: u === "wh" ? by : null, done: false };
+      if (!S.changes) S.changes = [];
+      S.changes.unshift(c);
+      out.pending = true;
+      notify(S, ["帳務部", "倉儲部", "業務助理", "主管", "負責人"], "報刀資料異動", txt, r.id);
+      if (owner && !staff && r.src === "內部" && !r.flags.some(function (f) { return f.t === "報錯"; })) {
+        r.flags.push({ t: "報錯", n: "提交後自行修改" });
+        out.flagged = true;
+      }
+    }
+    log(S, "報刀修改", head + "｜" + ch.length + " 個欄位");
+    return out;
+  }
+  function pendingChanges(S) { return (S.changes || []).filter(function (c) { var r = report(S, c.reportId); return !c.done && r && !r.deleted && canSeeReport(S, r); }); }
+  function confirmChange(S, id) {
+    need(S, "report_confirm");
+    var c = (S.changes || []).filter(function (x) { return x.id === id; })[0];
+    if (!c || c.done) throw new Error("這筆異動已確認");
+    var u = unitOf(role(S));
+    if (!u) throw new Error("只有帳務部、倉儲部、業務助理可以確認");
+    if (c[u]) throw new Error("你的單位已經確認過");
+    c[u] = { by: S.operator, at: nowStr().slice(5, 16) };
+    c.done = !!(c.acct && c.wh);
+    var r = report(S, c.reportId);
+    if (r) r.history.unshift({ ts: nowStr(), user: S.operator, role: role(S), sec: "異動確認", ch: [["確認異動", "—", (u === "acct" ? "帳務部" : "倉儲部／業務助理") + "已確認（" + c.who + " " + c.at.slice(5, 16) + " 的修改）"]] });
+    log(S, "異動確認", (r ? locName(S, r.hospital) + " " + r.date : "") + "｜" + (c.done ? "兩單位都已確認" : "等待另一單位"));
+    return c;
+  }
+  var FLAG_STATES = ["正常", "晚報", "報錯", "晚報＋報錯"];
+  var ERROR_TYPES = ["病人／該台刀資料", "日期或時間", "醫師", "品項／數量／型號", "其他"];
+  function flagText(r) { return r.src !== "內部" ? "不適用" : r.flags.length ? r.flags.map(function (f) { return f.t; }).join("＋") : "正常"; }
+  function setReportFlags(S, id, to, type, reason) {
+    need(S, "report_status");
+    var r = report(S, id);
+    if (!r) throw new Error("找不到報刀單");
+    if (r.src !== "內部") throw new Error("經銷商報刀不判定報刀狀況");
+    if (FLAG_STATES.indexOf(to) < 0) throw new Error("狀態不正確");
+    if (!String(reason || "").trim()) throw new Error("請填更改原因");
+    var before = flagText(r);
+    r.flags = [];
+    if (to.indexOf("晚報") >= 0) r.flags.push({ t: "晚報", n: "人工判定" });
+    if (to.indexOf("報錯") >= 0) r.flags.push({ t: "報錯", n: type || "其他" });
+    r.history.unshift({ ts: nowStr(), user: S.operator, role: role(S), sec: "報刀狀況", ch: [["報刀狀況", before, to], ["更改原因", "—", String(reason).trim()]] });
+    notify(S, ["主管", "負責人"], "報刀狀況已更改", locName(S, r.hospital) + " " + r.date.slice(5) + " " + r.patient + "：" + before + " → " + to + "（" + S.operator + "，原因：" + String(reason).trim() + "）", r.id);
+    log(S, "更改報刀狀況", before + " → " + to);
+    return r;
+  }
+  function setUnits(S, id, n, reason) {
+    need(S, "report_status");
+    var r = report(S, id);
+    if (!r) throw new Error("找不到報刀單");
+    if (r.src !== "內部") throw new Error("經銷商報刀不計算使用台數");
+    var before = unitsOf(S, r);
+    if (n === null) r.units = null;
+    else {
+      if (typeof n !== "number" || !isFinite(n) || n < 0) throw new Error("使用台數要是 0 以上的數字");
+      r.units = n;
+    }
+    r.history.unshift({ ts: nowStr(), user: S.operator, role: role(S), sec: "使用台數", ch: [["使用台數", String(before), String(unitsOf(S, r))]].concat(reason ? [["修改原因", "—", reason]] : []) });
+    notify(S, ["主管", "負責人"], "使用台數已修改", locName(S, r.hospital) + " " + r.date.slice(5) + " " + r.patient + "：" + before + " → " + unitsOf(S, r) + " 台（" + S.operator + "）", r.id);
+    return r;
+  }
+  // 業務、經銷商 delete their own case with a reason; no approval. Once stock is deducted the
+  // case has documents attached and cannot be deleted any more (spec: 已開票不可刪除).
+  function deleteReport(S, id, reason) {
+    var r = report(S, id);
+    if (!r || r.deleted) throw new Error("找不到報刀單");
+    if (!isOwner(S, r)) throw new Error("只有報刀人可以刪除自己的報刀");
+    if (r.status === "approved") throw new Error("已確認扣庫、產生單據的報刀不能刪除，請聯絡內勤");
+    if (!String(reason || "").trim()) throw new Error("請填刪除原因");
+    r.deleted = true; r.delInfo = { by: S.operator, role: role(S), at: nowStr(), reason: String(reason).trim() };
+    (S.changes || []).forEach(function (c) { if (c.reportId === id) c.done = true; });
+    r.history.unshift({ ts: nowStr(), user: S.operator, role: role(S), sec: "刪除", ch: [["刪除報刀", "—", r.delInfo.reason]] });
+    notify(S, ["帳務部", "倉儲部", "業務助理", "主管", "負責人"], "報刀已刪除", S.operator + " 刪除了 " + locName(S, r.hospital) + " " + r.date.slice(5) + " " + r.patient + "（原因：" + r.delInfo.reason + "）", r.id);
+    log(S, "刪除報刀", r.date + "｜" + locName(S, r.hospital) + "｜" + r.delInfo.reason);
     return r;
   }
 
@@ -638,7 +821,7 @@
     v = String(v == null ? "" : v);
     return /[",\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v;
   }
-  var STATUS = { pending: "待審核", approved: "已審核", rejected: "退回" };
+  var STATUS = { pending: "待確認", approved: "已確認扣庫", rejected: "退回" };
   function reportsCSV(S) {
     var rows = [["日期", "醫院", "醫師", "扣庫來源", "類型", "型號", "品名", "數量", "批號", "報廢", "備註", "狀態"]];
     S.reports.slice().reverse().forEach(function (r) {
@@ -1069,10 +1252,11 @@
   function seed() {
     var r = rng(20261031);
     var S = {
-      v: VERSION, operator: "內勤-小美",
+      v: VERSION, operator: "帳務-小美",
       users: [
-        { name: "業務-小胖", role: "業務" }, { name: "業務-阿明", role: "業務" },
-        { name: "內勤-小美", role: "內勤" }, { name: "管理員", role: "管理員" }
+        { name: "業務-小胖", role: "業務" }, { name: "業務-阿明", role: "業務" }, { name: "經銷商-示範醫材", role: "經銷商" },
+        { name: "倉儲-小芳", role: "倉儲部" }, { name: "業助-小周", role: "業務助理" }, { name: "帳務-小美", role: "帳務部" },
+        { name: "主管-王經理", role: "主管" }, { name: "負責人-陳董", role: "負責人" }
       ],
       perms: JSON.parse(JSON.stringify(DEFAULT_PERMS)),
       locations: [{ id: "co", name: "公司倉", type: "company" }],
@@ -1081,7 +1265,7 @@
         { id: "c102", code: "102", name: "範例醫療器材行", addr: "彰化縣範例鎮示範街 28 號", contact: "李先生", tel: "04-7000-0002" },
         { id: "c103", code: "103", name: "測試聯合診所", addr: "雲林縣示範市測試路 5 號", contact: "陳先生", tel: "05-5000-0003" }
       ],
-      products: [], categories: [], lots: [], moves: [], docs: [], reports: [], sales: [], payments: [], journals: [], log: []
+      products: [], categories: [], lots: [], moves: [], docs: [], changes: [], notifs: [], reports: [], sales: [], payments: [], journals: [], log: []
     };
     ["中榮", "員基", "鹿基", "彰基", "803", "二基"].forEach(function (n, i) {
       S.locations.push({ id: "h" + i, name: n, type: "hospital" });
@@ -1149,14 +1333,16 @@
     S.log.unshift({ ts: nowStr(), user: "系統", action: "初始化", detail: "載入示範資料" });
     seedDocs(S);
     seedReports(S);
+    seedDealer(S);
     seedSales(S);
     seedHistory(S);
-    S.operator = "內勤-小美";
+    S.operator = "帳務-小美";
+    S.notifs.forEach(function (n) { n.read = []; });
     return S;
   }
 
   function seedDocs(S) {
-    S.operator = "內勤-小美";
+    S.operator = "倉儲-小芳";
     receiveGoods(S, { date: addDays(-12), vendor: "示範生技", cold: true, check: { look: true, label: true, count: true, temp: "18°C" },
       lines: [{ sku: "PRP-20", lot: "PRP-2609-2", mfg: addDays(-60), exp: addDays(540), qty: 6 }] });
     var pl = plates(S).filter(function (p) { return fefoLot(S, p.sku, 1); }).slice(0, 2);
@@ -1180,17 +1366,33 @@
       var slots = bx ? filledSlots(S, bx).slice(0, 2) : [];
       if (!plate || slots.length < 2) return;
       S.operator = reps[i];
+      var day = addDays(-(8 - i * 3));
       var rep = submitReport(S, {
-        date: addDays(-(8 - i * 3)), hospital: hid, doctor: docs[i], loc: hid, note: i === 1 ? "補貨：備貨1" : "",
+        date: day, hospital: hid, doctor: docs[i], loc: hid, note: i === 1 ? "補貨：備貨1" : "",
+        shift: i === 1 ? "夜刀" : "日刀", patient: ["林O華", "陳O明", PT_TBD][i], mrn: ["0012345", "0098765", ""][i], deliverer: ["小李", "小李", "阿德"][i], rep: reps[i],
+        createdAt: i === 2 ? nowStr() : day + (i === 1 ? " 23:40:00" : " 18:20:00"),
         main: [{ sku: plate.sku, lot: plate.lot, qty: 1 }],
         screws: [{ sku: slots[0].sku, lot: bx.lot, qty: 1, slots: [slots[0].id] }, { sku: slots[1].sku, lot: bx.lot, qty: 1, scrap: true, slots: [slots[1].id] }]
       });
-      if (i < 2) { S.operator = "內勤-小美"; approveReport(S, rep.id); }
+      if (i < 2) { S.operator = "倉儲-小芳"; approveReport(S, rep.id); }
+      if (i === 0) {
+        S.operator = reps[0];
+        editReport(S, rep.id, { doctor: "林O成", shift: "夜刀" });
+        S.operator = "倉儲-小芳";
+        confirmChange(S, S.changes[0].id);
+      }
     });
   }
 
   // Backdated, already-approved activity so the statistics and the ledger are not empty.
   // It does not touch stock: it stands for what already happened before the demo started.
+  // A dealer case: the dealer bought the goods outright, so no company stock moves.
+  function seedDealer(S) {
+    var p = S.products.filter(function (x) { return x.kind === "plate"; })[3];
+    S.operator = "經銷商-示範醫材";
+    submitReport(S, { date: addDays(-2), hospital: "h5", doctor: "許醫師", patient: "張O德", mrn: "1209933", main: [{ sku: p.sku, lot: "", qty: 1 }], screws: [] });
+  }
+
   function seedHistory(S) {
     var r = rng(77123);
     var docs = ["林醫師", "陳醫師", "黃醫師", "吳醫師", "張醫師", "李醫師", "周醫師", "蔡醫師"];
@@ -1214,12 +1416,18 @@
         var sp = screws[Math.floor(r() * screws.length)];
         sc.push({ sku: sp.sku, lot: S.boxes[Math.floor(r() * S.boxes.length)].lot, qty: 1, scrap: r() < 0.15 });
       }
+      var who = reps[Math.floor(r() * 2)], late = r() < 0.12, err = r() < 0.08;
+      var fl = [];
+      if (late) fl.push({ t: "晚報", n: "暫定規則：手術隔天之後才提交" });
+      if (err) fl.push({ t: "報錯", n: "品項／數量／型號" });
       S.reports.push({ id: uid("R"), date: date, hospital: hosp.id, doctor: docs[Math.floor(r() * docs.length)], loc: hosp.id, note: "", status: "approved",
-        main: main, screws: sc, createdBy: reps[Math.floor(r() * 2)], createdAt: date + " 09:00:00", reviewedBy: "內勤-小美", reviewedAt: date + " 17:00:00" });
+        shift: r() < 0.3 ? "夜刀" : "日刀", patient: "病患" + (100 + i), mrn: String(1000000 + Math.floor(r() * 8999999)), deliverer: r() < 0.5 ? "小李" : "阿德", rep: who, src: "內部", dealer: "", flags: fl, units: null,
+        history: [{ ts: date + " 09:00:00", user: who, role: "業務", sec: "建立", ch: [["建立報刀", "—", "系統上線前的歷史資料"]] }],
+        main: main, screws: sc, createdBy: who, createdAt: (late ? shiftDate(date, 3) : date) + " 09:00:00", reviewedBy: "倉儲-小芳", reviewedAt: date + " 17:00:00" });
     }
     S.reports.sort(function (a, b) { return a.date < b.date ? 1 : a.date > b.date ? -1 : 0; });
 
-    S.operator = "內勤-小美";
+    S.operator = "帳務-小美";
     var invN = S.sales.filter(function (o) { return o.invoice; }).length;
     for (var j = 0; j < 10; j++) {
       var d2 = addDays(-(8 + Math.floor(r() * 150)));
@@ -1231,7 +1439,7 @@
       }
       invN++;
       var o = { id: uid("S"), no: nextSalesNo(S, d2), date: d2, customer: cust.id, currency: "NTD", taxMode: "incl", salesRep: reps[Math.floor(r() * 2)], dept: "業務部", note: "",
-        status: "confirmed", maker: "內勤-小美", reviewer: "內勤-小美", invoice: "ZZ" + String(10000000 + invN * 37), createdAt: d2 + " 10:00:00", confirmedAt: d2 + " 15:00:00", lines: ls };
+        status: "confirmed", maker: "帳務-小美", reviewer: "帳務-小美", invoice: "ZZ" + String(10000000 + invN * 37), createdAt: d2 + " 10:00:00", confirmedAt: d2 + " 15:00:00", lines: ls };
       S.sales.push(o);
       postSalesJournal(S, o, d2);
       var total = orderTotal(o), roll = r();
@@ -1243,13 +1451,13 @@
   }
   function addPaymentSeed(S, o, date, amount) {
     if (date > ymd(new Date())) return;
-    var pay = { id: uid("P"), orderId: o.id, date: date, amount: amount, method: "匯款", by: "內勤-小美" };
+    var pay = { id: uid("P"), orderId: o.id, date: date, amount: amount, method: "匯款", by: "帳務-小美" };
     S.payments.push(pay);
     postJournal(S, date, "收款 " + o.no, "pay:" + pay.id, [{ acct: "1100", dr: amount }, { acct: "1200", cr: amount }]);
   }
 
   function seedSales(S) {
-    S.operator = "內勤-小美";
+    S.operator = "帳務-小美";
     var line = S.lots.filter(function (l) {
       var p = product(S, l.sku);
       return l.loc === "co" && p && p.kind === "plate" && !isExpired(l.exp) && l.qty >= 2;
@@ -1273,6 +1481,8 @@
         if (S && !S.moves) S.moves = [];
         if (S && !S.categories) S.categories = [];
         if (S && !S.docs) S.docs = [];
+        if (S && !S.changes) S.changes = [];
+        if (S && !S.notifs) S.notifs = [];
         if (S && S.v === VERSION) return S;
       }
     } catch (e) { /* fall through to a fresh seed */ }
@@ -1301,7 +1511,10 @@
   confirmSales = tracked(confirmSales, function (S, o) { return { kind: "銷貨出貨", ref: { kind: "sales", id: o.id }, note: o.no }; });
 
   return {
-    ROLES: ROLES, CAPS: CAPS, STATUS: STATUS, SALES_STATUS: SALES_STATUS, TAX: TAX, 
+    ROLES: ROLES, OWNER: OWNER, CAPS: CAPS, SHIFTS: SHIFTS, PT_TBD: PT_TBD, FLAG_STATES: FLAG_STATES, ERROR_TYPES: ERROR_TYPES, MAIN_FIELDS: MAIN_FIELDS,
+    unitOf: unitOf, isDealer: isDealer, tableOf: tableOf, unitsAuto: unitsAuto, unitsOf: unitsOf, report: report, canSeeReport: canSeeReport, visibleReports: visibleReports, isOwner: isOwner,
+    myNotifs: myNotifs, markRead: markRead, editReport: editReport, pendingChanges: pendingChanges, confirmChange: confirmChange, flagText: flagText,
+    setReportFlags: setReportFlags, setUnits: setUnits, deleteReport: deleteReport, STATUS: STATUS, SALES_STATUS: SALES_STATUS, TAX: TAX, 
     ymd: ymd, addDays: addDays, expDays: expDays, isExpired: isExpired, posInt: posInt,
     user: user, role: role, can: can, need: need, setPerm: setPerm, addUser: addUser, setUserRole: setUserRole,
     product: product, location: location, locName: locName, customer: customer, plates: plates,

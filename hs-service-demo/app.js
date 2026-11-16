@@ -21,6 +21,7 @@
   var mapView = null;
   
   var repFilter = "all";
+  var RE = null;
   var traceQ = "";
   var D = newDraft();
   var SD = newSales();
@@ -40,12 +41,12 @@
     trace: '<circle cx="11" cy="11" r="6"/><path d="M20 20l-4.5-4.5"/>',
     settings: '<path d="M4 7h10M18 7h2M4 17h2M10 17h10"/><circle cx="16" cy="7" r="2"/><circle cx="8" cy="17" r="2"/>'
   };
-  function canAct() { return can("report_approve") || can("sales_confirm") || can("stock_edit") || can("acct_edit"); }
+  function canAct() { return can("report_approve") || can("report_confirm") || can("report_status") || can("sales_confirm") || can("stock_edit") || can("acct_edit"); }
   function defaultTab() { return canAct() ? "todo" : "report"; }
   var NAV = [
     { id: "intro", label: "介紹", title: "系統介紹", sub: "這套系統做了什麼、一張單怎麼從刀房走到帳上。", show: function () { return true; } },
     { id: "todo", label: "待辦", title: "待辦", sub: "需要你動手的事，處理完就會從這裡消失。", show: function () { return canAct(); } },
-    { id: "report", label: "報刀", title: "報刀", sub: "跟刀後回報這台刀用了什麼，只報你用到的。內勤審核後才會扣庫存。", show: function () { return true; } },
+    { id: "report", label: "報刀", title: "報刀", sub: "跟刀後回報這台刀用了什麼。送出後內勤確認才扣庫；送出後再修改會列入異動待確認。", show: function () { return true; } },
     { id: "stock", label: "庫存", title: "庫存", sub: "先選範圍：公司的庫存可以立即調動，醫院寄庫要先調回公司。", show: function () { return L.can(S, "stock_view"); } },
     { id: "docs", label: "單據", title: "GDP 單據", sub: "進貨、借出（寄庫）、借出還回與每月訂單審核表。格式比照正航，報刀審核後自動產生。", show: function () { return L.can(S, "stock_view"); } },
     { id: "sales", label: "銷貨憑單", title: "銷貨憑單", sub: "對應正航的銷貨憑單：客戶、明細、稅額，覆核後出貨扣庫並自動產生傳票。", show: function () { return L.can(S, "sales_view"); } },
@@ -119,7 +120,7 @@
       "<h2>" + esc(title) + "</h2></div>" + (headExtra || "") + '</div><div class="card-b">' + body + "</div></section>";
   }
   function noPerm(what) {
-    return '<div class="card"><div class="empty">目前身分是「' + esc(S.operator) + "」，沒有「" + esc(what) + "」的權限。到「設定」由管理員調整。</div></div>";
+    return '<div class="card"><div class="empty">目前身分是「' + esc(S.operator) + "」，沒有「" + esc(what) + "」的權限。到「設定」由負責人調整。</div></div>";
   }
 
   // ---------------- 骨釘盒: a physical rack drawn as a lamp grid ----------------
@@ -176,7 +177,11 @@
     var pend = S.reports.filter(function (r) { return r.status === "pending"; });
     var drafts = S.sales.filter(function (o) { return o.status === "draft"; });
     var att = attentionGroups();
-    if (pend.length && can("report_approve")) out += card("TODO", "待審核報刀（" + pend.length + "）", pend.map(reportCardHtml).join(""));
+    pend = pend.filter(function (r) { return !r.deleted; });
+    out += notifsHtml();
+    var chg = can("report_confirm") ? L.pendingChanges(S).filter(function (c) { var u = L.unitOf(L.role(S)); return u && !c[u]; }) : [];
+    if (chg.length) out += card("TODO", "異動待確認（" + chg.length + "）", changesHtml(chg));
+    if (pend.length && can("report_approve")) out += card("TODO", "待確認報刀（" + pend.length + "）", pend.map(reportCardHtml).join("") + '<p class="muted" style="margin-top:10px">倉儲或業務助理確認品項、批號後按「確認並扣庫」：寄庫扣庫，同時產生借出還回單、銷貨憑單與補貨借出草稿。</p>');
     if (drafts.length && can("sales_view")) {
       out += card("TODO", "銷貨憑單草稿（" + drafts.length + "）", drafts.map(function (o) {
         var c = L.customer(S, o.customer);
@@ -215,7 +220,7 @@
         return '<tr><td class="code">' + esc(r.o.no) + "</td><td>" + esc(c ? c.name : "") + "</td><td>" + esc(r.o.date) + '</td><td class="num">' + num(r.balance) + '</td><td class="num">' + r.days + ' 天</td><td><button class="btn btn-sm btn-primary" data-act="pay-order" data-id="' + r.o.id + '">登記收款</button></td></tr>';
       }).join("")));
     }
-    if (!out) out = card("TODO", "目前沒有待辦", '<div class="empty">報刀都審完了，沒有銷貨草稿，也沒有快到期的批號。</div>');
+    if (!out) out = card("TODO", "目前沒有待辦", '<div class="empty">報刀都確認完了，沒有異動待確認，也沒有快到期的批號。</div>');
     return out;
   }
 
@@ -226,7 +231,7 @@
   }
   function newDraft() {
     var h = firstHospital();
-    return { date: L.ymd(new Date()), hospital: h, doctor: "", loc: h, note: "", main: [], picks: [], sp: { box: "" }, showPicker: false };
+    return { date: L.ymd(new Date()), hospital: h, doctor: "", loc: h, note: "", shift: "日刀", patient: "", mrn: "", deliverer: "", rep: "", main: [], picks: [], sp: { box: "" }, showPicker: false };
   }
   function pickedMap() {
     var m = {};
@@ -241,10 +246,18 @@
       if (!groups[k]) { groups[k] = { sku: x.sku, lot: x.lot, qty: 0, scrap: !!x.scrap, slots: [] }; order.push(k); }
       groups[k].qty++; groups[k].slots.push(x.id);
     });
-    return { date: D.date, hospital: D.hospital, doctor: D.doctor, loc: D.loc, note: D.note, main: D.main, screws: order.map(function (k) { return groups[k]; }) };
+    return { date: D.date, hospital: D.hospital, doctor: D.doctor, loc: D.loc, note: D.note, shift: D.shift, patient: D.patient, mrn: D.mrn, deliverer: D.deliverer, rep: D.rep,
+      main: D.main, screws: L.isDealer(S) ? [] : order.map(function (k) { return groups[k]; }) };
   }
 
   function mainRowHtml(row, i) {
+    if (L.isDealer(S)) {
+      return '<div class="mainrow">' +
+        '<label class="field">品項<select data-bind="main-sku" data-i="' + i + '">' + options(L.sellable(S).map(function (p) { return { v: p.sku, t: (p.kind === "custom" ? "［" + L.kindName(S, p) + "］" : "") + p.sku + "　" + p.name }; }), row.sku) + "</select></label>" +
+        '<label class="field">批號（選填）<input data-bind="main-lotx" data-i="' + i + '" value="' + esc(row.lot) + '"></label>' +
+        '<label class="field">數量<input type="number" min="1" step="1" value="' + row.qty + '" data-bind="main-qty" data-i="' + i + '"></label>' +
+        '<button type="button" class="btn btn-sm" data-act="rm-main" data-i="' + i + '">移除</button></div>';
+    }
     var avail = L.sellable(S).filter(function (p) { return L.totalQty(S, D.loc, p.sku) > 0; });
     var skuOpts = options(avail.map(function (p) { return { v: p.sku, t: (p.kind === "custom" ? "［" + L.kindName(S, p) + "］" : "") + p.sku + "　" + p.name + "（庫存 " + L.totalQty(S, D.loc, p.sku) + "）" }; }), row.sku);
     var lotOpts = options(L.lines(S, D.loc, row.sku).map(function (l) {
@@ -298,17 +311,26 @@
     var chips = screwChipsHtml();
     var n = D.main.length + D.picks.length;
     var canSubmit = can("report_submit") && n > 0;
+    var dealer = L.isDealer(S), myRole = L.role(S);
+    var reps = S.users.filter(function (u) { return u.role === "業務"; });
+    var repField = dealer ? "" : myRole === "業務" ? '<label class="field">業務人員<input readonly value="' + esc(S.operator) + '（本人）"></label>'
+      : '<label class="field">業務人員（代報）<select data-bind="r-rep">' + options([{ v: "", t: "請選擇" }].concat(reps.map(function (u) { return { v: u.name, t: u.name }; })), D.rep) + "</select></label>";
     var body = '<form data-form="report"><div class="grid">' +
-      '<label class="field">日期<input type="date" data-bind="date" value="' + esc(D.date) + '"></label>' +
+      '<label class="field">手術日期<input type="date" data-bind="date" value="' + esc(D.date) + '"></label>' +
       '<label class="field">醫院<select data-bind="hospital">' + options(hospitals.map(function (h) { return { v: h.id, t: h.name }; }), D.hospital) + "</select></label>" +
       '<label class="field">醫師<input data-bind="doctor" list="doctors" value="' + esc(D.doctor) + '" placeholder="輸入或選擇"></label>' +
-      '<label class="field">扣庫來源<select data-bind="loc">' + locOptions(S.locations, D.loc) + "</select></label>" +
-      '<label class="field wide">備註<input data-bind="note" value="' + esc(D.note) + '" placeholder="例如 補貨：備貨1"></label></div>' +
+      (dealer ? "" : '<label class="field">刀別<select data-bind="r-shift">' + options(L.SHIFTS.map(function (x) { return { v: x, t: x }; }), D.shift) + "</select></label>") +
+      '<label class="field">病人姓名<input data-bind="r-patient" value="' + esc(D.patient) + '" placeholder="還不知道就填「' + L.PT_TBD + '」"></label>' +
+      '<label class="field">病例號<input data-bind="r-mrn" value="' + esc(D.mrn) + '" placeholder="選填"></label>' +
+      repField + (dealer ? "" : '<label class="field">送器械人員<input data-bind="r-deliverer" value="' + esc(D.deliverer) + '" placeholder="選填"></label>') +
+      (dealer ? "" : '<label class="field">扣庫來源<select data-bind="loc">' + locOptions(S.locations, D.loc) + "</select></label>") +
+      '<label class="field wide">報刀備註<input data-bind="note" value="' + esc(D.note) + '" placeholder="選填"></label></div>' +
+      (dealer ? '<p class="muted" style="margin:8px 0 0">經銷商報刀：用的是貴公司向我們買斷的貨，不扣公司庫存；不分日夜刀、不判定晚報與報錯。骨釘請以品項回報。</p>' : "") +
       '<datalist id="doctors">' + Object.keys(docs).map(function (d) { return '<option value="' + esc(d) + '">'; }).join("") + "</datalist>" +
       "<h4>本次用量</h4>" +
       (rows || chips ? rows + chips : '<div class="usage-empty">還沒加入任何品項。用到骨板就按「＋ 骨板」，用到骨釘就按「＋ 骨釘」，只加你用到的。</div>') +
       '<div class="row" style="margin-top:12px"><button type="button" class="btn btn-sm" data-act="add-main">＋ 骨板</button>' +
-      '<button type="button" class="btn btn-sm' + (D.showPicker ? " on" : "") + '" data-act="toggle-picker">＋ 骨釘' + (D.picks.length ? "（已選 " + D.picks.length + "）" : "") + "</button></div>" +
+      (dealer ? "</div>" : '<button type="button" class="btn btn-sm' + (D.showPicker ? " on" : "") + '" data-act="toggle-picker">＋ 骨釘' + (D.picks.length ? "（已選 " + D.picks.length + "）" : "") + "</button></div>") +
       (D.showPicker ? screwPickerHtml() : "") +
       '<div class="submitbar"><button type="submit" class="btn btn-primary"' + (canSubmit ? "" : ' disabled title="' + (can("report_submit") ? "先加入品項" : "沒有送出報刀的權限") + '"') + ">送出報刀" + (n ? "（" + n + " 項）" : "") + "</button></div></form>";
     return card("NEW", "新增報刀", body);
@@ -318,28 +340,22 @@
     var items = L.reportItems(r).map(function (it) {
       var p = L.product(S, it.sku);
       return "<li>" + L.kindName(S, p) + " " + esc(it.sku) + "　" + esc(pName(it.sku)) + " ×" + it.qty +
-        '　<span class="muted">批號 ' + esc(it.lot) + "</span>" + (it.scrap ? ' <span class="badge scrap">報廢</span>' : "") + "</li>";
+        '　<span class="muted">批號 ' + esc(it.lot || "—") + "</span>" + (it.scrap ? ' <span class="badge scrap">報廢</span>' : "") + "</li>";
     }).join("");
     var act = "";
     if (r.status === "pending") {
       var ok = can("report_approve");
-      act = '<div class="actions"><button class="btn btn-sm btn-primary" data-act="approve" data-id="' + r.id + '"' + (ok ? "" : ' disabled title="沒有審核權限"') + ">審核通過並扣庫</button>" +
+      act = '<div class="actions"><button class="btn btn-sm" data-act="open-report" data-id="' + r.id + '">開啟</button><button class="btn btn-sm btn-primary" data-act="approve" data-id="' + r.id + '"' + (ok ? "" : ' disabled title="沒有確認權限"') + ">" + (r.src === "經銷商" ? "確認" : "確認並扣庫") + "</button>" +
         '<button class="btn btn-sm btn-danger" data-act="reject" data-id="' + r.id + '"' + (ok ? "" : " disabled") + ">退回</button></div>";
     }
-    return '<div class="report"><div class="report-h"><b>' + esc(r.date) + "</b><span>" + esc(L.locName(S, r.hospital)) + "</span><span>" + esc(r.doctor) + "</span>" +
-      '<span class="badge ' + r.status + '">' + L.STATUS[r.status] + '</span><span class="muted">扣庫：' + esc(L.locName(S, r.loc)) + "</span>" + act + "</div>" +
+    return '<div class="report"><div class="report-h">' + tableTag(r) + "<b>" + esc(r.date) + "</b><span>" + esc(L.locName(S, r.hospital)) + "</span><span>" + esc(r.doctor) + "</span><span>" + esc(r.patient || "") + "</span>" +
+      '<span class="badge ' + r.status + '">' + L.STATUS[r.status] + "</span>" + flagBadges(r) + '<span class="muted">' + (r.src === "經銷商" ? "經銷商：" + esc(r.dealer) : "扣庫：" + esc(L.locName(S, r.loc))) + "</span>" + act + "</div>" +
       "<ul>" + items + "</ul>" +
-      '<div class="meta">送出 ' + esc(r.createdBy) + " " + esc(r.createdAt) + (r.reviewedBy ? "｜審核 " + esc(r.reviewedBy) + " " + esc(r.reviewedAt) : "") + (r.note ? "｜備註：" + esc(r.note) : "") + "</div></div>";
+      '<div class="meta">' + (r.shift ? esc(r.shift) + "｜" : "") + (r.rep ? "業務 " + esc(r.rep) + "｜" : "") + "提交 " + esc(r.createdBy) + " " + esc(r.createdAt) + (r.reviewedBy ? "｜審核 " + esc(r.reviewedBy) + " " + esc(r.reviewedAt) : "") + (r.note ? "｜備註：" + esc(r.note) : "") + "</div></div>";
   }
 
   function renderReport() {
-    var list = S.reports.filter(function (r) { return repFilter === "all" || r.status === repFilter; });
-    var seg = [["all", "全部"], ["pending", "待審核"], ["approved", "已審核"], ["rejected", "退回"]].map(function (x) {
-      return '<button data-act="rep-filter" data-v="' + x[0] + '" aria-pressed="' + (repFilter === x[0]) + '">' + x[1] + "</button>";
-    }).join("");
-    return reportFormHtml() + card("LOG", "報刀紀錄",
-      list.map(reportCardHtml).join("") || '<div class="empty">沒有資料</div>',
-      '<div class="row"><div class="seg">' + seg + '</div><button class="btn btn-sm" data-act="export-csv">匯出 CSV（給正航）</button></div>');
+    return (can("report_submit") ? reportFormHtml() : "") + reportListHtml();
   }
 
   // ---------------- 銷貨憑單 ----------------
@@ -544,17 +560,143 @@
       }).join("") + "</tbody></table></div>";
   }
 
-  function openReport(id) {
-    var r = S.reports.filter(function (x) { return x.id === id; })[0];
-    if (!r) return toast("找不到這張報刀單", true);
-    openDialog("報刀單 " + r.date, function () {
-      var items = L.reportItems(r).map(function (it) {
-        return "<tr><td class=\"code\">" + esc(it.sku) + "</td><td>" + esc(pName(it.sku)) + '</td><td class="code">' + esc(it.lot) + '</td><td class="num">' + it.qty + "</td><td>" + (it.scrap ? '<span class="badge scrap">報廢</span>' : "") + "</td></tr>";
-      }).join("");
-      return '<dl class="kv"><dt>醫院</dt><dd>' + esc(L.locName(S, r.hospital)) + "</dd><dt>醫師</dt><dd>" + esc(r.doctor) + "</dd><dt>扣庫來源</dt><dd>" + esc(L.locName(S, r.loc)) + "</dd><dt>狀態</dt><dd>" + esc(L.STATUS[r.status]) + "</dd>" +
-        (r.note ? "<dt>備註</dt><dd>" + esc(r.note) + "</dd>" : "") + (r.createdBy ? "<dt>送出</dt><dd>" + esc(r.createdBy) + " " + esc(r.createdAt || "") + "</dd>" : "") +
-        (r.reviewedBy ? "<dt>審核</dt><dd>" + esc(r.reviewedBy) + " " + esc(r.reviewedAt || "") + "</dd>" : "") + "</dl>" + tbl(["型號", "品名", "批號", "數量", ""], items) + reportDocsHtml(r);
+  // ---------------- 報刀紀錄、單筆紀錄、異動待確認、通知（spec v34） ----------
+  var TABLE_CLASS = { "鐿鈦": "t-yb", "綜合": "t-zh", "北榮": "t-bv" };
+  function tableTag(r) { var t = L.tableOf(S, r); return '<span class="ktag ' + (TABLE_CLASS[t] || "") + '">' + t + "</span>"; }
+  function flagBadges(r) {
+    if (r.src !== "內部") return "";
+    if (!r.flags || !r.flags.length) return '<span class="badge approved">正常</span>';
+    return r.flags.map(function (f) { return '<span class="badge ' + (f.t === "晚報" ? "draft" : "expired") + '" title="' + esc(f.n) + '">' + f.t + "</span>"; }).join("");
+  }
+  function changeIds() {
+    var m = {};
+    L.pendingChanges(S).forEach(function (c) { m[c.reportId] = 1; });
+    return m;
+  }
+  function reportListHtml() {
+    var all = L.visibleReports(S), live = all.filter(function (r) { return !r.deleted; }), dels = all.filter(function (r) { return r.deleted; });
+    var chg = L.pendingChanges(S), chgMap = changeIds(), mine = !can("report_all");
+    var tabs = [["all", mine ? "我的報刀" : "全部", live.length], ["pending", "待確認", live.filter(function (r) { return r.status === "pending"; }).length]]
+      .concat(can("report_confirm") || can("report_status") ? [["changes", "異動待確認", chg.length]] : []).concat([["deleted", "刪除紀錄", dels.length]]);
+    if (!tabs.some(function (t) { return t[0] === repFilter; })) repFilter = "all";
+    var seg = '<div class="seg">' + tabs.map(function (t) {
+      return '<button data-act="rep-filter" data-v="' + t[0] + '" aria-pressed="' + (repFilter === t[0]) + '"' + (t[0] === "changes" && t[2] ? ' class="seg-alert"' : "") + ">" + t[1] + "　" + t[2] + "</button>";
+    }).join("") + "</div>";
+    var head = '<div class="row">' + seg + (can("report_all") ? '<button class="btn btn-sm" data-act="export-csv">匯出 CSV</button>' : "") + "</div>";
+    if (repFilter === "changes") return card("CHANGES", "異動待確認", changesHtml(chg), head);
+    if (repFilter === "deleted") {
+      return card("DELETED", "刪除紀錄", tbl(["刀表", "手術日期", "醫院", "病人", "刪除人", "刪除時間", "原因", ""], dels.map(function (r) {
+        return "<tr><td>" + tableTag(r) + "</td><td>" + esc(r.date) + "</td><td>" + esc(L.locName(S, r.hospital)) + "</td><td>" + esc(r.patient) + "</td><td>" + esc(r.delInfo.by) + "</td><td>" + esc(r.delInfo.at.slice(0, 16)) + '</td><td class="wrap">' + esc(r.delInfo.reason) + '</td><td><button class="btn btn-sm" data-act="open-report" data-id="' + r.id + '">開啟</button></td></tr>';
+      }).join("")) + '<p class="muted" style="margin-top:10px">刪除的報刀保留原始內容，只供檢視，不列入統計。</p>', head);
+    }
+    var list = live.filter(function (r) { return repFilter === "all" || r.status === repFilter; }).slice(0, 60);
+    var rows = list.map(function (r) {
+      var items = L.reportItems(r), main = items.filter(function (it) { var p = L.product(S, it.sku); return p && p.kind !== "screw"; });
+      var screwN = items.filter(function (it) { var p = L.product(S, it.sku); return p && p.kind === "screw"; }).reduce(function (a, it) { return a + it.qty; }, 0);
+      var u = L.unitsOf(S, r);
+      return '<tr class="click" data-act="open-report" data-id="' + r.id + '"><td>' + tableTag(r) + "</td><td>" + esc(r.date) + "</td><td>" + esc(r.shift || "—") + "</td><td>" + esc(L.locName(S, r.hospital)) + "</td><td>" + esc(r.doctor) + "</td>" +
+        "<td>" + esc(r.patient || "") + (chgMap[r.id] ? ' <span class="badge expired">異動</span>' : "") + '<small class="sub2 code">' + esc(r.mrn || "") + "</small></td>" +
+        "<td>" + (main.length ? esc(pName(main[0].sku)) + (main.length > 1 ? " 等 " + main.length + " 項" : "") : "—") + (screwN ? '<small class="sub2">骨釘 ' + screwN + " 支</small>" : "") + "</td>" +
+        '<td class="num">' + (u == null ? "—" : u) + "</td><td>" + esc(r.src === "經銷商" ? r.dealer : r.rep || "") + "</td><td>" + (r.src === "內部" ? flagBadges(r) : '<span class="muted">—</span>') + '</td><td><span class="badge ' + r.status + '">' + L.STATUS[r.status] + "</span></td></tr>";
+    }).join("");
+    return card("LIST", mine ? "我的報刀" : "報刀紀錄", '<div class="table-wrap"><table class="table"><thead><tr><th>刀表</th><th>手術日期</th><th>刀別</th><th>醫院</th><th>醫師</th><th>病人／病例號</th><th>品項</th><th class="num">使用台數</th><th>業務／經銷商</th><th>報刀狀況</th><th>狀態</th></tr></thead><tbody>' +
+      (rows || '<tr><td colspan="11" class="empty">沒有資料</td></tr>') + "</tbody></table></div>" +
+      '<p class="muted" style="margin-top:10px">點一列開啟單筆紀錄。' + (mine ? "只顯示你自己的報刀。" : "") + "晚報規則客戶還沒提供，目前暫定「手術隔天之後才提交」。</p>", head);
+  }
+  function changesHtml(chg) {
+    if (!chg.length) return '<div class="empty">沒有待確認的異動</div>';
+    var u = L.unitOf(L.role(S));
+    var st = function (name, v) { return v ? '<div class="cf ok">✓ ' + name + ' <small>' + esc(v.by) + " " + esc(v.at) + "</small></div>" : '<div class="cf">○ ' + name + " <small>待確認</small></div>"; };
+    var rows = chg.map(function (c) {
+      var r = L.report(S, c.reportId), old = (Date.now() - new Date(c.at.replace(" ", "T")).getTime()) > 864e5;
+      return '<tr><td><button class="btn btn-sm" data-act="open-report" data-id="' + r.id + '">' + esc(r.date) + " " + esc(L.locName(S, r.hospital)) + "</button><small class=\"sub2\">" + esc(r.patient) + '</small></td><td class="wrap">' +
+        c.diffs.map(function (d) { return '<div>' + esc(d[0]) + '：<span class="old">' + esc(d[1] || "（空白）") + '</span> → <span class="new">' + esc(d[2] || "（空白）") + "</span></div>"; }).join("") +
+        "</td><td>" + esc(c.who) + '<small class="sub2">' + esc(c.role) + " " + esc(c.at.slice(5, 16)) + (old ? ' <span class="badge expired">逾 24 小時</span>' : "") + "</small></td><td>" + flagBadges(r) + "</td><td>" + st("帳務部", c.acct) + st("倉儲部／業務助理", c.wh) + "</td>" +
+        '<td><button class="btn btn-sm btn-primary" data-act="confirm-change" data-id="' + c.id + '"' + (can("report_confirm") && u && !c[u] ? "" : " disabled") + ">確認</button></td></tr>";
+    }).join("");
+    return '<div class="table-wrap"><table class="table changes"><thead><tr><th>報刀</th><th>異動內容（修改前 → 修改後）</th><th>修改人／時間</th><th>報刀狀況</th><th>確認進度</th><th></th></tr></thead><tbody>' + rows + "</tbody></table></div>" +
+      '<p class="muted" style="margin-top:10px">帳務部一個單位、倉儲部與業務助理一個單位，各單位任一人確認即可，修改人所屬單位視為已確認。兩單位都確認後移出清單。超過 24 小時未確認會標示。</p>';
+  }
+  function notifsHtml() {
+    var list = L.myNotifs(S), unread = list.filter(function (n) { return n.read.indexOf(S.operator) < 0; });
+    if (!list.length) return "";
+    var rows = list.slice(0, 6).map(function (n) {
+      var un = n.read.indexOf(S.operator) < 0;
+      return '<div class="notif' + (un ? " unread" : "") + '"><i></i><div><b>' + esc(n.title) + "</b><span>" + esc(n.text) + '</span></div><small>' + esc(n.ts.slice(5, 16)) + "</small>" +
+        (n.ref ? '<button class="btn btn-sm" data-act="notif-open" data-id="' + n.id + '" data-report="' + esc(n.ref) + '">查看</button>' : "") + "</div>";
+    }).join("");
+    return card("NOTICE", "通知" + (unread.length ? "（" + unread.length + " 則未讀）" : ""), rows, unread.length ? '<button class="btn btn-sm" data-act="notif-all">全部標為已讀</button>' : "");
+  }
+
+  // ---- 送出前檢查 ----
+  function openSubmitCheck() {
+    var d = draftPayload(), dealer = L.isDealer(S);
+    var fake = { hospital: d.hospital, main: d.main, screws: d.screws };
+    var items = d.main.concat(d.screws);
+    if (!items.length) return toast("先加入品項", true);
+    openDialog("送出前檢查", function () {
+      var kv = [["刀表", L.tableOf(S, fake) + "刀表"], ["報刀來源", dealer ? "經銷商報刀" : L.role(S) === "帳務部" ? "內部報刀（帳務代業務報刀）" : "內部報刀"], ["手術日期", d.date], ["醫院", L.locName(S, d.hospital)], ["醫師", d.doctor]]
+        .concat(dealer ? [] : [["刀別", d.shift]]).concat([["病人姓名", d.patient], ["病例號", d.mrn || "—"]])
+        .concat(dealer ? [] : [["業務人員", L.role(S) === "業務" ? S.operator : d.rep || "（未選）"], ["送器械人員", d.deliverer || "—"], ["扣庫來源", L.locName(S, d.loc)]]).concat([["報刀備註", d.note || "—"]]);
+      return '<dl class="kv">' + kv.map(function (x) { return "<dt>" + esc(x[0]) + "</dt><dd>" + esc(x[1]) + "</dd>"; }).join("") + "</dl>" +
+        tbl(["產品編號", "品名", "批號", "數量", ""], items.map(function (it) { return '<tr><td class="code">' + esc(it.sku) + "</td><td>" + esc(pName(it.sku)) + '</td><td class="code">' + esc(it.lot || "—") + '</td><td class="num">' + it.qty + "</td><td>" + (it.scrap ? '<span class="badge scrap">報廢</span>' : "") + "</td></tr>"; }).join("")) +
+        '<div class="row" style="margin-top:16px;justify-content:flex-end"><button class="btn" data-close>返回修改</button><button class="btn btn-primary" data-act="submit-confirm">確認送出</button></div>';
     });
+  }
+
+  // ---- 單筆報刀紀錄 ----
+  function openReport(id) {
+    var r0 = L.report(S, id);
+    if (!r0) return toast("找不到這張報刀單", true);
+    RE = null;
+    openDialog("報刀紀錄", function () { return reportRecordHtml(id); }, true);
+  }
+  function reportRecordHtml(id) {
+    var r = L.report(S, id), owner = L.isOwner(S, r), staff = can("report_status"), dealer = r.src === "經銷商";
+    var canEdit = !r.deleted && (owner || staff);
+    var head = '<div class="rec-head">' + tableTag(r) + '<span class="badge">' + esc(r.src) + "報刀" + (r.proxy ? "・帳務代報" : "") + '</span><span class="badge ' + r.status + '">' + L.STATUS[r.status] + "</span>" + flagBadges(r) +
+      (r.deleted ? '<span class="badge expired">已刪除</span>' : "") + '<span class="muted">提交時間 ' + esc(r.createdAt.slice(0, 16)) + "（系統記錄）</span></div>" +
+      (r.deleted ? '<div class="note-red">此報刀已於 ' + esc(r.delInfo.at.slice(0, 16)) + " 由 " + esc(r.delInfo.by) + " 刪除；原因：" + esc(r.delInfo.reason) + "。以下為刪除前的內容。</div>" : "");
+    var main;
+    if (RE) {
+      var f = function (k, label, type) {
+        if (k === "shift") return '<label class="field">' + label + '<select data-bind="re-shift">' + options(L.SHIFTS.map(function (x) { return { v: x, t: x }; }), RE.shift) + "</select></label>";
+        return '<label class="field">' + label + '<input data-bind="re-' + k + '"' + (type ? ' type="' + type + '"' : "") + ' value="' + esc(RE[k] || "") + '"></label>';
+      };
+      main = '<form data-form="re" data-id="' + esc(r.id) + '"><div class="grid">' + f("date", "手術日期", "date") + f("doctor", "醫師") + (dealer ? "" : f("shift", "刀別")) + f("patient", "病人姓名") + f("mrn", "病例號") + (dealer ? "" : f("deliverer", "送器械人員")) +
+        '<label class="field wide">報刀備註<input data-bind="re-note" value="' + esc(RE.note || "") + '"></label></div>' +
+        (owner && !staff && r.src === "內部" ? '<p class="note-amber">儲存後會列入異動待確認，由帳務部與倉儲部／業務助理確認；業務送出後自行修改，系統會自動標記「報錯」（只補上待補病人資料或改備註不算）。</p>' : '<p class="muted">儲存後列入異動待確認（只改備註、補病人資料除外）。</p>') +
+        '<div class="row" style="margin-top:10px"><button type="button" class="btn" data-act="re-cancel">取消</button><button class="btn btn-primary">儲存</button></div></form>';
+    } else {
+      main = '<dl class="kv"><dt>手術日期</dt><dd>' + esc(r.date) + "</dd><dt>醫院</dt><dd>" + esc(L.locName(S, r.hospital)) + "</dd><dt>醫師</dt><dd>" + esc(r.doctor) + "</dd>" +
+        (dealer ? "<dt>經銷商</dt><dd>" + esc(r.dealer) + "</dd>" : "<dt>刀別</dt><dd>" + esc(r.shift || "—") + "</dd>") +
+        "<dt>病人姓名</dt><dd>" + esc(r.patient || "") + (r.patient === L.PT_TBD ? ' <span class="badge draft">待補</span>' : "") + "</dd><dt>病例號</dt><dd>" + esc(r.mrn || "—") + "</dd>" +
+        (dealer ? "" : "<dt>業務人員</dt><dd>" + esc(r.rep || "—") + "</dd><dt>送器械人員</dt><dd>" + esc(r.deliverer || "—") + "</dd><dt>扣庫來源</dt><dd>" + esc(L.locName(S, r.loc)) + "</dd>") +
+        "<dt>報刀備註</dt><dd>" + esc(r.note || "—") + "</dd></dl>";
+    }
+    var sec = function (t, body, right) { return '<section class="rec-sec"><div class="rec-sec-h"><b>' + t + "</b>" + (right || "") + "</div>" + body + "</section>"; };
+    var items = L.reportItems(r).map(function (it) {
+      return '<tr><td class="code">' + esc(it.sku) + "</td><td>" + esc(pName(it.sku)) + '</td><td class="code">' + esc(it.lot || "—") + '</td><td class="num">' + it.qty + "</td><td>" + (it.scrap ? '<span class="badge scrap">報廢</span>' : "") + "</td></tr>";
+    }).join("");
+    var u = L.unitsOf(S, r);
+    var statusBox = dealer ? "" : sec("報刀狀況與使用台數", '<div class="rec-line"><span>報刀狀況</span>' + flagBadges(r) + (r.flags.length ? '<small class="muted">' + esc(r.flags.map(function (x) { return x.t + "：" + x.n; }).join("；")) + "</small>" : "") + "</div>" +
+      '<div class="rec-line"><span>使用台數</span><b>' + (u == null ? "—" : u) + " 台</b>" + (r.units != null ? '<small class="muted">人工修改（系統判斷 ' + L.unitsAuto(S, r) + "）</small>" : '<small class="muted">鐿鈦：有骨板 1 台，只有骨釘 0 台；綜合：使用數量</small>') + "</div>" +
+      (staff && !r.deleted ? '<form data-form="flags" data-id="' + esc(r.id) + '" class="grid" style="margin-top:10px"><label class="field">更改報刀狀況<select name="to">' + options(L.FLAG_STATES.map(function (x) { return { v: x, t: x }; }), L.flagText(r).replace("不適用", "正常")) + "</select></label>" +
+        '<label class="field">錯誤類型<select name="type">' + options(L.ERROR_TYPES.map(function (x) { return { v: x, t: x }; }), L.ERROR_TYPES[3]) + '</select></label><label class="field wide">更改原因（必填）<input name="reason" placeholder="例如：醫院臨時退回 2 支，非業務報錯"></label>' +
+        '<div class="field">&nbsp;<button class="btn btn-sm">更改報刀狀況</button></div></form>' +
+        '<form data-form="units" data-id="' + esc(r.id) + '" class="grid"><label class="field">使用台數<input name="units" type="number" min="0" step="0.5" value="' + (u == null ? 0 : u) + '"></label><label class="field wide">原因（選填）<input name="reason" placeholder="例如：同一台手術拆成兩筆報刀"></label>' +
+        '<div class="field">&nbsp;<button class="btn btn-sm">修改台數</button></div></form><p class="muted">更改後通知主管、負責人，並記在修改歷程。使用台數用於業務獎金（由業務助理匯出計算）。</p>' : ""));
+    var hist = (r.history || []).map(function (h) {
+      return '<div class="hist"><div class="hist-h"><b>' + esc(h.user) + '</b><small>' + esc(h.role || "") + '</small><span class="badge">' + esc(h.sec) + "</span><small>" + esc(String(h.ts).slice(0, 16)) + "</small></div>" +
+        h.ch.map(function (c) { return '<div class="hist-c"><span>' + esc(c[0]) + '</span><span class="old">' + esc(c[1]) + '</span><span>→</span><span class="new">' + esc(c[2]) + "</span></div>"; }).join("") + "</div>";
+    }).join("");
+    var actions = '<div class="row" style="margin-top:6px">' + (r.status === "pending" && !r.deleted && can("report_approve") ? '<button class="btn btn-primary btn-sm" data-act="approve" data-id="' + r.id + '">' + (dealer ? "確認" : "確認並扣庫") + "</button>" : "") +
+      (owner && !r.deleted && r.status !== "approved" ? '<button class="btn btn-danger btn-sm" data-act="del-report" data-id="' + r.id + '">刪除報刀</button>' : "") + "</div>";
+    return head + actions +
+      sec("手術主紀錄", main, canEdit && !RE ? '<button class="btn btn-sm" data-act="re-edit" data-id="' + r.id + '">✎ 修改</button>' : RE ? '<span class="badge draft">修改中</span>' : "") +
+      sec("產品明細", tbl(["產品編號", "品名", "批號", "數量", ""], items) + '<p class="muted">報廢另計，不含在使用數量內。產品明細的修改（增刪骨釘列、數量）待會議確認規則後開放。</p>') +
+      statusBox + (r.docs || r.status === "approved" ? sec("產生的單據", reportDocsHtml(r)) : "") +
+      sec("修改歷程（" + (r.history || []).length + " 筆）", hist || '<div class="empty">沒有紀錄</div>');
   }
 
   function platesMatrix() {
@@ -1016,14 +1158,14 @@
   // ---------------- 介紹 ----------------
   var FLOW = [
     { lane: 0, t: "報刀", d: "醫院、醫師、用了哪些品項與批號" },
-    { lane: 1, t: "審核", d: "通過，或退回請業務修改" },
+    { lane: 1, t: "倉儲確認", d: "確認批號；修改進異動待確認" },
     { lane: 2, t: "借出還回", d: "寄庫扣庫，批號和報刀一致" },
     { lane: 2, t: "銷貨憑單", d: "金流單，自動產生並入帳" },
     { lane: 1, t: "補貨借出", d: "出貨檢查後過帳，補回醫院" },
     { lane: 1, t: "訂單審核表", d: "FR17-02 每月自動彙整列印" },
     { lane: 1, t: "登記收款", d: "沖銷應收，帳齡自動更新" }
   ];
-  var LANES = ["業務", "內勤", "系統自動"];
+  var LANES = ["業務／經銷商", "內勤", "系統自動"];
   function flowSvg() {
     var X0 = 96, STEP = 146, NW = 134, NH = 66, LH = 104, LY = 16, W = 1116, H = LY + LH * 3 + 78;
     var cy = function (lane) { return LY + LH * lane + LH / 2; };
@@ -1055,7 +1197,7 @@
   }
 
   var FEATURES = [
-    ["report", "報刀", "業務在手機上報，只報用到的品項。骨釘直接在盒子上點格子，批號跟著帶出。內勤審核後才扣庫。"],
+    ["report", "報刀", "照你們 v34 的流程：刀別、病人與病例號、送器械人員、送出前檢查；晚報與報錯自動標記，可人工更改並留原因；送出後修改列入異動待確認，由帳務部與倉儲部／業務助理確認；逐欄位修改歷程；使用台數；經銷商報刀。骨釘直接在盒子上點格子。"],
     ["stock", "庫存與骨釘盒", "公司倉、醫院寄庫、業務移動庫存分開看，公司的可以立即調動。骨釘盒可自訂排列，像座位圖一樣一格一格看。有效期警示、位置地圖、最新異動帳。"],
     ["docs", "GDP 單據", "進貨憑單含收貨檢查與溫度；借出憑單（寄庫）出貨檢查後過帳；報刀審核自動開借出還回單，批號和報刀一致。每月 FR17-02 訂單審核表直接列印，不用再從正航匯出貼 Excel。低於安全庫存時提醒並產生訂購單。"],
     ["sales", "銷貨憑單", "對應正航的銷貨憑單：客戶、明細、稅額。覆核後出貨扣庫，並可開立發票。"],
@@ -1065,7 +1207,7 @@
     ["settings", "權限與設定", "角色對應功能可自行調整，例如業務看不到任何金額。醫院、業務移動庫存、客戶都能自己新增，也能新增產品別（例如 PRP）並自訂欄位，業務就能報這個產品。"]
   ];
   var COMPARE = [
-    ["報刀", "業務傳 Excel 或訊息，內勤再重打一次", "業務自己報，內勤審核，資料不用重打"],
+    ["報刀", "業務傳 Excel 或訊息，內勤再重打一次", "業務自己報，送出後修改會留下前後紀錄並由兩個單位確認"],
     ["庫存", "寄庫、業務庫存、公司庫存分散在不同檔案", "同一份帳，分位置顯示，骨釘盒看得到每一格"],
     ["GDP 單據", "正航開借出、還回、銷貨，每月匯出貼 Dropbox 的 Excel 再列印", "報刀審核就產生借出還回單與銷貨憑單；訂單審核表直接印"],
     ["銷貨與帳", "資料整理後再轉進正航，另外對帳", "憑單覆核即扣庫、開票、入帳"],
@@ -1083,9 +1225,9 @@
 
   function renderIntro() {
     var hero = '<section class="intro-hero"><div class="eyebrow">AMAD Labs · DEMO</div><h2>從刀房到帳本，同一份資料</h2>' +
-      '<p>業務在醫院報刀，內勤審核，庫存自動扣、銷貨憑單、發票、傳票、應收跟著走，批號隨時查得到去向。取代現在的 Excel 加正航的來回整理。</p>' +
+      '<p>業務在醫院報刀，倉儲確認，庫存自動扣、銷貨憑單、發票、傳票、應收跟著走，批號隨時查得到去向。取代現在的 Excel 加正航的來回整理。</p>' +
       '<div class="row"><button class="btn btn-primary" data-act="intro-as" data-name="業務-小胖" data-tab="report">以業務身分報一張刀</button>' +
-      '<button class="btn" data-act="intro-as" data-name="內勤-小美" data-tab="todo">以內勤身分審核</button>' +
+      '<button class="btn" data-act="intro-as" data-name="倉儲-小芳" data-tab="todo">以倉儲身分確認</button>' +
       '<button class="btn" data-act="intro-go" data-tab="stock">看庫存與地圖</button></div></section>';
 
     var flow = card("FLOW", "一張單怎麼走", '<div class="flow-wrap">' + flowSvg() + "</div>" + flowList() +
@@ -1104,7 +1246,8 @@
       '<p class="muted" style="margin-top:10px">系統提供的是紀錄與管制的工具。GDP 認證還需要文件化的 SOP 與稽核，不是裝了系統就通過。這個示範版資料存在瀏覽器；正式版會放在伺服器的資料庫。</p>');
 
     var tour = card("TRY", "三分鐘體驗", '<ol class="tour"><li><b>業務報刀</b><span>以「業務-小胖」報一張刀，選醫院、醫師，加骨板，再到骨釘盒點用掉的格子。</span></li>' +
-      '<li><b>內勤審核</b><span>換成「內勤-小美」，在待辦審核通過，庫存自動扣。</span></li>' +
+      '<li><b>倉儲確認</b><span>換成「倉儲-小芳」，在待辦按「確認並扣庫」：寄庫扣庫，並自動產生借出還回單、銷貨憑單與補貨借出草稿。</span></li>' +
+      '<li><b>送出後修改</b><span>換回「業務-小胖」開啟自己的報刀改醫師或刀別：系統標記報錯、列入異動待確認；再用「帳務-小美」確認。</span></li>' +
       '<li><b>回頭查</b><span>到「庫存」的「最新異動」看到剛剛那筆扣庫，點「報刀單」回到來源；再到「追溯」查批號。</span></li></ol>' +
       '<p class="muted">所有資料都是示範用的假資料，隨時可以在「設定」重設。</p>');
     return hero + flow + feats + '<div class="stat-grid intro-two">' + cmp + gdp + "</div>" + tour;
@@ -1183,7 +1326,7 @@
     var custRows = S.customers.map(function (c) { return '<tr><td class="code">' + esc(c.code) + "</td><td>" + esc(c.name) + "</td><td>" + esc(c.addr) + "</td><td>" + esc(c.contact) + "</td></tr>"; }).join("");
 
     var userRows = S.users.map(function (u) {
-      return "<tr><td>" + esc(u.name) + '</td><td><select class="cellinput" data-act="user-role" data-name="' + esc(u.name) + '"' + (admin && u.name !== "管理員" ? "" : " disabled") + ">" + options(L.ROLES.map(function (r) { return { v: r, t: r }; }), u.role) + "</select></td></tr>";
+      return "<tr><td>" + esc(u.name) + '</td><td><select class="cellinput" data-act="user-role" data-name="' + esc(u.name) + '"' + (admin ? "" : " disabled") + ">" + options(L.ROLES.map(function (r) { return { v: r, t: r }; }), u.role) + "</select></td></tr>";
     }).join("");
 
     var lastGroup = null;
@@ -1191,8 +1334,8 @@
       var head = c[2] !== lastGroup ? '<tr class="group"><td colspan="4">' + esc(c[2]) + "</td></tr>" : "";
       lastGroup = c[2];
       return head + "<tr><td>" + esc(c[1]) + "</td>" + L.ROLES.map(function (r) {
-        var fixed = r === "管理員" || c[0] === "manage_perms";
-        var on = r === "管理員" || (c[0] !== "manage_perms" && !!(S.perms[r] && S.perms[r][c[0]]));
+        var fixed = r === L.OWNER || c[0] === "manage_perms";
+        var on = r === L.OWNER || (c[0] !== "manage_perms" && !!(S.perms[r] && S.perms[r][c[0]]));
         return '<td><input type="checkbox" data-act="perm" data-role="' + r + '" data-cap="' + c[0] + '"' + (on ? " checked" : "") + (admin && !fixed ? "" : " disabled") + "></td>";
       }).join("") + "</tr>";
     }).join("");
@@ -1355,7 +1498,8 @@
     if (!el || el.tagName === "INPUT" || el.tagName === "SELECT") return;
     var a = el.getAttribute("data-act"), g = function (k) { return el.getAttribute("data-" + k); };
 
-    if (a === "add-main") {
+    if (a === "add-main" && L.isDealer(S)) { D.main.push({ sku: L.sellable(S)[0].sku, lot: "", qty: 1, scrap: false }); render(); }
+    else if (a === "add-main") {
       var first = L.sellable(S).filter(function (p) { return usableLines(D.loc, p.sku).length; })[0];
       if (!first) return toast("這個扣庫來源沒有可用的庫存", true);
       D.main.push({ sku: first.sku, lot: usableLines(D.loc, first.sku)[0].lot, qty: 1, scrap: false });
@@ -1378,7 +1522,7 @@
       D.picks.splice(+g("idx"), 1);
       render();
         } else if (a === "rep-filter") { repFilter = g("v"); render(); }
-    else if (a === "approve") run(function () { L.approveReport(S, g("id")); }, "已審核：已扣庫，並產生借出還回單、銷貨憑單與補貨借出草稿");
+    else if (a === "approve") run(function () { var ar = L.approveReport(S, g("id")); if (dlg.open && refreshDlg) refreshDlg(); return ar; }, "已確認：已扣庫，並產生借出還回單、銷貨憑單與補貨借出草稿");
     else if (a === "reject") {
       var why = window.prompt("退回原因（可留空）");
       if (why !== null) run(function () { L.rejectReport(S, g("id"), why); }, "已退回");
@@ -1567,7 +1711,7 @@
     e.preventDefault();
     var v = function (n) { return e.target.elements[n].value; };
     if (f === "report") {
-      if (run(function () { L.submitReport(S, draftPayload()); }, "已送出，等內勤審核")) D = newDraft();
+      openSubmitCheck();
     } else if (f === "sales") {
       run(function () { SD = deepCopy(L.saveSales(S, SD)); }, "憑單已儲存");
     } else if (f === "inbound") {
@@ -1680,6 +1824,59 @@
     if (tip && !tip.hidden) placeTip(e, tip);
   });
 
+  document.addEventListener("click", function (e) {
+    var el = e.target.closest && e.target.closest("[data-act]");
+    if (!el) return;
+    var a = el.getAttribute("data-act"), g = function (k) { return el.getAttribute("data-" + k); };
+    if (a === "submit-confirm") {
+      if (run(function () { L.submitReport(S, draftPayload()); }, "已送出報刀，已通知帳務部、倉儲部、業務助理")) { D = newDraft(); closeDialog(); render(); }
+    } else if (a === "re-edit") {
+      var r = L.report(S, g("id"));
+      RE = { date: r.date, doctor: r.doctor, shift: r.shift, patient: r.patient, mrn: r.mrn, deliverer: r.deliverer, note: r.note };
+      refreshDlg();
+    } else if (a === "re-cancel") { RE = null; refreshDlg(); }
+    else if (a === "confirm-change") run(function () { var c = L.confirmChange(S, g("id")); toast(c.done ? "兩個單位都已確認，已移出清單" : "已確認，等待另一個單位"); });
+    else if (a === "del-report") {
+      var why = window.prompt("刪除原因（必填）");
+      if (why !== null && run(function () { L.deleteReport(S, g("id"), why); }, "已刪除，已通知各部門")) refreshDlg && refreshDlg();
+    } else if (a === "notif-open") { L.markRead(S, g("id")); L.save(S); render(); openReport(g("report")); }
+    else if (a === "notif-all") run(function () { L.markRead(S, null); });
+  });
+  document.addEventListener("input", function (e) {
+    var t = e.target, b = t.getAttribute && t.getAttribute("data-bind");
+    if (!b) return;
+    if (b.indexOf("re-") === 0 && RE) RE[b.slice(3)] = t.value;
+    else if (b === "r-patient") D.patient = t.value;
+    else if (b === "r-mrn") D.mrn = t.value;
+    else if (b === "r-deliverer") D.deliverer = t.value;
+    else if (b === "main-lotx") D.main[+t.getAttribute("data-i")].lot = t.value;
+  });
+  document.addEventListener("change", function (e) {
+    var t = e.target, b = t.getAttribute && t.getAttribute("data-bind");
+    if (b === "r-shift") D.shift = t.value;
+    else if (b === "r-rep") D.rep = t.value;
+    else if (b === "re-shift" && RE) RE.shift = t.value;
+  });
+  document.addEventListener("submit", function (e) {
+    var f = e.target.getAttribute && e.target.getAttribute("data-form"), id = e.target.getAttribute && e.target.getAttribute("data-id");
+    if (f === "re") {
+      e.preventDefault();
+      var res = run(function () { return L.editReport(S, id, RE); });
+      if (res) {
+        RE = null; refreshDlg();
+        toast(!res.changed ? "沒有變更" : res.flagged ? "已儲存，列入異動待確認；系統已標記為報錯" : res.pending ? "已儲存，列入異動待確認" : "已儲存（不需確認）");
+      }
+    } else if (f === "flags") {
+      e.preventDefault();
+      var el = e.target.elements;
+      if (run(function () { L.setReportFlags(S, id, el.to.value, el.type.value, el.reason.value); }, "已更改報刀狀況，已通知主管、負責人")) refreshDlg();
+    } else if (f === "units") {
+      e.preventDefault();
+      var el2 = e.target.elements;
+      if (run(function () { L.setUnits(S, id, Number(el2.units.value), el2.reason.value.trim()); }, "已更新使用台數，已通知主管、負責人")) refreshDlg();
+    }
+  });
+
   // ---------------- GDP 單據 ----------------
   var COMPANY = { name: "禾翔醫藥生技有限公司", tel: "04-0000-0000", fax: "04-0000-0001", taxId: "00000000" };
   function docSource(d) {
@@ -1688,12 +1885,13 @@
   }
   function docParty(d) { return d.type === "in" ? d.vendor : L.locName(S, d.type === "lend" ? d.to : d.from); }
   function reportDocsHtml(r) {
-    if (!r.docs) return r.status === "approved" ? '<p class="muted" style="margin-top:12px">這張是系統上線前的歷史資料，沒有對應單據。</p>' : "";
+    if (r.src === "經銷商") return '<p class="muted">經銷商自有貨，不產生公司單據。</p>';
+    if (!r.docs) return r.status === "approved" ? '<p class="muted">這張是系統上線前的歷史資料，沒有對應單據。</p>' : "";
     var x = r.docs, b = [];
     if (x.ret && L.doc(S, x.ret)) b.push('<button class="btn btn-sm" data-act="open-doc" data-id="' + x.ret + '">借出還回單 ' + esc(L.doc(S, x.ret).no) + "</button>");
     if (x.sales) b.push('<button class="btn btn-sm" data-act="open-sales" data-id="' + x.sales + '"' + (can("sales_view") ? "" : " disabled") + ">銷貨憑單</button>");
     if (x.lend && L.doc(S, x.lend)) { var ld = L.doc(S, x.lend); b.push('<button class="btn btn-sm" data-act="open-doc" data-id="' + x.lend + '">補貨借出 ' + esc(ld.no) + "（" + L.DOC_STATUS[ld.status] + "）</button>"); }
-    return '<h4 style="margin-top:16px">產生的單據</h4><div class="row">' + b.join("") + "</div>" +
+    return '<div class="row">' + b.join("") + "</div>" +
       (x.short && x.short.length ? '<p class="muted" style="margin-top:8px">公司倉不足，沒有列入補貨：' + x.short.map(esc).join("、") + "</p>" : "");
   }
   function monthsBack(n) {
