@@ -593,3 +593,25 @@ select { max-width: 100%; text-overflow: ellipsis; }
   .side { overflow-y: auto; gap: 16px; }
   .nav button { padding: 8px 12px; }
 }
+
+/* 報刀 form per 刀表 */
+.rf-help { margin: 8px 0 12px; font-size: 0.86rem; }
+.rf-table select, .rf-table input { min-width: 0; }
+.rf-table td { vertical-align: middle; }
+.hosp-pick { display: flex; gap: 6px; align-items: center; }
+.hosp-pick select { flex: 1; min-width: 0; }
+.btn.star { min-width: 38px; font-size: 1rem; }
+.btn.star.on { color: #d97706; }
+.lot-fill { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 8px 14px; margin-top: 10px; padding: 10px 12px; border: 1px dashed var(--accent); border-radius: 10px; background: var(--accent-soft); }
+.lot-fill > b { width: 100%; }
+.rep-filters { margin-bottom: 12px; }
+.nhi-alert { border-color: #dc2626; }
+.nhi-alert h2 { color: #dc2626; }
+.nhi-alert .row { padding: 6px 0; border-bottom: 1px solid var(--line); }
+.badge.src-dl { border-style: dashed; }
+.badge.src-nhi { color: #b91c1c; }
+textarea { width: 100%; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--ink); font: inherit; }
+.rf-table [data-bind="rf-p-sku"], .rf-table [data-bind="rf-c-sku"] { min-width: 190px; }
+.rf-table [data-bind="rf-s-series"] { min-width: 170px; }
+.rf-table [data-bind="rf-s-len"] { min-width: 96px; }
+.rf-table [data-bind$="-lot"] { min-width: 150px; }

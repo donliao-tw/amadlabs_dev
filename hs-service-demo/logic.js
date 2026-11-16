@@ -4,7 +4,7 @@
 })(typeof self !== "undefined" ? self : this, function () {
   "use strict";
 
-  var KEY = "hs-service-demo-v11";
+  var KEY = "hs-service-demo-v12";
   var VERSION = 6;
   // The client's seven roles (spec v34). 負責人 holds everything, including the permission matrix.
   var ROLES = ["業務", "經銷商", "倉儲部", "業務助理", "帳務部", "主管", "負責人", "系統管理員"];
@@ -575,24 +575,48 @@
   var SHIFTS = ["日刀", "夜刀"];
   var PT_TBD = "待補病人資料";
   function isDealer(S) { return role(S) === "經銷商"; }
+  var TABLES = ["鐿鈦", "綜合", "北榮"];
+  function isBV(S, locId) { return /北榮/.test(locName(S, locId)); }
+  // A 綜合 product whose category has a 容量 field (PRP) is billed by what was bought but counted by what was used.
+  function capOf(S, p) {
+    if (!p || p.kind !== "custom") return 0;
+    var cat = category(S, p.cat), f = cat && cat.fields.filter(function (x) { return /容量/.test(x.label); })[0];
+    return f ? Number(p.attrs && p.attrs[f.key]) || 0 : 0;
+  }
+  function methodOf(S, sku) { return capOf(S, product(S, sku)) === 10 ? "門診" : "手術"; }
   function submitReport(S, d) {
     need(S, "report_submit");
     var dealer = isDealer(S);
+    var table = TABLES.indexOf(d.table) >= 0 ? d.table : "鐿鈦";
+    var sub = table === "北榮" ? (d.sub === "綜合" ? "綜合" : "鐿鈦") : table;
+    var nhi = !dealer && d.src === "健保貨";
+    if (nhi && (role(S) !== "帳務部" || table !== "鐿鈦")) throw new Error("健保貨只能由帳務部在鐿鈦刀表新增");
+    if (table === "北榮" && !isBV(S, d.hospital)) throw new Error("北榮刀表的醫院固定是北榮");
+    if (table !== "北榮" && isBV(S, d.hospital)) throw new Error("醫院是北榮，請改選北榮刀表");
+    var boneTable = sub === "鐿鈦";
     if (!d.date) throw new Error("請填手術日期");
     if (d.date > ymd(new Date())) throw new Error("手術日期不可晚於今天");
     if (!location(S, d.hospital)) throw new Error("請選醫院");
     if (!String(d.doctor || "").trim()) throw new Error("請填醫師");
     if (!String(d.patient || "").trim()) throw new Error("請填病人姓名（還不知道可填「" + PT_TBD + "」）");
-    if (!dealer && SHIFTS.indexOf(d.shift) < 0) throw new Error("請選刀別");
-    if (!dealer && !location(S, d.loc)) throw new Error("請選扣庫來源");
+    var withShift = table === "鐿鈦" && !dealer && !nhi;
+    if (withShift && SHIFTS.indexOf(d.shift) < 0) throw new Error("請選刀別");
+    if (!dealer && !nhi && !location(S, d.loc)) throw new Error("請選扣庫來源");
     var rep = role(S) === "業務" ? S.operator : String(d.rep || "").trim();
-    if (!dealer && !rep) throw new Error("代業務報刀請選業務人員");
+    if (!dealer && !nhi && !rep) throw new Error("代業務報刀請選業務人員");
     var items = d.main.concat(d.screws);
     if (!items.length) throw new Error("至少要有一個品項");
     var seen = {};
     items.forEach(function (it) {
-      if (!product(S, it.sku)) throw new Error("品項不存在：" + it.sku);
-      if (!it.lot && !dealer) throw new Error("品項缺批號：" + it.sku);
+      var pp = product(S, it.sku);
+      if (!pp) throw new Error("品項不存在：" + it.sku);
+      if (boneTable && pp.kind === "custom") throw new Error(sub + "刀表只報骨板、骨釘；" + pp.name + " 請改用綜合" + (table === "北榮" ? "品項" : "刀表"));
+      if (!boneTable && pp.kind !== "custom") throw new Error("綜合" + (table === "北榮" ? "品項" : "刀表") + "不報骨板、骨釘");
+      if (pp.kind === "plate" && !it.scrap && !(Number(it.holes) > 0)) throw new Error("骨板要填洞數：" + pp.name);
+      if (capOf(S, pp) && !dealer) {
+        if (!product(S, it.useSku) || !capOf(S, product(S, it.useSku))) throw new Error(pp.name + " 要選使用型號");
+        if (!(Number(it.useQty) >= 0) || Math.floor(Number(it.useQty)) !== Number(it.useQty)) throw new Error(pp.name + " 要填使用數量（未使用填 0）");
+      }
       if (!posInt(it.qty)) throw new Error("數量必須是正整數：" + it.sku);
       if (it.slots) {
         if (it.slots.length !== it.qty) throw new Error("格子數與數量不一致：" + it.sku);
@@ -609,17 +633,33 @@
     });
     var r = {
       id: uid("R"), date: d.date, hospital: d.hospital, doctor: String(d.doctor).trim(),
-      shift: dealer ? null : d.shift, patient: String(d.patient).trim(), mrn: String(d.mrn || "").trim(), deliverer: dealer ? "" : String(d.deliverer || "").trim(),
-      rep: dealer ? "" : rep, src: dealer ? "經銷商" : "內部", dealer: dealer ? S.operator : "", proxy: role(S) === "帳務部",
-      loc: dealer ? null : d.loc, note: d.note || "", status: "pending", flags: [], units: null, history: [],
-      main: d.main.map(function (x) { return { sku: x.sku, lot: x.lot || "", qty: x.qty, scrap: !!x.scrap }; }),
+      table: table, sub: sub, dept: table === "綜合" ? String(d.dept || "").trim() : "",
+      shift: withShift ? d.shift : null, patient: String(d.patient).trim(), mrn: String(d.mrn || "").trim(), deliverer: withShift ? String(d.deliverer || "").trim() : "",
+      rep: dealer ? "" : rep, src: dealer ? "經銷商" : nhi ? "健保貨" : "內部", dealer: dealer ? S.operator : "", proxy: role(S) === "帳務部" && !nhi, whNote: "",
+      loc: dealer || nhi ? null : d.loc, note: d.note || "", status: "pending", flags: [], units: null, history: [],
+      main: d.main.map(function (x) {
+        var pp = product(S, x.sku), o = { sku: x.sku, lot: x.lot || "", qty: x.qty, scrap: !!x.scrap };
+        if (pp && pp.kind === "plate") o.holes = Number(x.holes) || 0;
+        if (pp && pp.kind === "custom") {
+          var cap = capOf(S, pp);
+          o.useSku = cap && !dealer ? x.useSku : x.sku;
+          o.useQty = cap && !dealer ? Number(x.useQty) : x.qty;
+          o.method = methodOf(S, x.sku);
+        }
+        return o;
+      }),
       screws: d.screws.map(function (x) { return { sku: x.sku, lot: x.lot, qty: x.qty, scrap: !!x.scrap, slots: x.slots ? x.slots.slice() : undefined }; }),
       createdBy: S.operator, createdAt: d.createdAt || nowStr(), reviewedBy: "", reviewedAt: ""
     };
     // 晚報 (provisional rule until 業務助理 supplies the real one): submitted after the day following surgery.
     if (r.src === "內部" && !r.proxy && r.createdAt.slice(0, 10) > shiftDate(r.date, 1)) r.flags.push({ t: "晚報", n: "暫定規則：手術隔天之後才提交（" + r.createdAt.slice(0, 16) + "）" });
-    r.history.push({ ts: r.createdAt, user: S.operator, role: role(S), sec: "建立", ch: [["建立報刀", "—", "主紀錄 1 筆、產品 " + items.length + " 項"]] });
+    r.history.push({ ts: r.createdAt, user: S.operator, role: role(S), sec: "建立", ch: [["建立報刀", "—", r.table + "刀表" + (r.table === "北榮" ? "（" + r.sub + "品項）" : "") + "｜" + r.src + "｜產品 " + items.length + " 項"]] });
     S.reports.unshift(r);
+    if (nhi) {
+      notify(S, ["倉儲部"], "【重要】新增健保貨報刀", locName(S, r.hospital) + " " + r.date.slice(5) + " " + r.patient + "：請安排訂貨或出貨，並在報刀紀錄的倉儲備註記錄（提交人：" + S.operator + "）", r.id);
+      log(S, "報刀送出", "健保貨｜" + r.date + "｜" + locName(S, r.hospital));
+      return r;
+    }
     log(S, "報刀送出", r.date + "｜" + locName(S, r.hospital) + "｜" + r.doctor + "｜" + items.length + " 項");
     notify(S, ["帳務部", "倉儲部", "業務助理"], "新增報刀", tableOf(S, r) + "刀表 " + locName(S, r.hospital) + " " + r.date.slice(5) + " " + r.patient + "（" + r.src + "，提交人：" + S.operator + "）", r.id);
     return r;
@@ -631,14 +671,23 @@
     if (!r) throw new Error("找不到報刀單");
     if (r.status !== "pending") throw new Error("這張單已處理過");
     if (r.deleted) throw new Error("這張報刀已刪除");
-    if (r.src === "經銷商") {
+    if (r.src === "經銷商" || r.src === "健保貨") {
       r.status = "approved"; r.reviewedBy = S.operator; r.reviewedAt = nowStr();
-      r.history.unshift({ ts: nowStr(), user: S.operator, role: role(S), sec: "確認", ch: [["報刀確認", "待確認", "已確認（經銷商自有貨，不扣公司庫存）"]] });
+      r.history.unshift({ ts: nowStr(), user: S.operator, role: role(S), sec: "確認", ch: [["報刀確認", "待確認", r.src === "經銷商" ? "已確認（經銷商自有貨，不扣公司庫存）" : "已確認（健保貨的出貨與扣庫方式待討論）"]] });
       log(S, "報刀確認", "經銷商報刀｜" + r.date + "｜" + locName(S, r.hospital));
       return r;
     }
+    var missing = reportItems(r).filter(function (it) { return !it.lot && !it.slots; });
+    if (missing.length) throw new Error("還有 " + missing.length + " 項沒有批號，請先補批號再確認");
     var byLine = r.main.slice(), slotIds = [];
-    r.screws.forEach(function (it) { if (it.slots) it.slots.forEach(function (sid) { slotIds.push(sid); }); else byLine.push(it); });
+    r.screws.forEach(function (it) {
+      if (!it.slots) {
+        var got = autoSlots(S, r.loc, it);
+        if (got.length < it.qty) throw new Error((product(S, it.sku) ? product(S, it.sku).name : it.sku) + " 在" + locName(S, r.loc) + "的骨釘盒只剩 " + got.length + " 支（批號 " + it.lot + "）");
+        it.slots = got;
+      }
+      it.slots.forEach(function (sid) { slotIds.push(sid); });
+    });
     slotIds.forEach(function (sid) {
       var sl = parseSlot(S, sid);
       if (!sl || !sl.band.fill[sl.i]) throw new Error("有一格骨釘已經被用掉或移走，請退回這張單重新選");
@@ -676,6 +725,7 @@
   // ---------- 報刀：刀表、使用台數、修改與異動確認、報刀狀況、刪除、通知（spec v34） ----------
   // 刀表 follows the client's split: 北榮 by hospital; otherwise 骨板/骨釘 go to 鐿鈦 and other products to 綜合.
   function tableOf(S, r) {
+    if (r.table) return r.table;
     if (/北榮/.test(locName(S, r.hospital))) return "北榮";
     var anyCustom = reportItems(r).some(function (it) { var p = product(S, it.sku); return p && p.kind === "custom"; });
     var anyBone = reportItems(r).some(function (it) { var p = product(S, it.sku); return p && p.kind !== "custom"; });
@@ -689,15 +739,70 @@
       var p = product(S, it.sku);
       if (!p || it.scrap) return;
       if (p.kind === "plate") plate = true;
-      else if (p.kind === "custom") n += it.qty;
+      else if (p.kind === "custom") {
+        // PRP: 使用數量 × (使用型號容量 ÷ 品項容量); other 綜合 items: 使用數量.
+        var cap = capOf(S, p), use = it.useQty != null ? it.useQty : it.qty;
+        n += cap ? use * (capOf(S, product(S, it.useSku)) || cap) / cap : use;
+      }
     });
-    return n + (plate ? 1 : 0);
+    return Math.round((n + (plate ? 1 : 0)) * 100) / 100;
   }
   function unitsOf(S, r) { return r.units != null ? r.units : unitsAuto(S, r); }
   function report(S, id) { return S.reports.filter(function (x) { return x.id === id; })[0] || null; }
   function canSeeReport(S, r) { return can(S, "report_all") || r.createdBy === S.operator || r.rep === S.operator; }
   function visibleReports(S) { return S.reports.filter(function (r) { return canSeeReport(S, r); }); }
   function isOwner(S, r) { return r.createdBy === S.operator || (r.src === "內部" && r.rep === S.operator); }
+
+  // 倉儲部／業務助理 fill in lots the reporter left blank (spec: 批號選填，未填由倉儲部補填) — not an error, no confirmation.
+  function fillLots(S, id, lots) {
+    if (!can(S, "report_approve")) throw new Error("只有倉儲部、業務助理、帳務部可以補批號");
+    var r = report(S, id);
+    if (!r || r.deleted) throw new Error("找不到報刀單");
+    if (r.status !== "pending") throw new Error("已確認的報刀不能再改批號");
+    var items = reportItems(r), ch = [];
+    Object.keys(lots).forEach(function (k) {
+      var it = items[+k], v = String(lots[k] || "").trim();
+      if (!it || it.slots || v === it.lot) return;
+      ch.push(["第 " + (+k + 1) + " 項 " + (product(S, it.sku) ? product(S, it.sku).name : it.sku) + "｜批號", it.lot || "（空白）", v || "（空白）"]);
+      it.lot = v;
+    });
+    if (!ch.length) return r;
+    r.history.unshift({ ts: nowStr(), user: S.operator, role: role(S), sec: "產品明細", ch: ch });
+    notify(S, ["主管", "負責人"], "內勤補填批號", locName(S, r.hospital) + " " + r.date.slice(5) + " " + r.patient + "：" + ch.length + " 項（" + S.operator + "）", r.id);
+    return r;
+  }
+  function setWhNote(S, id, text) {
+    if (["倉儲部", "業務助理"].indexOf(role(S)) < 0 && !isTop(role(S))) throw new Error("倉儲備註由倉儲部、業務助理填寫");
+    var r = report(S, id);
+    if (!r) throw new Error("找不到報刀單");
+    var a = r.whNote || "", b = String(text || "").trim();
+    if (a === b) return r;
+    r.whNote = b;
+    r.history.unshift({ ts: nowStr(), user: S.operator, role: role(S), sec: "倉儲備註", ch: [["倉儲備註", a || "（空白）", b || "（空白）"]] });
+    return r;
+  }
+  function nhiPending(S) { return S.reports.filter(function (r) { return r.src === "健保貨" && !r.deleted && !r.whNote; }); }
+  function favHosp(S) { return (S.favHosp && S.favHosp[S.operator]) || []; }
+  function toggleFavHosp(S, locId) {
+    if (!S.favHosp) S.favHosp = {};
+    var list = favHosp(S).slice(), i = list.indexOf(locId);
+    if (i >= 0) list.splice(i, 1); else list.push(locId);
+    S.favHosp[S.operator] = list;
+    return list;
+  }
+  // Screws reported as rows (使用骨釘＋長度) instead of picked slots: take matching filled slots from the boxes at the source.
+  function autoSlots(S, loc, it) {
+    var out = [];
+    (S.boxes || []).forEach(function (b) {
+      if (b.loc !== loc || (it.lot && b.lot !== it.lot) || isExpired(b.exp)) return;
+      b.bands.forEach(function (band, bi) {
+        band.fill.forEach(function (v, i) {
+          if (v && out.length < it.qty && skuFor(band.name, slotLabel(b, i)) === it.sku) out.push(slotId(b.id, bi, i));
+        });
+      });
+    });
+    return out;
+  }
 
   function notify(S, to, title, text, reportId) {
     if (!S.notifs) S.notifs = [];
@@ -1394,6 +1499,7 @@
     ["中榮", "員基", "鹿基", "彰基", "803", "二基"].forEach(function (n, i) {
       S.locations.push({ id: "h" + i, name: n, type: "hospital" });
     });
+    S.locations.push({ id: "h6", name: "北榮", type: "hospital" });
     S.locations.push({ id: "r0", name: "黃紹翔移動庫存", type: "rep" });
     applyGeoDefaults(S);
 
@@ -1503,7 +1609,7 @@
         date: day, hospital: hid, doctor: docs[i], loc: hid, note: i === 1 ? "補貨：備貨1" : "",
         shift: i === 1 ? "夜刀" : "日刀", patient: ["林O華", "陳O明", PT_TBD][i], mrn: ["0012345", "0098765", ""][i], deliverer: ["小李", "小李", "阿德"][i], rep: reps[i],
         createdAt: i === 2 ? nowStr() : day + (i === 1 ? " 23:40:00" : " 18:20:00"),
-        main: [{ sku: plate.sku, lot: plate.lot, qty: 1 }],
+        table: "鐿鈦", main: [{ sku: plate.sku, lot: i === 2 ? "" : plate.lot, qty: 1, holes: holesOf(product(S, plate.sku)) }],
         screws: [{ sku: slots[0].sku, lot: bx.lot, qty: 1, slots: [slots[0].id] }, { sku: slots[1].sku, lot: bx.lot, qty: 1, scrap: true, slots: [slots[1].id] }]
       });
       if (i < 2) { S.operator = "林旻萱"; approveReport(S, rep.id); }
@@ -1522,8 +1628,17 @@
   function seedDealer(S) {
     var p = S.products.filter(function (x) { return x.kind === "plate"; })[3];
     S.operator = "日釩";
-    submitReport(S, { date: addDays(-2), hospital: "h5", doctor: "許醫師", patient: "張O德", mrn: "1209933", main: [{ sku: p.sku, lot: "", qty: 1 }], screws: [] });
+    submitReport(S, { table: "鐿鈦", date: addDays(-2), hospital: "h5", doctor: "許醫師", patient: "張O德", mrn: "1209933", main: [{ sku: p.sku, lot: "", qty: 1, holes: holesOf(p) }], screws: [] });
+    // a 綜合 PRP case and a 健保貨 case so every kind of report shows up in the demo
+    S.operator = "黃紹翔";
+    submitReport(S, { table: "綜合", date: addDays(-1), hospital: "h0", doctor: "林醫師", dept: "骨科", patient: "吳O玲", mrn: "0076610", loc: "h0", rep: "黃紹翔",
+      main: [{ sku: "PRP-10", lot: "PRP-2605-1", qty: 2, useSku: "PRP-10", useQty: 1 }], screws: [], createdAt: addDays(-1) + " 16:40:00" });
+    S.operator = "張喧婷";
+    submitReport(S, { table: "鐿鈦", src: "健保貨", date: addDays(-1), hospital: "h3", doctor: "李醫師", patient: "林O蘭", mrn: "0156732",
+      main: [{ sku: p.sku, lot: "", qty: 1, holes: holesOf(p) }], screws: [] });
   }
+
+  function holesOf(p) { var m = p && /(\d+)\s*孔/.exec(p.name); return m ? Number(m[1]) : 0; }
 
   function seedHistory(S) {
     var r = rng(77123);
@@ -1542,7 +1657,7 @@
       var main = [], sc = [];
       for (var k = 0, n1 = 1 + Math.floor(r() * 2); k < n1; k++) {
         var p = pl[Math.floor(r() * pl.length)];
-        main.push({ sku: p.sku, lot: lotOf(p.sku), qty: 1, scrap: false });
+        main.push({ sku: p.sku, lot: lotOf(p.sku), qty: 1, scrap: false, holes: holesOf(p) });
       }
       for (var k2 = 0, n2 = Math.floor(r() * 4); k2 < n2 && screws.length; k2++) {
         var sp = screws[Math.floor(r() * screws.length)];
@@ -1553,7 +1668,7 @@
       if (late) fl.push({ t: "晚報", n: "暫定規則：手術隔天之後才提交" });
       if (err) fl.push({ t: "報錯", n: "品項／數量／型號" });
       S.reports.push({ id: uid("R"), date: date, hospital: hosp.id, doctor: docs[Math.floor(r() * docs.length)], loc: hosp.id, note: "", status: "approved",
-        shift: r() < 0.3 ? "夜刀" : "日刀", patient: "病患" + (100 + i), mrn: String(1000000 + Math.floor(r() * 8999999)), deliverer: r() < 0.5 ? "小李" : "阿德", rep: who, src: "內部", dealer: "", flags: fl, units: null,
+        table: "鐿鈦", sub: "鐿鈦", shift: r() < 0.3 ? "夜刀" : "日刀", patient: "病患" + (100 + i), mrn: String(1000000 + Math.floor(r() * 8999999)), deliverer: r() < 0.5 ? "小李" : "阿德", rep: who, src: "內部", dealer: "", flags: fl, units: null,
         history: [{ ts: date + " 09:00:00", user: who, role: "業務", sec: "建立", ch: [["建立報刀", "—", "系統上線前的歷史資料"]] }],
         main: main, screws: sc, createdBy: who, createdAt: (late ? shiftDate(date, 3) : date) + " 09:00:00", reviewedBy: "林旻萱", reviewedAt: date + " 17:00:00" });
     }
@@ -1647,6 +1762,8 @@
     company: company, updateCompany: updateCompany, UNITS: UNITS, productUsage: productUsage, addProduct: addProduct, updateProduct: updateProduct,
     setProductActive: setProductActive, deleteProduct: deleteProduct,
     ROLES: ROLES, OWNER: OWNER, ADMIN: ADMIN, isTop: isTop, CAPS: CAPS, SHIFTS: SHIFTS, PT_TBD: PT_TBD, FLAG_STATES: FLAG_STATES, ERROR_TYPES: ERROR_TYPES, MAIN_FIELDS: MAIN_FIELDS,
+    TABLES: TABLES, isBV: isBV, capOf: capOf, methodOf: methodOf, holesOf: holesOf, fillLots: fillLots, setWhNote: setWhNote, nhiPending: nhiPending,
+    favHosp: favHosp, toggleFavHosp: toggleFavHosp,
     unitOf: unitOf, isDealer: isDealer, tableOf: tableOf, unitsAuto: unitsAuto, unitsOf: unitsOf, report: report, canSeeReport: canSeeReport, visibleReports: visibleReports, isOwner: isOwner,
     myNotifs: myNotifs, markRead: markRead, editReport: editReport, pendingChanges: pendingChanges, confirmChange: confirmChange, flagText: flagText,
     setReportFlags: setReportFlags, setUnits: setUnits, deleteReport: deleteReport, STATUS: STATUS, SALES_STATUS: SALES_STATUS, TAX: TAX, 
