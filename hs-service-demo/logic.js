@@ -4,7 +4,7 @@
 })(typeof self !== "undefined" ? self : this, function () {
   "use strict";
 
-  var KEY = "hs-service-demo-v8";
+  var KEY = "hs-service-demo-v9";
   var VERSION = 6;
   // The client's seven roles (spec v34). 負責人 holds everything, including the permission matrix.
   var ROLES = ["業務", "經銷商", "倉儲部", "業務助理", "帳務部", "主管", "負責人"];
@@ -200,7 +200,7 @@
     return null;
   }
   function categoryProducts(S, id) { return S.products.filter(function (p) { return p.kind === "custom" && p.cat === id; }); }
-  function sellable(S) { return S.products.filter(function (p) { return p.kind !== "screw"; }); }
+  function sellable(S) { return S.products.filter(function (p) { return p.kind !== "screw" && p.active !== false; }); }
   function kindName(S, p) {
     if (!p) return "品項";
     if (p.kind === "screw") return "骨釘";
@@ -407,7 +407,7 @@
   function ensureProduct(S, bandName, label) {
     var sku = skuFor(bandName, label);
     if (!product(S, sku)) {
-      S.products.push({ sku: sku, name: bandName + " " + label, price: 800, group: bandName + " 骨釘", kind: "screw", series: bandName, len: String(label) });
+      S.products.push({ sku: sku, name: bandName + " " + label, price: 800, group: bandName + " 骨釘", kind: "screw", series: bandName, len: String(label), unit: "支", company: "HX", vendor: "示範原廠（骨材）", active: true });
     }
     return sku;
   }
@@ -871,7 +871,7 @@
     need(S, "sales_edit");
     validateSales(S, d);
     var copy = {
-      date: d.date, customer: d.customer, currency: "NTD", taxMode: d.taxMode === "excl" ? "excl" : "incl",
+      date: d.date, customer: d.customer, company: d.company || (S.companies && S.companies[0] ? S.companies[0].id : ""), currency: "NTD", taxMode: d.taxMode === "excl" ? "excl" : "incl",
       salesRep: d.salesRep || "", dept: d.dept || "", note: d.note || "",
       lines: d.lines.map(function (l) { return { sku: l.sku, loc: l.loc, lot: l.lot, qty: l.qty, price: l.price }; })
     };
@@ -912,6 +912,113 @@
     o.invoice = "ZZ" + String(10000000 + n * 37);
     log(S, "開立發票(示範)", o.no + "｜" + o.invoice);
     return o;
+  }
+
+  // ---------- 開票公司（spec v34：禾翔、和祥、晉昇） ----------
+  // Each product says which company invoices it; a 報刀 that mixes companies gets one 銷貨憑單 per company.
+  function company(S, id) {
+    var list = S.companies || [];
+    for (var i = 0; i < list.length; i++) if (list[i].id === id) return list[i];
+    return list[0] || { id: "", short: "", name: "" };
+  }
+  function updateCompany(S, id, d) {
+    need(S, "settings_edit");
+    var c = (S.companies || []).filter(function (x) { return x.id === id; })[0];
+    if (!c) throw new Error("找不到公司");
+    ["name", "short", "tel", "fax", "taxId", "addr"].forEach(function (k) { if (k in d) c[k] = String(d[k] || "").trim(); });
+    if (!c.short || !c.name) throw new Error("公司簡稱與全名不能空白");
+    log(S, "公司資料", c.short + "｜" + c.name);
+    return c;
+  }
+
+  // ---------- 品項主檔 ----------
+  var UNITS = ["PCS", "支", "片", "組", "盒", "瓶"];
+  function productUsage(S, sku) {
+    var u = { stock: 0, lots: 0, reports: 0, sales: 0, docs: 0, boxes: 0 };
+    S.lots.forEach(function (l) { if (l.sku === sku) { u.lots++; u.stock += l.qty; } });
+    S.reports.forEach(function (r) { if (reportItems(r).some(function (it) { return it.sku === sku; })) u.reports++; });
+    S.sales.forEach(function (o) { if (o.lines.some(function (l) { return l.sku === sku; })) u.sales++; });
+    (S.docs || []).forEach(function (d) { if (d.lines.some(function (l) { return l.sku === sku; })) u.docs++; });
+    (S.boxes || []).forEach(function (b) { b.bands.forEach(function (band) { if (b.labels.some(function (lb) { return skuFor(band.name, lb) === sku; })) u.boxes++; }); });
+    u.used = u.lots + u.reports + u.sales + u.docs + u.boxes > 0;
+    return u;
+  }
+  function cleanProduct(S, d, p) {
+    var out = {};
+    var name = String(d.name == null ? (p ? p.name : "") : d.name).trim();
+    if (!name) throw new Error("品名規格必填");
+    out.name = name;
+    var price = d.price == null ? (p ? p.price : 0) : Number(d.price);
+    if (!isFinite(price) || price < 0) throw new Error("單價必須是 0 以上的數字");
+    out.price = price;
+    var safety = d.safety == null || d.safety === "" ? (p && typeof p.safety === "number" ? p.safety : 0) : Number(d.safety);
+    if (!isFinite(safety) || safety < 0 || Math.floor(safety) !== safety) throw new Error("安全庫存要是 0 以上的整數");
+    out.safety = safety;
+    out.vendor = String(d.vendor == null ? (p ? p.vendor || "" : "") : d.vendor).trim();
+    out.unit = String(d.unit || (p && p.unit) || "PCS").trim();
+    var co = d.company || (p && p.company) || (S.companies && S.companies[0] ? S.companies[0].id : "");
+    if (S.companies && S.companies.length && !S.companies.some(function (c) { return c.id === co; })) throw new Error("請選開票公司");
+    out.company = co;
+    return out;
+  }
+  function addProduct(S, d) {
+    need(S, "settings_edit");
+    var sku = String(d.sku || "").trim();
+    if (!sku) throw new Error("產品編號必填");
+    if (/\s/.test(sku)) throw new Error("產品編號不能有空白");
+    if (product(S, sku)) throw new Error("產品編號已存在");
+    var kind = d.kind === "custom" ? "custom" : "plate";
+    var p = cleanProduct(S, d, null);
+    p.sku = sku; p.kind = kind; p.active = true;
+    if (kind === "custom") {
+      var cat = category(S, d.cat);
+      if (!cat) throw new Error("請選產品別");
+      p.cat = cat.id; p.group = cat.name; p.attrs = checkAttrs(cat, d.attrs);
+    } else {
+      p.group = String(d.group || "").trim();
+      if (!p.group) throw new Error("骨板要填分類（例如 橈骨遠端掌側鎖定骨板）");
+    }
+    S.products.push(p);
+    log(S, "新增品項", sku + " " + p.name + "｜" + company(S, p.company).short);
+    return p;
+  }
+  var PRODUCT_LABELS = { name: "品名規格", group: "分類", price: "單價", vendor: "原廠", safety: "安全庫存", unit: "單位", company: "開票公司" };
+  function updateProduct(S, sku, d) {
+    need(S, "settings_edit");
+    var p = product(S, sku);
+    if (!p) throw new Error("找不到品項");
+    var next = cleanProduct(S, d, p);
+    if (p.kind === "plate" && d.group != null) {
+      next.group = String(d.group).trim();
+      if (!next.group) throw new Error("分類不能空白");
+    }
+    var ch = [];
+    Object.keys(next).forEach(function (k) {
+      if (String(p[k] == null ? "" : p[k]) !== String(next[k])) {
+        ch.push(PRODUCT_LABELS[k] + " " + (k === "company" ? company(S, p[k]).short : p[k] == null ? "（空白）" : p[k]) + " → " + (k === "company" ? company(S, next[k]).short : next[k]));
+        p[k] = next[k];
+      }
+    });
+    if (p.kind === "custom" && d.attrs) p.attrs = checkAttrs(category(S, p.cat), d.attrs);
+    if (ch.length) log(S, "品項修改", sku + "｜" + ch.join("；"));
+    return p;
+  }
+  // Discontinue instead of delete once anything refers to the product (spec: 刪除建議實作為停用).
+  function setProductActive(S, sku, on) {
+    need(S, "settings_edit");
+    var p = product(S, sku);
+    if (!p) throw new Error("找不到品項");
+    p.active = !!on;
+    log(S, on ? "品項啟用" : "品項停用", sku + " " + p.name);
+    return p;
+  }
+  function deleteProduct(S, sku) {
+    need(S, "settings_edit");
+    var p = product(S, sku);
+    if (!p) throw new Error("找不到品項");
+    if (productUsage(S, sku).used) throw new Error("這個品項已有庫存、報刀或單據紀錄，不能刪除，請改用「停用」");
+    S.products = S.products.filter(function (x) { return x.sku !== sku; });
+    log(S, "刪除品項", sku + " " + p.name);
   }
 
   // ---------- GDP 物流單據：進貨憑單、借出憑單（寄庫）、借出還回單 ----------
@@ -1032,16 +1139,23 @@
     ret.lines = items.map(function (it) { return { sku: it.sku, lot: it.lot, qty: it.qty, exp: expOf[it.sku + " " + it.lot] || "", mfg: "", from: r.loc, price: 0, note: it.scrap ? "報廢" : "" }; });
     ret.status = "posted"; ret.checker = S.operator; ret.checkedAt = nowStr();
     var sold = items.filter(function (it) { return !it.scrap; });
-    var o = null;
-    if (sold.length) {
+    var byCo = {}, coOrder = [], made = [];
+    sold.forEach(function (it) {
+      var p = product(S, it.sku), co = (p && p.company) || (S.companies && S.companies[0] ? S.companies[0].id : "");
+      if (!byCo[co]) { byCo[co] = []; coOrder.push(co); }
+      byCo[co].push(it);
+    });
+    coOrder.forEach(function (co) {
       var c = partyCustomer(S, r.hospital);
-      o = { id: uid("S"), no: nextSalesNo(S, today), date: today, customer: c.id, currency: "NTD", taxMode: "incl", salesRep: r.createdBy, dept: "業務部",
+      var x = { id: uid("S"), no: nextSalesNo(S, today), date: today, customer: c.id, company: co, currency: "NTD", taxMode: "incl", salesRep: r.rep || r.createdBy, dept: "業務部",
         note: "報刀耗用｜借出還回單 " + ret.no, status: "confirmed", maker: S.operator, reviewer: S.operator, invoice: "", createdAt: nowStr(), confirmedAt: nowStr(),
         ref: { kind: "report", id: r.id },
-        lines: sold.map(function (it) { var p = product(S, it.sku); return { sku: it.sku, loc: r.loc, lot: it.lot, exp: expOf[it.sku + " " + it.lot] || "", qty: it.qty, price: p ? p.price : 0 }; }) };
-      S.sales.unshift(o);
-      postSalesJournal(S, o, today);
-    }
+        lines: byCo[co].map(function (it) { var p = product(S, it.sku); return { sku: it.sku, loc: r.loc, lot: it.lot, exp: expOf[it.sku + " " + it.lot] || "", qty: it.qty, price: p ? p.price : 0 }; }) };
+      S.sales.unshift(x);
+      postSalesJournal(S, x, today);
+      made.push(x);
+    });
+    var o = made[0] || null;
     // Replenishment: lend the same items back to the hospital from company stock. 骨釘 are refilled
     // through the screw box itself, so they are left out of the suggestion.
     var need_ = {};
@@ -1056,8 +1170,8 @@
       lend = newDoc(S, "lend", { date: today, ref: { kind: "report", id: r.id }, note: "補貨｜報刀 " + r.date + " " + locName(S, r.hospital) });
       lend.to = r.loc; lend.ship = "自送"; lend.kind = "寄庫"; lend.handler = r.createdBy; lend.due = ""; lend.lines = ls;
     }
-    r.docs = { ret: ret.id, sales: o ? o.id : null, lend: lend ? lend.id : null, short: short };
-    log(S, "報刀產生單據", "借出還回單 " + ret.no + (o ? "｜銷貨憑單 " + o.no : "") + (lend ? "｜補貨借出（草稿）" + lend.no : "") + (short.length ? "｜公司倉不足：" + short.join("、") : ""));
+    r.docs = { ret: ret.id, sales: o ? o.id : null, salesAll: made.map(function (x) { return x.id; }), lend: lend ? lend.id : null, short: short };
+    log(S, "報刀產生單據", "借出還回單 " + ret.no + (made.length ? "｜銷貨憑單 " + made.map(function (x) { return x.no + "（" + company(S, x.company).short + "）"; }).join("、") : "") + (lend ? "｜補貨借出（草稿）" + lend.no : "") + (short.length ? "｜公司倉不足：" + short.join("、") : ""));
     return r.docs;
   }
 
@@ -1265,6 +1379,11 @@
         { id: "c102", code: "102", name: "範例醫療器材行", addr: "彰化縣範例鎮示範街 28 號", contact: "李先生", tel: "04-7000-0002" },
         { id: "c103", code: "103", name: "測試聯合診所", addr: "雲林縣示範市測試路 5 號", contact: "陳先生", tel: "05-5000-0003" }
       ],
+      companies: [
+        { id: "HX", short: "禾翔", name: "禾翔醫藥生技有限公司", tel: "04-0000-0000", fax: "04-0000-0001", taxId: "00000000", addr: "台中市示範區範例路 1 號" },
+        { id: "HS", short: "和祥", name: "和祥（全名待客戶提供）", tel: "", fax: "", taxId: "", addr: "" },
+        { id: "JS", short: "晉昇", name: "晉昇（全名待客戶提供）", tel: "", fax: "", taxId: "", addr: "" }
+      ],
       products: [], categories: [], lots: [], moves: [], docs: [], changes: [], notifs: [], reports: [], sales: [], payments: [], journals: [], log: []
     };
     ["中榮", "員基", "鹿基", "彰基", "803", "二基"].forEach(function (n, i) {
@@ -1326,9 +1445,17 @@
     mkBox("2.7 小骨釘盒", "co", "SL27-2404", [["2.7 骨釘", 11]], 0.4);
     S.lots = S.lots.filter(function (l) { return l.qty > 0; });
 
+    S.categories.push({ id: "cBONE", name: "人工骨／骨水泥", fields: [{ key: "f1", label: "院內碼", type: "text" }] });
+    [["AB-0500", "人工骨填充物 5cc（示範）", 6800, "M0000001"], ["BC-4020", "骨水泥 40g（示範）", 6000, "M0000002"]].forEach(function (x, i) {
+      S.products.push({ sku: x[0], name: x[1], price: x[2], group: "人工骨／骨水泥", kind: "custom", cat: "cBONE", attrs: { f1: x[3] }, company: "HS", vendor: "示範原廠（人工骨）", safety: 5, unit: "盒" });
+      S.lots.push({ id: uid("L"), loc: "co", sku: x[0], lot: "AB-2607-" + (i + 1), exp: addDays(400 + i * 90), qty: 3 + i * 4 });
+    });
     S.products.forEach(function (p) {
+      p.active = true;
+      if (!p.unit) p.unit = p.kind === "custom" ? "組" : "PCS";
+      if (!p.company) p.company = p.cat === "cPRP" ? "JS" : "HX";
       if (p.kind === "plate") { p.vendor = "示範原廠（骨材）"; p.safety = 4 + Math.floor(r() * 4); }
-      else if (p.kind === "custom") { p.vendor = "示範生技"; p.safety = 6; }
+      else if (p.cat === "cPRP") { p.vendor = "示範生技"; p.safety = 6; }
     });
     S.log.unshift({ ts: nowStr(), user: "系統", action: "初始化", detail: "載入示範資料" });
     seedDocs(S);
@@ -1483,6 +1610,7 @@
         if (S && !S.docs) S.docs = [];
         if (S && !S.changes) S.changes = [];
         if (S && !S.notifs) S.notifs = [];
+        if (S && !S.companies) S.companies = [];
         if (S && S.v === VERSION) return S;
       }
     } catch (e) { /* fall through to a fresh seed */ }
@@ -1511,6 +1639,8 @@
   confirmSales = tracked(confirmSales, function (S, o) { return { kind: "銷貨出貨", ref: { kind: "sales", id: o.id }, note: o.no }; });
 
   return {
+    company: company, updateCompany: updateCompany, UNITS: UNITS, productUsage: productUsage, addProduct: addProduct, updateProduct: updateProduct,
+    setProductActive: setProductActive, deleteProduct: deleteProduct,
     ROLES: ROLES, OWNER: OWNER, CAPS: CAPS, SHIFTS: SHIFTS, PT_TBD: PT_TBD, FLAG_STATES: FLAG_STATES, ERROR_TYPES: ERROR_TYPES, MAIN_FIELDS: MAIN_FIELDS,
     unitOf: unitOf, isDealer: isDealer, tableOf: tableOf, unitsAuto: unitsAuto, unitsOf: unitsOf, report: report, canSeeReport: canSeeReport, visibleReports: visibleReports, isOwner: isOwner,
     myNotifs: myNotifs, markRead: markRead, editReport: editReport, pendingChanges: pendingChanges, confirmChange: confirmChange, flagText: flagText,

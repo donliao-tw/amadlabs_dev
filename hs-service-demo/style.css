@@ -576,3 +576,10 @@ select { max-width: 100%; text-overflow: ellipsis; }
   .notif small, .notif .btn { grid-column: 2; justify-self: start; }
 }
 .table td .sub2 { display: block; margin-top: 2px; color: var(--muted); font-size: 0.74rem; white-space: normal; }
+.table tr.row-off td { opacity: 0.55; }
+.table.items td { vertical-align: middle; }
+.cellstack { display: inline-flex; flex-direction: column; gap: 2px; }
+.cellstack small, .cellnote { color: var(--muted); font-size: 0.74rem; }
+.cellnote { display: block; }
+.item-acts { display: grid; grid-template-columns: repeat(3, auto); gap: 6px; justify-content: start; }
+.table.items td:nth-child(2) { min-width: 160px; max-width: 240px; }
