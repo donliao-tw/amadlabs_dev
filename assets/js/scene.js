@@ -441,11 +441,13 @@ function placeLabel(el, pos, alpha, spritePx) {
     return;
   }
   // The label sits on its sheet and grows or shrinks with it.
-  const sc = spritePx ? Math.min(Math.max(spritePx / 200, 0.72), 1.3) : 1;
+  let sc = spritePx ? Math.min(Math.max(spritePx / 200, 0.72), 1.3) : 1;
+  if (el.matches(":hover, :focus-visible")) sc = Math.max(sc, 1.2); // the one being read is never small
   el.style.transform = `translate3d(${x.toFixed(1)}px, ${y.toFixed(1)}px, 0) translate(-50%, -50%) scale(${sc.toFixed(3)})`;
   el.style.opacity = String(Math.min(a, 1));
   el.style.pointerEvents = a > 0.6 ? "auto" : "none";
   el.style.zIndex = el.matches(":hover, :focus-visible") ? "2000" : String(Math.round((1 - v3.z) * 800));
+  el.classList.toggle("is-low", y > H * 0.5); // open the card upward near the bottom
   el.classList.toggle("is-edge-l", x < W * 0.22);
   el.classList.toggle("is-edge-r", x > W * 0.78);
   el._shown = true;
@@ -562,8 +564,8 @@ function play() {
     return;
   }
 
-  bodies.forEach((b, i) => later(() => b.el.classList.add("is-stamped"), 600 + i * 140));
-  const tMerge = 600 + bodies.length * 140 + 900;
+  bodies.forEach((b, i) => later(() => b.el.classList.add("is-stamped"), 400 + i * 93));
+  const tMerge = 400 + bodies.length * 93 + 600;
   later(() => {
     setState("merging");
     bodies.forEach((b, i) => tween(b, "cw", 0, 1.1, i * 0.04));

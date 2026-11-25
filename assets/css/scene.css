@@ -208,10 +208,10 @@
 
 .orb-card b {
   display: block;
-  margin-bottom: 4px;
-  color: var(--ink);
+  margin-bottom: 6px;
+  color: var(--hue, #9fb4ff);
   font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
-  font-size: 0.8125rem;
+  font-size: 0.875rem;
   font-weight: 500;
 }
 
@@ -221,19 +221,20 @@
   position: absolute;
   left: 50%;
   top: calc(100% + 10px);
-  width: 280px;
-  padding: 12px 14px;
-  color: var(--ink-dim);
-  font-size: 0.875rem;
-  line-height: 1.55;
+  width: 340px;
+  padding: 14px 16px;
+  color: #fff;
+  font-size: 1rem;
+  line-height: 1.6;
   white-space: normal;
-  background: rgba(8, 11, 30, 0.96);
-  border: 1px solid var(--edge);
+  background: #0a0e24;
+  border: 1px solid rgba(190, 205, 255, 0.55);
   border-radius: 10px;
-  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.55);
+  box-shadow: 0 0 0 4px rgba(5, 6, 15, 0.7), 0 16px 40px rgba(0, 0, 0, 0.7);
   transform: translateX(-50%);
 }
 
+.orb.is-low .orb-card { top: auto; bottom: calc(100% + 10px); }
 .orb.is-edge-l .orb-card { left: 0; transform: none; }
 .orb.is-edge-r .orb-card { left: auto; right: 0; transform: none; }
 
@@ -257,7 +258,7 @@
   background: var(--hue, #7aa2ff);
 }
 
-.orb-feat.is-selected .orb-card { color: var(--ink-dim); }
+.orb-feat.is-selected .orb-card { color: #fff; }
 
 /* the core's click target */
 .orb-core {
@@ -419,7 +420,7 @@
 
 @media (max-width: 760px) {
   .scene-stage { height: max(560px, calc(100svh - 64px - 130px)); }
-  .orb-card { width: 220px; }
+  .orb-card { width: 260px; font-size: 0.9375rem; }
   .orb { padding: 5px 12px 5px 6px; gap: 8px; }
   .orb-text strong { font-size: 0.9375rem; }
   .orb-x { width: 22px; height: 22px; }
