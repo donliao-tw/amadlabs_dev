@@ -5,14 +5,14 @@
 
 .xp {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 360px;
+  grid-template-columns: minmax(0, 1fr) 340px;
   gap: 24px;
-  align-items: stretch;
+  align-items: center;
 }
 
 .xp-stage {
   position: relative;
-  min-height: max(560px, calc(100svh - 64px - 220px));
+  height: max(560px, calc(100svh - 64px - 200px));
   border-radius: 20px;
   background:
     radial-gradient(ellipse 60% 55% at 50% 45%, var(--xp-glow), transparent 75%);
@@ -62,7 +62,7 @@
   gap: 8px;
   padding: 6px 14px 6px 6px;
   font: inherit;
-  font-size: 1rem;
+  font-size: 0.9375rem;
   font-weight: 600;
   color: var(--color-text);
   white-space: nowrap;
@@ -110,8 +110,8 @@
 .xp-panel {
   display: flex;
   flex-direction: column;
-  gap: 16px;
-  padding: 20px;
+  gap: 12px;
+  padding: 16px;
   background: color-mix(in srgb, var(--color-surface) 80%, transparent);
   border: 1px solid var(--color-border);
   border-radius: 20px;
@@ -121,7 +121,7 @@
 
 .xp-list {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: 1fr;
   gap: 6px;
   margin: 0;
   padding: 0;
@@ -218,7 +218,7 @@
 
 @media (max-width: 900px) {
   .xp { grid-template-columns: 1fr; }
-  .xp-stage { min-height: 480px; }
+  .xp-stage { height: 480px; }
   .xp-label { font-size: 0.8125rem; padding: 4px 10px 4px 4px; }
   .xp-label.is-left { padding: 4px 4px 4px 10px; }
   .xp-label .xp-num { width: 20px; height: 20px; font-size: 0.625rem; }
@@ -230,5 +230,46 @@
   .xp-label,
   .xp-label.is-left { padding: 3px; }
   .xp-label .xp-num { width: 24px; height: 24px; font-size: 0.6875rem; }
-  .xp-stage { min-height: 420px; }
+  .xp-stage { height: 420px; }
+}
+
+/* ---------- about ---------- */
+
+.about-highlights {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+  margin: 32px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.about-highlights li {
+  padding: 18px 20px;
+  background: color-mix(in srgb, var(--color-surface) 80%, transparent);
+  border: 1px solid var(--color-border);
+  border-radius: 14px;
+  backdrop-filter: blur(8px);
+}
+
+.about-highlights strong {
+  display: block;
+  margin-bottom: 6px;
+  font-family: var(--font-display);
+  font-size: 1.5rem;
+  font-weight: 700;
+  background: linear-gradient(100deg, var(--color-accent), #a47bff);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.about-highlights span {
+  color: var(--color-text-muted);
+  font-size: 0.9375rem;
+  line-height: 1.6;
+}
+
+@media (max-width: 760px) {
+  .about-highlights { grid-template-columns: 1fr; }
 }

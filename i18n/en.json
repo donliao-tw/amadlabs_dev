@@ -70,7 +70,7 @@
   "project3.desc": "A short description of the case: what we built, what tech was used, what problem it solved for the client.",
   "project3.tag": "Tag",
   "about.title": "About Us",
-  "about.body": "AMAD Labs is a software studio focused on AI and full-stack development. Real team/studio copy to be added later.",
+  "about.body": "AMAD Labs is an engineering team with more than ten years in the industry. We started with IoT: collecting, cleaning and analysing sensor data on factory floors. From there we built the back-end systems, databases, websites and mobile interfaces on top of it, and we have run them in production for years. Because we know every step data takes from the shop floor to the owner's phone, we can turn scattered processes into one system that is easy to use and easy to keep running, not just hand over a pile of code.",
   "about.skillsTitle": "Tech Stack",
   "skills.item1": "Skill One",
   "skills.item2": "Skill Two",
@@ -236,5 +236,11 @@
   "build.ai.points": "Invoice and delivery-note recognition|Document summaries and tagging|Automatic web data collection|Cleaning and importing old Excel data",
   "build.api.name": "Integration and APIs",
   "build.api.desc": "Accounting, shop, LINE and old systems all apart? We connect them so one entry updates everywhere.",
-  "build.api.points": "Accounting and e-commerce integration|APIs for your partners|Cloud backup and data migration|Single sign-on"
+  "build.api.points": "Accounting and e-commerce integration|APIs for your partners|Cloud backup and data migration|Single sign-on",
+  "about.h1.title": "10+ years",
+  "about.h1.text": "of hands-on industry work, building and running production systems",
+  "about.h2.title": "IoT → Web",
+  "about.h2.text": "from collecting and analysing sensor data to websites and admin systems",
+  "about.h3.title": "End to end",
+  "about.h3.text": "requirements, design, build, launch and support, by the same team"
 }

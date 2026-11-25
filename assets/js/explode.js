@@ -46,6 +46,8 @@ let openTarget = 0;
 let sceneTime = 0;
 let timers = [];
 let lastTs = 0;
+let baseDist = 20;
+let fitScale = 1; // grows until every callout fits inside the stage
 
 const t = (k) => (Object.prototype.hasOwnProperty.call(dict, k) ? dict[k] : "");
 const ease = (x) => (x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2);
@@ -320,7 +322,8 @@ function resize() {
   // keep the whole open stack (about 9 units tall, 9 wide with callouts) in view
   const vFit = 5.6 / Math.tan((camera.fov * Math.PI) / 360);
   const hFit = (camera.aspect < 0.8 ? 6.4 : 8.6) / (Math.tan((camera.fov * Math.PI) / 360) * camera.aspect);
-  camera.position.setLength(Math.max(vFit, hFit));
+  baseDist = Math.max(vFit, hFit);
+  camera.position.setLength(baseDist * fitScale);
   camera.updateProjectionMatrix();
   controls.update();
 }
@@ -352,6 +355,9 @@ function frame(ts) {
   controls.autoRotate = !reduceMotion && !selected && !hoverKey;
   controls.update();
 
+  let minLeft = Infinity;
+  let maxRight = -Infinity;
+
   slabs.forEach((s) => {
     const hot = s.key === selected || s.key === hoverKey;
     s.lift = approach(s.lift, s.key === selected ? 1 : 0, 1 - Math.pow(0.001, dt));
@@ -373,7 +379,7 @@ function frame(ts) {
     // leader: from the layer's outer edge to the callout point
     const edgeX = x + s.dir * (SLAB.w / 2);
     const z = 1.4 * s.lift;
-    const reach = camera.aspect < 0.8 ? 0.7 : 1.4; // short leaders on narrow screens
+    const reach = camera.aspect < 0.8 ? 0.7 : 0.9; // short leaders on narrow screens
     a.set(edgeX, y + 0.25 * s.lift, z);
     v.set(edgeX + s.dir * (0.4 + reach * e), y + 0.25 * s.lift, z);
     const pos = s.leader.geometry.attributes.position;
@@ -393,7 +399,22 @@ function frame(ts) {
     s.el.style.opacity = show ? String(Math.max(0.35, s.fade)) : "0";
     s.el.style.pointerEvents = show ? "auto" : "none";
     s.el.classList.toggle("is-left", leftSide);
+    if (show) {
+      const w = s.el.offsetWidth;
+      minLeft = Math.min(minLeft, leftSide ? sx - w : sx);
+      maxRight = Math.max(maxRight, leftSide ? sx : sx + w);
+    }
   });
+
+  // Pull the camera back while any callout runs past the stage edge, and
+  // ease it in again once there is room to spare.
+  if (maxRight > -Infinity) {
+    const pad = 12;
+    const over = Math.max(maxRight - (W - pad), pad - minLeft);
+    if (over > 0) fitScale = Math.min(fitScale * (1 + Math.min(over, 80) * 0.0008), 2.2);
+    else if (over < -30) fitScale = Math.max(fitScale * 0.997, 1);
+    camera.position.setLength(baseDist * fitScale);
+  }
 
   renderer.render(scene3, camera);
 }
