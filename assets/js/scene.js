@@ -119,28 +119,27 @@ function sheetTexture(selected, hue) {
   c.height = 176;
   const g = c.getContext("2d");
   const r = 18;
-  g.fillStyle = theme.surface;
+  // translucent body and header in the sheet's own colour; the stars show through
+  g.fillStyle = hue;
+  g.globalAlpha = 0.16;
   g.beginPath();
   g.roundRect(6, 6, 244, 164, r);
   g.fill();
-  g.fillStyle = hue;
+  g.globalAlpha = 0.38;
   g.beginPath();
   g.roundRect(6, 6, 244, 40, [r, r, 0, 0]);
   g.fill();
-  g.strokeStyle = theme.border;
+  // two cells only: one centre line each way
+  g.globalAlpha = 0.55;
+  g.strokeStyle = hue;
   g.lineWidth = 3;
-  for (let i = 1; i < 4; i++) {
-    g.beginPath();
-    g.moveTo(6 + (244 / 4) * i, 46);
-    g.lineTo(6 + (244 / 4) * i, 168);
-    g.stroke();
-  }
-  for (let j = 1; j < 4; j++) {
-    g.beginPath();
-    g.moveTo(8, 6 + (164 / 4) * j + 6);
-    g.lineTo(248, 6 + (164 / 4) * j + 6);
-    g.stroke();
-  }
+  g.beginPath();
+  g.moveTo(128, 46);
+  g.lineTo(128, 168);
+  g.moveTo(8, 108);
+  g.lineTo(248, 108);
+  g.stroke();
+  g.globalAlpha = 1;
   g.strokeStyle = selected ? "#ffffff" : hue;
   g.lineWidth = selected ? 9 : 5;
   g.beginPath();
