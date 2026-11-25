@@ -552,7 +552,41 @@
     });
   }
 
+  // Past the hero: hide the menu bar and show the floating top button.
+  function initHeaderAutoHide() {
+    var header = document.querySelector(".site-header");
+    var hero = document.getElementById("top");
+    var btn = document.getElementById("toTop");
+    if (!header || !hero || !btn) return;
+    var ticking = false;
+    function update() {
+      ticking = false;
+      var past = window.scrollY > hero.offsetHeight * 0.6;
+      header.classList.toggle("is-hidden", past);
+      btn.classList.toggle("is-shown", past);
+      if (past) {
+        var nav = document.getElementById("siteNav");
+        var toggle = document.getElementById("navToggle");
+        if (nav && nav.classList.contains("open")) {
+          nav.classList.remove("open");
+          if (toggle) toggle.setAttribute("aria-expanded", "false");
+        }
+      }
+    }
+    window.addEventListener("scroll", function () {
+      if (!ticking) {
+        ticking = true;
+        requestAnimationFrame(update);
+      }
+    }, { passive: true });
+    btn.addEventListener("click", function () {
+      window.scrollTo({ top: 0, behavior: reduceMotion ? "auto" : "smooth" });
+    });
+    update();
+  }
+
   document.addEventListener("DOMContentLoaded", function () {
+    initHeaderAutoHide();
     var currentLang = getStoredLang();
     setLang(currentLang);
     fetchHeroTheme();

@@ -180,6 +180,54 @@ a:hover { text-decoration: underline; }
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
   border-bottom: 1px solid var(--color-border);
+  transition: transform 0.35s cubic-bezier(0.22, 0.8, 0.24, 1);
+}
+
+/* Once past the hero the menu slides away; the floating top button takes over. */
+.site-header.is-hidden { transform: translateY(-100%); }
+
+.to-top {
+  position: fixed;
+  right: clamp(16px, 3vw, 32px);
+  bottom: clamp(16px, 3vw, 32px);
+  z-index: 4000;
+  display: grid;
+  place-items: center;
+  width: 52px;
+  height: 52px;
+  padding: 0;
+  color: #fff;
+  background: linear-gradient(135deg, var(--color-accent), #a47bff);
+  border: 0;
+  border-radius: 50%;
+  box-shadow: 0 8px 24px rgba(79, 70, 229, 0.35);
+  cursor: pointer;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(16px) scale(0.9);
+  transition: opacity 0.25s ease, transform 0.25s ease, box-shadow 0.2s ease;
+}
+
+.to-top.is-shown {
+  opacity: 1;
+  pointer-events: auto;
+  transform: none;
+}
+
+.to-top:hover { box-shadow: 0 10px 30px rgba(79, 70, 229, 0.5); transform: translateY(-2px); }
+
+.to-top:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 3px; }
+
+.to-top small {
+  display: block;
+  margin-top: -2px;
+  font-size: 0.625rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .site-header, .to-top { transition: none; }
 }
 
 .header-inner {
