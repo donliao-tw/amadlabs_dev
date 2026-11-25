@@ -10,6 +10,13 @@
   --color-accent-contrast: #ffffff;
   --color-shine: 148, 158, 173;
   --header-bg: rgba(255, 255, 255, 0.78);
+  --page-dot: rgba(30, 41, 80, 0.07);
+  --page-blob-1: rgba(99, 102, 241, 0.13);
+  --page-blob-2: rgba(14, 165, 233, 0.11);
+  --page-blob-3: rgba(236, 72, 153, 0.08);
+  --seam: rgba(99, 102, 241, 0.55);
+  --seam-2: rgba(14, 165, 233, 0.55);
+  --seam-glow: rgba(99, 102, 241, 0.12);
   --max-width: 1080px;
   --radius: 10px;
   --shadow: 0 1px 3px rgba(0, 0, 0, 0.06), 0 8px 24px rgba(0, 0, 0, 0.04);
@@ -19,7 +26,7 @@
 }
 
 :root[data-theme="dark"] {
-  --color-bg: #0b0d12;
+  --color-bg: #07090f;
   --color-bg-alt: #12151c;
   --color-surface: #151922;
   --color-text: #edf0f4;
@@ -30,13 +37,20 @@
   --color-accent-contrast: #0b0d12;
   --color-shine: 168, 178, 196;
   --header-bg: rgba(11, 13, 18, 0.72);
+  --page-dot: rgba(200, 210, 255, 0.06);
+  --page-blob-1: rgba(124, 58, 237, 0.20);
+  --page-blob-2: rgba(14, 165, 233, 0.14);
+  --page-blob-3: rgba(236, 72, 153, 0.10);
+  --seam: rgba(143, 160, 255, 0.7);
+  --seam-2: rgba(56, 210, 255, 0.6);
+  --seam-glow: rgba(124, 140, 255, 0.18);
   --shadow: 0 1px 3px rgba(0, 0, 0, 0.3), 0 8px 24px rgba(0, 0, 0, 0.35);
   --shadow-lg: 0 4px 10px rgba(0, 0, 0, 0.35), 0 20px 48px rgba(0, 0, 0, 0.45);
   color-scheme: dark;
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme]) {
-    --color-bg: #0b0d12;
+    --color-bg: #07090f;
     --color-bg-alt: #12151c;
     --color-surface: #151922;
     --color-text: #edf0f4;
@@ -47,6 +61,13 @@
     --color-accent-contrast: #0b0d12;
     --color-shine: 168, 178, 196;
   --header-bg: rgba(11, 13, 18, 0.72);
+  --page-dot: rgba(200, 210, 255, 0.06);
+  --page-blob-1: rgba(124, 58, 237, 0.20);
+  --page-blob-2: rgba(14, 165, 233, 0.14);
+  --page-blob-3: rgba(236, 72, 153, 0.10);
+  --seam: rgba(143, 160, 255, 0.7);
+  --seam-2: rgba(56, 210, 255, 0.6);
+  --seam-glow: rgba(124, 140, 255, 0.18);
     --shadow: 0 1px 3px rgba(0, 0, 0, 0.3), 0 8px 24px rgba(0, 0, 0, 0.35);
     --shadow-lg: 0 4px 10px rgba(0, 0, 0, 0.35), 0 20px 48px rgba(0, 0, 0, 0.45);
   }
@@ -73,7 +94,31 @@ html {
   display: flex;
   flex-direction: column;
   justify-content: center;
-  border-top: 1px solid var(--color-border);
+}
+
+/* Section seams: no hard rule, a soft glowing line that fades at both ends. */
+.section:not(.hero) { position: relative; }
+.section:not(.hero)::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 0;
+  width: min(880px, 80%);
+  height: 1px;
+  transform: translateX(-50%);
+  background: linear-gradient(90deg, transparent, var(--seam) 30%, var(--seam-2) 70%, transparent);
+  pointer-events: none;
+}
+.section:not(.hero)::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 0;
+  width: min(640px, 70%);
+  height: 90px;
+  transform: translateX(-50%);
+  background: radial-gradient(ellipse 50% 100% at 50% 0%, var(--seam-glow), transparent 70%);
+  pointer-events: none;
 }
 
 /* #about is the first section after the last full-screen slide (#projects).
@@ -99,7 +144,14 @@ body {
   margin: 0;
   font-family: var(--font-sans);
   color: var(--color-text);
-  background: var(--color-bg);
+  /* the whole landing page: soft colour fields over a faint dot grid */
+  background:
+    radial-gradient(circle at 1px 1px, var(--page-dot) 1px, transparent 1.6px) 0 0 / 26px 26px,
+    radial-gradient(ellipse 60% 45% at 10% 8%, var(--page-blob-1), transparent 70%),
+    radial-gradient(ellipse 50% 40% at 92% 30%, var(--page-blob-2), transparent 70%),
+    radial-gradient(ellipse 60% 45% at 30% 85%, var(--page-blob-3), transparent 70%),
+    var(--color-bg);
+  background-attachment: fixed;
   line-height: 1.6;
 }
 
@@ -464,7 +516,7 @@ a:hover { text-decoration: underline; }
 }
 
 .section-alt {
-  background: var(--color-bg-alt);
+  background: transparent;
 }
 
 .section-title {

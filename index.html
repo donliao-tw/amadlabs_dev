@@ -12,6 +12,7 @@
 </script>
 <link rel="stylesheet" href="assets/css/style.css">
 <link rel="stylesheet" href="assets/css/scene.css">
+<link rel="stylesheet" href="assets/css/build.css">
 </head>
 <body>
 
@@ -28,7 +29,7 @@
 
     <nav class="site-nav" id="siteNav">
       <a href="#services" data-i18n="nav.services">服務</a>
-      <a href="#projects" data-i18n="nav.projects">作品</a>
+      <a href="#offerings" data-i18n="nav.build">能做什麼</a>
       <a href="#about" data-i18n="nav.about">關於我們</a>
       <a href="#contact" data-i18n="nav.contact">聯絡我們</a>
       <button class="icon-btn theme-toggle" id="themeToggle" type="button" aria-label="切換深色／淺色模式" title="切換深色／淺色模式">
@@ -146,83 +147,27 @@
     </div>
   </section>
 
-  <section id="offerings" class="section section-alt snap-section">
+  <section id="offerings" class="section snap-section">
     <div class="container">
-      <h2 class="section-title" data-i18n="services.title">我們能幫你做什麼</h2>
-      <p class="section-subtitle" data-i18n="services.subtitle">看看有沒有講到你的痛點</p>
-      <div class="offers">
-        <article class="offer">
-          <h3 data-i18n="cat1.question">資料散落各地?想找一份東西要翻好幾個地方?</h3>
-          <details><summary><span data-i18n="cat1.item1.title">告別 Excel 地獄</span></summary><p data-i18n="cat1.item1.desc">報表、對帳表散落在好幾份 Excel,複製貼上到眼花?整合成一套系統,一次輸入到處同步。</p></details>
-          <details><summary><span data-i18n="cat1.item2.title">系統互相打通</span></summary><p data-i18n="cat1.item2.desc">會計軟體、ERP 各用各的,同一筆資料打三次?幫你把系統串起來,一個地方輸入到處同步。</p></details>
-          <details><summary><span data-i18n="cat1.item3.title">資料雲端化備份</span></summary><p data-i18n="cat1.item3.desc">重要資料只存在某台電腦或某人隨身碟?搬到雲端,安全備份、隨時看得到。</p></details>
-        </article>
-        <article class="offer">
-          <h3 data-i18n="cat2.question">月底才知道業績?合約、庫存期限老是忘記?</h3>
-          <details><summary><span data-i18n="cat2.item1.title">老闆看得懂的即時報表</span></summary><p data-i18n="cat2.item1.desc">月底要等內勤整理一整天才知道業績?做儀表板,即時看得到,不用等人工彙整。</p></details>
-          <details><summary><span data-i18n="cat2.item2.title">單據自動辨識輸入</span></summary><p data-i18n="cat2.item2.desc">發票、出貨單一張一張手動打很花時間又容易錯?用 AI 辨識掃描單據,自動幫你填進系統。</p></details>
-          <details><summary><span data-i18n="cat2.item3.title">自動寄送報表/提醒通知</span></summary><p data-i18n="cat2.item3.desc">合約快到期、庫存快見底常常忘記?系統自動寄信/發通知提醒你。</p></details>
-        </article>
-        <article class="offer">
-          <h3 data-i18n="cat3.question">客戶訊息回不完?半夜假日還要顧著手機?</h3>
-          <details><summary><span data-i18n="cat3.item1.title">AI 智能客服</span></summary><p data-i18n="cat3.item1.desc">客戶一直問一樣的問題、電話接不完?AI 客服 24 小時先擋第一輪,員工只處理真正需要人處理的事。</p></details>
-          <details><summary><span data-i18n="cat3.item2.title">LINE 官方帳號機器人</span></summary><p data-i18n="cat3.item2.desc">客戶在 LINE 問東問西要隨時待命回?機器人自動回覆常見問題、接受預約或下單。</p></details>
-          <details><summary><span data-i18n="cat3.item3.title">企業官網/形象網站</span></summary><p data-i18n="cat3.item3.desc">客戶想查公司結果沒有網站,或舊網站又醜又不能手機看?做一個看起來專業的官網。</p></details>
-          <details><summary><span data-i18n="cat3.item4.title">讓客戶在 Google 找得到你</span></summary><p data-i18n="cat3.item4.desc">官網做好了但搜尋都找不到,被同業擋在前面?基本 SEO 優化增加曝光。</p></details>
-        </article>
-        <article class="offer">
-          <h3 data-i18n="cat4.question">同一張單子要打兩三次?流程卡來卡去?</h3>
-          <details><summary><span data-i18n="cat4.item1.title">表單線上化</span></summary><p data-i18n="cat4.item1.desc">業務用紙本、LINE 傳單子,內勤要重打一次?搬到線上,一次輸入不用重複打字。</p></details>
-          <details><summary><span data-i18n="cat4.item2.title">預約/排程系統</span></summary><p data-i18n="cat4.item2.desc">電話、LINE、現場都在約時間常搞混?線上預約系統,客戶自己選時間不撞期。</p></details>
-          <details><summary><span data-i18n="cat4.item3.title">庫存/進銷存管理系統</span></summary><p data-i18n="cat4.item3.desc">庫存夠不夠都憑印象或翻 Excel?系統即時準確,快沒貨自動提醒。</p></details>
-          <details><summary><span data-i18n="cat4.item4.title">多分店/多據點資料整合</span></summary><p data-i18n="cat4.item4.desc">每家分店各自記帳,總部要等回報才知道狀況?整合起來即時看得到。</p></details>
-        </article>
-        <article class="offer">
-          <h3 data-i18n="cat5.question">重複的工作做不完,想加人又加不起?</h3>
-          <details><summary><span data-i18n="cat5.item1.title">用 AI 做原本要很多人做的事</span></summary><p data-i18n="cat5.item1.desc">資料分析、文件整理這些重複工作交給 AI 先做一輪,同樣人力做更多事,不用一直加人。</p></details>
-          <details><summary><span data-i18n="cat5.item2.title">網路資料自動蒐集(爬蟲)</span></summary><p data-i18n="cat5.item2.desc">同業價格、競品動態每次要人工一家家查?自動蒐集整理,定期更新給你看。</p></details>
-        </article>
-      </div>
-    </div>
-  </section>
+      <h2 class="section-title" data-i18n="build.title">我們能幫你做什麼</h2>
+      <p class="section-subtitle" data-i18n="build.subtitle">一套系統拆開來,每一層都是我們做得到的事。</p>
 
-  <section id="projects" class="section section-alt snap-section">
-    <div class="container">
-      <h2 class="section-title" data-i18n="projects.title">作品</h2>
-      <p class="section-subtitle" data-i18n="projects.subtitle">這裡放我們參與過的專案案例</p>
+      <div class="xp">
+        <div class="xp-stage" id="xpStage">
+          <canvas class="xp-canvas" id="xpCanvas" aria-hidden="true"></canvas>
+          <div class="xp-layer" id="xpLayer"></div>
+          <button class="btn xp-replay" id="xpReplay" type="button" data-i18n="build.replay">重新組裝</button>
+        </div>
 
-      <div class="card-grid">
-        <article class="card project-card">
-          <div class="project-thumb" aria-hidden="true"></div>
-          <span class="project-tag">DEMO</span>
-          <h3>Industrial Excel AI</h3>
-          <p>上傳公司在用的 Excel，掃描出工作表、公式、命名範圍、隱藏工作表與 VBA 巨集 — 開發中的預覽版。</p>
-          <a href="iea/" class="project-link">試用預覽版</a>
-        </article>
-
-        <article class="card project-card">
-          <div class="project-thumb" aria-hidden="true"></div>
-          <span class="project-tag" data-i18n="project1.tag">標籤</span>
-          <h3 data-i18n="project1.title">案例名稱一</h3>
-          <p data-i18n="project1.desc">案例簡短描述。</p>
-          <a href="#" class="project-link" data-i18n="project.viewLink">查看案例</a>
-        </article>
-
-        <article class="card project-card">
-          <div class="project-thumb" aria-hidden="true"></div>
-          <span class="project-tag" data-i18n="project2.tag">標籤</span>
-          <h3 data-i18n="project2.title">案例名稱二</h3>
-          <p data-i18n="project2.desc">案例簡短描述。</p>
-          <a href="#" class="project-link" data-i18n="project.viewLink">查看案例</a>
-        </article>
-
-        <article class="card project-card">
-          <div class="project-thumb" aria-hidden="true"></div>
-          <span class="project-tag" data-i18n="project3.tag">標籤</span>
-          <h3 data-i18n="project3.title">案例名稱三</h3>
-          <p data-i18n="project3.desc">案例簡短描述。</p>
-          <a href="#" class="project-link" data-i18n="project.viewLink">查看案例</a>
-        </article>
+        <aside class="xp-panel" id="xpPanel">
+          <ol class="xp-list" id="xpList"></ol>
+          <div class="xp-detail" data-kind="hint" aria-live="polite">
+            <p class="xp-detail-title"></p>
+            <p class="xp-detail-text"></p>
+            <ul class="xp-detail-list"></ul>
+          </div>
+          <a href="#contact" class="btn btn-primary xp-cta" data-i18n="build.cta">跟我們聊聊你的需求</a>
+        </aside>
       </div>
     </div>
   </section>
@@ -232,15 +177,6 @@
       <h2 class="section-title" data-i18n="about.title">關於我們</h2>
       <p class="about-body" data-i18n="about.body">AMAD Labs 是一個專注 AI 與全端開發的軟體工作室。</p>
 
-      <h3 class="skills-title" data-i18n="about.skillsTitle">技術能力</h3>
-      <ul class="skills-list">
-        <li data-i18n="skills.item1">技能一</li>
-        <li data-i18n="skills.item2">技能二</li>
-        <li data-i18n="skills.item3">技能三</li>
-        <li data-i18n="skills.item4">技能四</li>
-        <li data-i18n="skills.item5">技能五</li>
-        <li data-i18n="skills.item6">技能六</li>
-      </ul>
     </div>
   </section>
 
@@ -316,6 +252,7 @@
 {"imports":{"three":"./assets/vendor/three/three.module.min.js","three/addons/":"./assets/vendor/three/addons/"}}
 </script>
 <script type="module" src="assets/js/scene.js"></script>
+<script type="module" src="assets/js/explode.js"></script>
 <script src="assets/js/main.js"></script>
 </body>
 </html>

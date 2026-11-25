@@ -47,6 +47,9 @@
   margin-left: calc(50% - 50vw);
   height: max(600px, calc(100svh - 64px - 150px));
   color: var(--ink);
+  /* feather the top and bottom so deep space melts into the page */
+  -webkit-mask-image: linear-gradient(180deg, transparent 0, #000 56px, #000 calc(100% - 56px), transparent 100%);
+  mask-image: linear-gradient(180deg, transparent 0, #000 56px, #000 calc(100% - 56px), transparent 100%);
   background:
     radial-gradient(ellipse 60% 55% at 22% 30%, rgba(124, 58, 237, 0.30), transparent 70%),
     radial-gradient(ellipse 55% 50% at 80% 70%, rgba(14, 165, 233, 0.26), transparent 70%),
@@ -84,7 +87,7 @@
   align-items: flex-start;
   justify-content: space-between;
   gap: 16px;
-  padding: 20px clamp(16px, 4vw, 48px);
+  padding: 44px clamp(16px, 4vw, 48px) 0;
   pointer-events: none;
 }
 
@@ -116,7 +119,7 @@
 .scene-hint {
   position: absolute;
   right: clamp(16px, 4vw, 48px);
-  bottom: 14px;
+  bottom: 52px;
   margin: 0;
   color: var(--ink-dim);
   font-size: 0.875rem;
@@ -323,7 +326,7 @@
 .scene-detail {
   position: absolute;
   left: 50%;
-  bottom: 20px;
+  bottom: 48px;
   z-index: 1500;
   width: min(760px, calc(100% - 32px));
   transform: translateX(-50%);
@@ -425,7 +428,7 @@
   .orb-text strong { font-size: 0.9375rem; }
   .orb-x { width: 22px; height: 22px; }
   .scene:not([data-state="chaos"]) .orb-x { display: none; }
-  .scene-detail { bottom: 12px; padding: 10px 14px; }
+  .scene-detail { bottom: 40px; padding: 10px 14px; }
   .scene-detail-text, .scene-detail-title { font-size: 1rem; }
   .scene-hint { display: none; }
 }

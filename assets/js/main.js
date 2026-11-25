@@ -514,7 +514,7 @@
       .then(function (dict) {
         applyDict(dict);
         window.__amadDict = dict;
-        if (window.AmadScene) window.AmadScene.setDict(dict);
+        if (window.AmadScene) window.AmadScene.setDict(dict); if (window.AmadExplode) window.AmadExplode.setDict(dict);
         document.title = dict["meta.title"] || document.title;
         storeLang(lang);
 
