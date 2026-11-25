@@ -12,7 +12,7 @@
 
 .xp-stage {
   position: relative;
-  height: max(560px, calc(100svh - 64px - 200px));
+  height: max(520px, calc(100svh - 230px));
   border-radius: 20px;
   background:
     radial-gradient(ellipse 60% 55% at 50% 45%, var(--xp-glow), transparent 75%);
@@ -104,6 +104,10 @@
 }
 
 .xp-label.is-selected .xp-num { background: rgba(255, 255, 255, 0.75); }
+
+/* the section fits one screen: tighter padding than other sections */
+#offerings.section { padding: 40px 0; }
+#offerings .section-subtitle { margin-bottom: 20px; }
 
 /* ---------- side panel ---------- */
 

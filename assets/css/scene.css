@@ -45,7 +45,7 @@
   position: relative;
   width: 100vw;
   margin-left: calc(50% - 50vw);
-  height: max(600px, calc(100svh - 64px - 150px));
+  height: max(600px, calc(100svh - 150px));
   color: var(--ink);
   /* feather the top and bottom so deep space melts into the page */
   -webkit-mask-image: linear-gradient(180deg, transparent 0, #000 56px, #000 calc(100% - 56px), transparent 100%);
@@ -422,7 +422,7 @@
 /* ---------- small screens ---------- */
 
 @media (max-width: 760px) {
-  .scene-stage { height: max(560px, calc(100svh - 64px - 130px)); }
+  .scene-stage { height: max(560px, calc(100svh - 130px)); }
   .orb-card { width: 260px; font-size: 0.9375rem; }
   .orb { padding: 5px 12px 5px 6px; gap: 8px; }
   .orb-text strong { font-size: 0.9375rem; }
