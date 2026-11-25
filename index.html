@@ -125,24 +125,22 @@
 
   <section id="services" class="section snap-section">
     <div class="container">
-      <h2 class="section-title" data-i18n="scene.title">十份 Excel,十個麻煩</h2>
+      <h2 class="section-title" data-i18n="scene.title">資料散落各處,沒人敢說哪份才是對的</h2>
       <p class="section-subtitle" data-i18n="scene.subtitle">每一份都被打了叉。看它們合成一套系統,再點開看各自卡在哪。</p>
 
       <div class="scene" id="scene" data-state="chaos">
-        <div class="scene-bar">
-          <p class="scene-status" id="sceneStatus" aria-live="polite"></p>
-          <button class="btn btn-outline scene-replay" id="sceneReplay" type="button" data-i18n="scene.replay">重播</button>
-        </div>
-
         <div class="scene-stage" id="sceneStage">
           <canvas class="scene-canvas" id="sceneCanvas" aria-hidden="true"></canvas>
           <div class="orb-layer" id="orbLayer"></div>
+          <div class="scene-bar">
+            <p class="scene-status" id="sceneStatus" aria-live="polite"></p>
+            <button class="btn scene-replay" id="sceneReplay" type="button" data-i18n="scene.replay">重播</button>
+          </div>
           <p class="scene-hint" data-i18n="scene.hint">拖曳可旋轉</p>
-        </div>
-
-        <div class="scene-detail" id="sceneDetail" data-kind="hint" aria-live="polite">
-          <p class="scene-detail-title"></p>
-          <p class="scene-detail-text"></p>
+          <div class="scene-detail" id="sceneDetail" data-kind="hint" aria-live="polite">
+            <p class="scene-detail-title"></p>
+            <p class="scene-detail-text"></p>
+          </div>
         </div>
       </div>
     </div>

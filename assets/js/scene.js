@@ -2,7 +2,7 @@ import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 
 /*
- * Scene (Three.js): ten Excel sheets, each marked wrong, drift in space,
+ * Scene (Three.js): sixteen Excel sheets, each marked wrong, drift in space,
  * fall into one system, then fly out onto orbits around it.
  *
  *   chaos   -> sheets scattered in 3D, each stamped with a red mark
@@ -17,12 +17,18 @@ import { OrbitControls } from "three/addons/controls/OrbitControls.js";
  * reachable by keyboard.
  */
 
-const SHEETS = ["s1", "s2", "s3", "s4", "s5", "s6", "s7", "s8", "s9", "s10"];
+const SHEETS = Array.from({ length: 16 }, (_, i) => "s" + (i + 1));
 const FEATURES = ["f1", "f2", "f3", "f4", "f5", "f6", "f7", "f8", "f9", "f10", "f11", "f12", "f13"];
 
 // Orbit shape per sheet: eccentricity and tilt about X.
-const ECC = [0.1, 0.28, 0.18, 0.34, 0.12, 0.3, 0.2, 0.08, 0.26, 0.16];
-const TILT = [0.35, -0.3, 0.12, 0.42, -0.45, 0.2, -0.15, 0.38, -0.34, 0.1];
+const ECC = [0.1, 0.28, 0.18, 0.34, 0.12, 0.3, 0.2, 0.08, 0.26, 0.16, 0.22, 0.14, 0.3, 0.1, 0.24, 0.18];
+const TILT = [0.35, -0.3, 0.12, 0.42, -0.45, 0.2, -0.15, 0.38, -0.34, 0.1, -0.25, 0.46, -0.08, 0.3, -0.4, 0.18];
+
+// One hue per sheet, so the system reads as colourful rather than grey.
+const HUES = [
+  "#ff6b8b", "#ff9a52", "#ffd24d", "#7be07b", "#34d3c1", "#4cc3ff", "#6f8cff", "#a47bff",
+  "#e07bff", "#ff7bbd", "#ffb36b", "#b6e04d", "#4de0a3", "#5ad0f0", "#8aa2ff", "#d58aff",
+];
 
 const ICON_X =
   '<svg viewBox="0 0 12 12" width="10" height="10" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M2 2l8 8M10 2L2 10"/></svg>';
@@ -103,50 +109,43 @@ function rng(seed) {
 // ---------- theme colours, read from the page's CSS variables ----------
 
 function readTheme() {
-  const cs = getComputedStyle(document.documentElement);
-  const get = (n, fb) => cs.getPropertyValue(n).trim() || fb;
-  theme = {
-    dark: document.documentElement.getAttribute("data-theme") === "dark",
-    surface: get("--color-surface", "#ffffff"),
-    alt: get("--color-bg-alt", "#f6f7f9"),
-    border: get("--color-border", "#e4e6ea"),
-    muted: get("--color-text-muted", "#5b6270"),
-    accent: get("--color-accent", "#2f6feb"),
-  };
+  // The stage is always deep space, so these do not follow the page theme.
+  theme = { surface: "#f7f9ff", alt: "#e8edff", border: "#c9d2f0", muted: "#7c88b8", accent: "#4f8cff" };
 }
 
-function sheetTexture(selected) {
+function sheetTexture(selected, hue) {
   const c = document.createElement("canvas");
   c.width = 256;
   c.height = 176;
   const g = c.getContext("2d");
   const r = 18;
   g.fillStyle = theme.surface;
-  g.strokeStyle = selected ? theme.accent : theme.muted;
-  g.lineWidth = selected ? 7 : 4;
   g.beginPath();
   g.roundRect(6, 6, 244, 164, r);
   g.fill();
-  g.stroke();
-  // header band and grid, so it reads as a spreadsheet at a glance
-  g.fillStyle = theme.alt;
+  g.fillStyle = hue;
   g.beginPath();
-  g.roundRect(8, 8, 240, 38, [r - 2, r - 2, 0, 0]);
+  g.roundRect(6, 6, 244, 40, [r, r, 0, 0]);
   g.fill();
   g.strokeStyle = theme.border;
   g.lineWidth = 3;
   for (let i = 1; i < 4; i++) {
     g.beginPath();
-    g.moveTo(6 + (244 / 4) * i, 8);
+    g.moveTo(6 + (244 / 4) * i, 46);
     g.lineTo(6 + (244 / 4) * i, 168);
     g.stroke();
   }
   for (let j = 1; j < 4; j++) {
     g.beginPath();
-    g.moveTo(8, 6 + (164 / 4) * j);
-    g.lineTo(248, 6 + (164 / 4) * j);
+    g.moveTo(8, 6 + (164 / 4) * j + 6);
+    g.lineTo(248, 6 + (164 / 4) * j + 6);
     g.stroke();
   }
+  g.strokeStyle = selected ? "#ffffff" : hue;
+  g.lineWidth = selected ? 9 : 5;
+  g.beginPath();
+  g.roundRect(6, 6, 244, 164, r);
+  g.stroke();
   const tex = new THREE.CanvasTexture(c);
   tex.colorSpace = THREE.SRGBColorSpace;
   return tex;
@@ -171,23 +170,19 @@ function glowTexture() {
 
 function applyTheme() {
   readTheme();
-  const line = new THREE.Color(theme.muted);
-
-  bodies.forEach((b) => {
+  bodies.forEach((b, i) => {
     b.tex?.dispose();
     b.texSel?.dispose();
-    b.tex = sheetTexture(false);
-    b.texSel = sheetTexture(true);
+    b.tex = sheetTexture(false, HUES[i]);
+    b.texSel = sheetTexture(true, HUES[i]);
   });
 
   coreMesh.material.color.set(theme.accent);
   glowSprite.material.map?.dispose();
   glowSprite.material.map = glowTexture();
-  glowSprite.material.blending = theme.dark ? THREE.AdditiveBlending : THREE.NormalBlending;
+  glowSprite.material.blending = THREE.AdditiveBlending;
   glowSprite.material.needsUpdate = true;
   wire.material.color.set(theme.accent);
-  stars.material.color.copy(line);
-  stars.material.opacity = theme.dark ? 0.7 : 0.35;
   refresh();
 }
 
@@ -206,13 +201,13 @@ function buildWorld() {
   // core: a plain sphere with a soft halo
   coreMesh = new THREE.Mesh(
     new THREE.SphereGeometry(0.9, 48, 32),
-    new THREE.MeshBasicMaterial({ color: 0x2f6feb })
+    new THREE.MeshBasicMaterial({ color: 0x4f8cff })
   );
   root.add(coreMesh);
 
   wire = new THREE.Mesh(
     new THREE.SphereGeometry(1.32, 14, 10),
-    new THREE.MeshBasicMaterial({ wireframe: true, transparent: true, opacity: 0.2, depthWrite: false })
+    new THREE.MeshBasicMaterial({ wireframe: true, transparent: true, opacity: 0.35, depthWrite: false })
   );
   root.add(wire);
 
@@ -223,7 +218,7 @@ function buildWorld() {
   // sheets, each with its orbit line and a DOM label
   const rand = rng(7);
   SHEETS.forEach((key, i) => {
-    const a = 3.1 + i * 0.52;
+    const a = 2.9 + i * 0.36;
     const ecc = ECC[i];
     const b = a * Math.sqrt(1 - ecc * ecc);
     const eul = new THREE.Euler(TILT[i], i * 0.63, 0);
@@ -235,7 +230,7 @@ function buildWorld() {
     }
     const line = new THREE.Line(
       new THREE.BufferGeometry().setFromPoints(pts),
-      new THREE.LineBasicMaterial({ transparent: true, opacity: 0 })
+      new THREE.LineBasicMaterial({ transparent: true, opacity: 0, color: HUES[i] })
     );
     line.rotation.copy(eul);
     root.add(line);
@@ -246,6 +241,7 @@ function buildWorld() {
     const el = document.createElement("button");
     el.type = "button";
     el.className = "orb";
+    el.style.setProperty("--hue", HUES[i]);
     el.setAttribute("data-k", key);
     el.innerHTML =
       '<span class="orb-x" aria-hidden="true">' + ICON_X + "</span>" +
@@ -259,9 +255,9 @@ function buildWorld() {
       b,
       ecc,
       eul,
-      ang0: rand() * Math.PI * 2,
+      ang0: i * 2.399963 + rand() * 0.4,
       speed: 1.35 / Math.pow(a, 1.5),
-      chaos: new THREE.Vector3((rand() - 0.5) * 14, (rand() - 0.5) * 7, (rand() - 0.5) * 9),
+      chaos: new THREE.Vector3((rand() - 0.5) * 17, (rand() - 0.5) * 8, (rand() - 0.5) * 9),
       cw: 1, // weight of the scattered position
       ow: 0, // weight of the orbit position
       sel: false,
@@ -285,6 +281,7 @@ function buildWorld() {
     const el = document.createElement("button");
     el.type = "button";
     el.className = "orb orb-feat";
+    el.style.setProperty("--hue", HUES[(i * 3 + 2) % HUES.length]);
     el.setAttribute("data-k", key);
     el.innerHTML = '<span class="orb-text"><strong></strong></span><span class="orb-card"><span></span></span>';
     layer.appendChild(el);
@@ -297,15 +294,22 @@ function buildWorld() {
     });
   });
 
-  // faint stars for depth
+  // stars in a few colours, for depth
   const sp = [];
+  const sc = [];
   const r2 = rng(99);
-  for (let i = 0; i < 360; i++) {
+  const starCols = ["#ffffff", "#bcd0ff", "#ffd9a8", "#c9b6ff", "#9fe8ff"].map((h) => new THREE.Color(h));
+  for (let i = 0; i < 900; i++) {
     sp.push(new THREE.Vector3(r2() - 0.5, r2() - 0.5, r2() - 0.5).normalize().multiplyScalar(26 + r2() * 24));
+    const col = starCols[Math.floor(r2() * starCols.length)];
+    const dim = 0.4 + r2() * 0.6;
+    sc.push(col.r * dim, col.g * dim, col.b * dim);
   }
+  const starGeo = new THREE.BufferGeometry().setFromPoints(sp);
+  starGeo.setAttribute("color", new THREE.Float32BufferAttribute(sc, 3));
   stars = new THREE.Points(
-    new THREE.BufferGeometry().setFromPoints(sp),
-    new THREE.PointsMaterial({ size: 1.6, sizeAttenuation: false, transparent: true, depthWrite: false })
+    starGeo,
+    new THREE.PointsMaterial({ size: 2, sizeAttenuation: false, vertexColors: true, transparent: true, opacity: 0.95, depthWrite: false })
   );
   root.add(stars);
 
@@ -324,10 +328,10 @@ function buildWorld() {
 function fitCamera() {
   const aspect = W / H;
   camera.aspect = aspect;
-  const fit = 9.2 / (Math.tan((camera.fov * Math.PI) / 360) * aspect);
+  const fit = 9.6 / (Math.tan((camera.fov * Math.PI) / 360) * aspect);
   // On a narrow screen the outer orbits may run past the edge; a bigger
   // scene is worth more than showing every orbit at once.
-  const dist = aspect < 1 ? Math.max(15, fit * 0.66) : Math.max(15, fit);
+  const dist = aspect < 1 ? Math.max(14, fit * 0.62) : Math.max(14, fit);
   camera.position.setLength(dist);
   camera.updateProjectionMatrix();
   controls.update();
@@ -346,7 +350,7 @@ function resize() {
 const v3 = new THREE.Vector3();
 const edge = new THREE.Vector3();
 
-function placeLabel(el, pos, alpha) {
+function placeLabel(el, pos, alpha, spritePx) {
   v3.copy(pos).project(camera);
   const x = (v3.x * 0.5 + 0.5) * W;
   const y = (-v3.y * 0.5 + 0.5) * H;
@@ -359,13 +363,14 @@ function placeLabel(el, pos, alpha) {
     }
     return;
   }
-  const left = x > W * 0.62;
-  const tx = left ? x - 16 : x + 16;
-  el.style.transform = `translate3d(${tx.toFixed(1)}px, ${y.toFixed(1)}px, 0) translate(${left ? "-100%" : "0"}, -50%)`;
+  // The label sits on its sheet and grows or shrinks with it.
+  const sc = spritePx ? Math.min(Math.max(spritePx / 200, 0.72), 1.3) : 1;
+  el.style.transform = `translate3d(${x.toFixed(1)}px, ${y.toFixed(1)}px, 0) translate(-50%, -50%) scale(${sc.toFixed(3)})`;
   el.style.opacity = String(Math.min(a, 1));
   el.style.pointerEvents = a > 0.6 ? "auto" : "none";
   el.style.zIndex = el.matches(":hover, :focus-visible") ? "2000" : String(Math.round((1 - v3.z) * 800));
-  el.classList.toggle("is-left", left);
+  el.classList.toggle("is-edge-l", x < W * 0.22);
+  el.classList.toggle("is-edge-r", x > W * 0.78);
   el._shown = true;
 }
 
@@ -394,17 +399,19 @@ function frame(ts) {
 
     const k = Math.min(b.cw + b.ow, 1);
     b.sprite.position.copy(b.pos);
-    b.sprite.scale.set(1.5 * k, 1.03 * k, 1);
-    b.line.material.opacity = (b.sel ? 0.95 : theme.dark ? 0.42 : 0.5) * b.ow;
+    b.sprite.scale.set(2.0 * k, 1.38 * k, 1);
+    b.line.material.opacity = (b.sel ? 1 : 0.4) * b.ow;
     b.line.visible = b.ow > 0.01;
 
-    placeLabel(b.el, b.pos, k);
+    const dist = camera.position.distanceTo(b.pos);
+    const pxPerUnit = H / (2 * Math.tan((camera.fov * Math.PI) / 360) * dist);
+    placeLabel(b.el, b.pos, k, 2.0 * k * pxPerUnit);
   });
 
   featGroup.rotation.y = clock * 0.12;
   feats.forEach((f) => {
     f.pos.copy(f.dir).multiplyScalar(5.6 * f.fw).applyAxisAngle(THREE.Object3D.DEFAULT_UP, featGroup.rotation.y);
-    placeLabel(f.el, f.pos, f.fw);
+    placeLabel(f.el, f.pos, f.fw, 200);
   });
 
   // the core's click target follows the sphere on screen
@@ -510,7 +517,6 @@ function refresh() {
       b.sprite.material.map = b.sel ? b.texSel : b.tex;
       b.sprite.material.needsUpdate = true;
     }
-    b.line.material.color.set(b.sel ? theme.accent : theme.muted);
   });
 
   feats.forEach((f) => {
@@ -595,10 +601,6 @@ function bind() {
   replayBtn.addEventListener("click", play);
 
   new ResizeObserver(resize).observe(stage);
-  new MutationObserver(applyTheme).observe(document.documentElement, {
-    attributes: true,
-    attributeFilter: ["data-theme"],
-  });
 }
 
 function start() {
