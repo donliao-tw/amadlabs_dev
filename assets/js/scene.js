@@ -176,7 +176,6 @@ function applyTheme() {
     b.texSel = sheetTexture(true, HUES[i]);
   });
 
-  coreMesh.material.color.set(theme.accent);
   glowSprite.material.map?.dispose();
   glowSprite.material.map = glowTexture();
   glowSprite.material.blending = THREE.AdditiveBlending;
@@ -186,6 +185,75 @@ function applyTheme() {
 }
 
 // ---------- build ----------
+
+// The core: a ball of slowly flowing colour. Domain-warped noise in the
+// object's own space gives drifting bands; a rim light keeps it round.
+function coreMaterial() {
+  return new THREE.ShaderMaterial({
+    uniforms: { uTime: { value: 0 } },
+    vertexShader: `
+      varying vec3 vPos;
+      varying vec3 vNormal;
+      varying vec3 vView;
+      void main() {
+        vPos = position;
+        vNormal = normalize(normalMatrix * normal);
+        vec4 mv = modelViewMatrix * vec4(position, 1.0);
+        vView = normalize(-mv.xyz);
+        gl_Position = projectionMatrix * mv;
+      }`,
+    fragmentShader: `
+      uniform float uTime;
+      varying vec3 vPos;
+      varying vec3 vNormal;
+      varying vec3 vView;
+
+      float hash(vec3 p) {
+        p = fract(p * 0.3183099 + 0.1);
+        p *= 17.0;
+        return fract(p.x * p.y * p.z * (p.x + p.y + p.z));
+      }
+      float noise(vec3 x) {
+        vec3 i = floor(x);
+        vec3 f = fract(x);
+        f = f * f * (3.0 - 2.0 * f);
+        return mix(
+          mix(mix(hash(i), hash(i + vec3(1, 0, 0)), f.x), mix(hash(i + vec3(0, 1, 0)), hash(i + vec3(1, 1, 0)), f.x), f.y),
+          mix(mix(hash(i + vec3(0, 0, 1)), hash(i + vec3(1, 0, 1)), f.x), mix(hash(i + vec3(0, 1, 1)), hash(i + vec3(1, 1, 1)), f.x), f.y),
+          f.z);
+      }
+      float fbm(vec3 p) {
+        float v = 0.0;
+        float a = 0.5;
+        for (int i = 0; i < 4; i++) {
+          v += a * noise(p);
+          p = p * 2.03 + vec3(1.7, 9.2, 3.1);
+          a *= 0.5;
+        }
+        return v;
+      }
+
+      void main() {
+        vec3 p = vPos * 1.6;
+        float t = uTime * 0.22;
+        // warp the lookup twice so the colour streams instead of just fading
+        vec3 q = vec3(fbm(p + vec3(0.0, t, 0.0)), fbm(p + vec3(5.2, 1.3, -t)), fbm(p + vec3(-t, 8.3, 2.8)));
+        float n = fbm(p + 2.2 * q + vec3(t * 0.6));
+
+        vec3 deep = vec3(0.07, 0.12, 0.45);
+        vec3 blue = vec3(0.20, 0.45, 1.00);
+        vec3 cyan = vec3(0.20, 0.85, 1.00);
+        vec3 violet = vec3(0.60, 0.35, 1.00);
+        vec3 col = mix(deep, blue, smoothstep(0.15, 0.55, n));
+        col = mix(col, violet, smoothstep(0.45, 0.8, q.x) * 0.75);
+        col = mix(col, cyan, smoothstep(0.55, 0.9, n + q.y * 0.3) * 0.85);
+
+        float fres = pow(1.0 - max(dot(normalize(vNormal), normalize(vView)), 0.0), 2.4);
+        col += vec3(0.45, 0.65, 1.0) * fres * 0.9;
+        gl_FragColor = vec4(col, 1.0);
+      }`,
+  });
+}
 
 function buildWorld() {
   renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
@@ -198,10 +266,7 @@ function buildWorld() {
   scene3.add(root);
 
   // core: a plain sphere with a soft halo
-  coreMesh = new THREE.Mesh(
-    new THREE.SphereGeometry(0.9, 48, 32),
-    new THREE.MeshBasicMaterial({ color: 0x4f8cff })
-  );
+  coreMesh = new THREE.Mesh(new THREE.SphereGeometry(0.9, 64, 48), coreMaterial());
   root.add(coreMesh);
 
   wire = new THREE.Mesh(
@@ -379,6 +444,8 @@ function frame(ts) {
   const dt = Math.min((ts - lastTs) / 1000 || 0, 0.05);
   lastTs = ts;
 
+  coreMesh.material.uniforms.uTime.value += reduceMotion ? 0 : dt; // the flow never pauses
+  coreMesh.rotation.y += reduceMotion ? 0 : dt * 0.05;
   const paused = hovered || reduceMotion;
   if (!paused) clock += dt;
   stepTweens(dt);
