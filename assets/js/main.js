@@ -41,6 +41,7 @@
 
   var reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   var heroPlayed = false;
+  var HERO_SPEED = 1.3; // entrance plays 30% faster: every duration is divided by this
 
   var heroSection = document.querySelector(".hero");
   var heroEyebrow = document.getElementById("heroEyebrow");
@@ -103,19 +104,19 @@
   }
 
   function startLetter(el) {
-    tween(el, 720, easeLinear, function (e) {
+    tween(el, 720 / HERO_SPEED, easeLinear, function (e) {
       return "translateX(" + interp(BOUNCE_X, e).toFixed(2) + "px)";
     });
   }
 
   function startD(el) {
-    tween(el, 720, easeOutQuad, function (e) {
+    tween(el, 720 / HERO_SPEED, easeOutQuad, function (e) {
       return "scale(" + interp(D_SCALE, e).toFixed(3) + ")";
     });
   }
 
   function startLabs(el) {
-    tween(el, 760, easeOutCubic, function (e) {
+    tween(el, 760 / HERO_SPEED, easeOutCubic, function (e) {
       var x = interp(LABS_X, e).toFixed(2);
       var sk = interp(LABS_SKEW, e).toFixed(2);
       return "translateX(" + x + "px) skewX(" + sk + "deg)";
@@ -132,14 +133,14 @@
   }
 
   function schedule(fn, delay) {
-    heroTimers.push(setTimeout(fn, delay));
+    heroTimers.push(setTimeout(fn, delay / HERO_SPEED));
   }
 
   function startHeroTypewriter() {
     var naturalWidth = heroTwText.scrollWidth;
     var text = heroTwText.textContent;
     var charCount = Math.max(text.length, 1);
-    var duration = Math.min(1680, Math.max(640, charCount * 58));
+    var duration = Math.min(1680, Math.max(640, charCount * 58)) / HERO_SPEED;
 
     heroTypeAnim = heroTwWrap.animate(
       [{ width: "0px" }, { width: naturalWidth + "px" }],
@@ -151,7 +152,7 @@
       heroTwCursor.classList.add("blink");
       heroCta.classList.add("in");
       unlockScrollAfterEntrance();
-      setTimeout(function () { heroSection.classList.add("compact"); }, 1000);
+      setTimeout(function () { heroSection.classList.add("compact"); }, 1000 / HERO_SPEED);
     }).catch(function () {});
   }
 

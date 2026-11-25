@@ -218,7 +218,7 @@ a:hover { text-decoration: underline; }
   background:
     radial-gradient(560px 320px at 50% -10%, rgba(47, 111, 235, 0.16), transparent 70%),
     radial-gradient(480px 320px at 85% 10%, rgba(106, 140, 255, 0.10), transparent 70%);
-  transition: min-height 1.4s cubic-bezier(0.76, 0, 0.24, 1);
+  transition: min-height 1.08s cubic-bezier(0.76, 0, 0.24, 1);
 }
 
 /* On first load the hero fills the screen so nothing below it is visible;

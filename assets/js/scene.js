@@ -85,13 +85,26 @@ function stepTweens(dt) {
   }
 }
 
+// Intro steps run on the scene's own clock, which only ticks while the scene
+// is on screen. A wall-clock setTimeout would keep advancing the story while
+// the visitor is elsewhere on the page and leave it half-played on return.
+let sceneTime = 0;
+
 function later(fn, ms) {
-  timers.push(setTimeout(fn, ms));
+  timers.push({ at: sceneTime + ms / 1000, fn });
 }
 
 function clearTimers() {
-  timers.forEach(clearTimeout);
   timers = [];
+}
+
+function runTimers() {
+  for (let i = 0; i < timers.length; ) {
+    if (timers[i].at <= sceneTime) {
+      const { fn } = timers.splice(i, 1)[0];
+      fn();
+    } else i++;
+  }
 }
 
 // Deterministic pseudo-random, so the pile looks the same every visit.
@@ -446,6 +459,9 @@ function frame(ts) {
 
   coreMesh.material.uniforms.uTime.value += reduceMotion ? 0 : dt; // the flow never pauses
   coreMesh.rotation.y += reduceMotion ? 0 : dt * 0.05;
+  sceneTime += dt;
+  runTimers();
+
   const paused = hovered || reduceMotion;
   if (!paused) clock += dt;
   stepTweens(dt);
@@ -718,10 +734,10 @@ function init() {
     (entries) => {
       entries.forEach((en) => {
         visible = en.isIntersecting;
-        if (en.isIntersecting && en.intersectionRatio >= 0.4) start();
+        if (en.isIntersecting && en.intersectionRatio >= 0.5) start();
       });
     },
-    { threshold: [0, 0.4] }
+    { threshold: [0, 0.5] }
   ).observe(stage);
 
   if (window.__amadDict) setDict(window.__amadDict);
