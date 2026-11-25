@@ -512,6 +512,8 @@
       })
       .then(function (dict) {
         applyDict(dict);
+        window.__amadDict = dict;
+        if (window.AmadScene) window.AmadScene.setDict(dict);
         document.title = dict["meta.title"] || document.title;
         storeLang(lang);
 
@@ -531,133 +533,22 @@
       });
   }
 
-  // ---- Services: 3D coverflow carousel over the 4 pain-point cards ----
+  // ---- Theme: light / dark, remembered per browser ----
 
-  function initServicesCarousel() {
-    var carousel = document.querySelector(".cat-carousel");
-    var stage = document.getElementById("catStage");
-    var dotsWrap = document.getElementById("catDots");
-    var prevBtn = document.getElementById("catPrev");
-    var nextBtn = document.getElementById("catNext");
-    if (!stage || !dotsWrap || !prevBtn || !nextBtn) return;
+  function getColorMode() {
+    return document.documentElement.getAttribute("data-theme") === "dark" ? "dark" : "light";
+  }
 
-    var cards = Array.prototype.slice.call(stage.querySelectorAll(".cat-card"));
-    var n = cards.length;
-    if (!n) return;
-    var active = 0;
-    var expanded = false;
-
-    cards.forEach(function (card, i) {
-      var dot = document.createElement("button");
-      dot.type = "button";
-      dot.setAttribute("aria-label", "第 " + (i + 1) + " 項,共 " + n + " 項");
-      dot.addEventListener("click", function () { goTo(i); });
-      dotsWrap.appendChild(dot);
+  function initThemeToggle() {
+    var btn = document.getElementById("themeToggle");
+    if (!btn) return;
+    btn.setAttribute("aria-pressed", getColorMode() === "dark" ? "true" : "false");
+    btn.addEventListener("click", function () {
+      var next = getColorMode() === "dark" ? "light" : "dark";
+      document.documentElement.setAttribute("data-theme", next);
+      btn.setAttribute("aria-pressed", next === "dark" ? "true" : "false");
+      try { localStorage.setItem("theme", next); } catch (e) { /* ignore */ }
     });
-    var dots = Array.prototype.slice.call(dotsWrap.children);
-
-    function transformFor(d, isExpanded) {
-      if (d === 0) {
-        // Sizing up on expand is done in CSS via real width/padding/
-        // font-size growth on .cat-card.is-expanded (see style.css) rather
-        // than a transform: scale() here — scaling text through a
-        // compositor transform rasterizes it as a stretched bitmap and
-        // never renders crisp.
-        return { transform: "translateX(-50%)", opacity: 1, z: 3, interactive: true };
-      }
-      if (d === -1) {
-        return { transform: "translateX(-132%) translateZ(-160px) rotateY(-32deg) scale(0.82)", opacity: 0.55, z: 2, interactive: true };
-      }
-      if (d === 1) {
-        return { transform: "translateX(32%) translateZ(-160px) rotateY(32deg) scale(0.82)", opacity: 0.55, z: 2, interactive: true };
-      }
-      if (d < 0) {
-        return { transform: "translateX(-205%) translateZ(-320px) rotateY(-48deg) scale(0.62)", opacity: 0.3, z: 1, interactive: true };
-      }
-      return { transform: "translateX(105%) translateZ(-320px) rotateY(48deg) scale(0.62)", opacity: 0.3, z: 1, interactive: true };
-    }
-
-    function render() {
-      // On narrow screens there's no room for the 3D side-peek — only the
-      // active card is shown, full width; still swipeable via touch/dots.
-      var mobile = window.matchMedia("(max-width: 720px)").matches;
-
-      cards.forEach(function (card, i) {
-        var d = i - active;
-        if (d > n / 2) d -= n;
-        else if (d < -n / 2) d += n;
-
-        var isExpanded = d === 0 && expanded;
-        var t = transformFor(d, isExpanded);
-        if (mobile && d !== 0) {
-          t = { transform: t.transform, opacity: 0, z: 1, interactive: false };
-        }
-        card.style.transform = t.transform;
-        card.style.opacity = t.opacity;
-        card.style.zIndex = t.z;
-        card.style.pointerEvents = t.interactive ? "auto" : "none";
-        card.classList.toggle("is-active", d === 0);
-        card.classList.toggle("is-expanded", isExpanded);
-      });
-      dots.forEach(function (dot, i) { dot.classList.toggle("is-active", i === active); });
-      if (carousel) carousel.classList.toggle("has-expanded", expanded);
-    }
-
-    function goTo(i) {
-      active = ((i % n) + n) % n;
-      expanded = false;
-      render();
-    }
-
-    prevBtn.addEventListener("click", function () { goTo(active - 1); });
-    nextBtn.addEventListener("click", function () { goTo(active + 1); });
-
-    stage.addEventListener("keydown", function (e) {
-      if (e.key === "ArrowLeft") goTo(active - 1);
-      else if (e.key === "ArrowRight") goTo(active + 1);
-      else if (e.key === "Escape" && expanded) { expanded = false; render(); }
-    });
-
-    // Single delegated click handler for the whole stage:
-    //  - expanded: any click at all collapses it back.
-    //  - collapsed, click on the active card: zoom it in.
-    //  - collapsed, click on a side card: bring that one to the center.
-    stage.addEventListener("click", function (e) {
-      if (expanded) {
-        expanded = false;
-        render();
-        return;
-      }
-      var clickedIndex = -1;
-      cards.forEach(function (card, i) {
-        if (clickedIndex === -1 && card.contains(e.target)) clickedIndex = i;
-      });
-      if (clickedIndex === -1) return;
-      if (clickedIndex === active) {
-        expanded = true;
-        render();
-      } else {
-        goTo(clickedIndex);
-      }
-    });
-
-    var touchStartX = null;
-    stage.addEventListener("touchstart", function (e) { touchStartX = e.touches[0].clientX; }, { passive: true });
-    stage.addEventListener("touchend", function (e) {
-      if (touchStartX === null) return;
-      var dx = e.changedTouches[0].clientX - touchStartX;
-      if (dx > 40) goTo(active - 1);
-      else if (dx < -40) goTo(active + 1);
-      touchStartX = null;
-    }, { passive: true });
-
-    var resizeTimer = null;
-    window.addEventListener("resize", function () {
-      clearTimeout(resizeTimer);
-      resizeTimer = setTimeout(render, 150);
-    });
-
-    render();
   }
 
   document.addEventListener("DOMContentLoaded", function () {
@@ -666,7 +557,7 @@
     fetchHeroTheme();
     initThemePanel();
     lockScrollDuringEntrance();
-    initServicesCarousel();
+    initThemeToggle();
 
     var langToggle = document.getElementById("langToggle");
     if (langToggle) {
