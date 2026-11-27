@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex">
-<title>上傳品名資料｜禾翔 ERP</title>
+<title>上傳資料｜禾翔 ERP</title>
 <style>
   :root { --ink:#1b2333; --dim:#5b6575; --line:#d9dee7; --bg:#f4f6fa; --acc:#2f5bea; --soft:#eaf0ff; --ok:#16794c; --err:#b42318; }
   * { box-sizing:border-box; }
@@ -48,8 +48,8 @@
 </style>
 </head>
 <body><div class="wrap">
-<h1>上傳品名資料</h1>
-<p class="lead">我們需要的是<b>品名</b>(不需要庫存數量)。品名太多就不用整理,把有涵蓋到品名的檔案直接給我們,由我們來整理。</p>
+<h1>上傳新系統需要的資料</h1>
+<p class="lead">我們需要的是<b>品名+規格</b>(不需要庫存數量),而且只要<b>實際有用到</b>的,沒在用的請不要給。品項太多就不用整理,把有涵蓋到品名的檔案直接給我們,由我們來整理。<br>沒涵蓋到的品項,之後在系統裡都可以手動新增,不用擔心漏掉。</p>
 
 <form id="f" novalidate>
   <h2>① 選擇提供方式</h2>
@@ -61,23 +61,27 @@
   </div>
 
   <div class="panel card on" id="p-raw">
-    <b>只要檔案裡看得到品名就可以,例如:</b>
+    <b>請盡量提供下面這些(有多少給多少):</b>
     <ul class="check">
-      <li><b>正航匯出的商品資料</b><span>能匯出的話,直接給原始匯出檔。</span></li>
-      <li><b>價目表、報價單、型錄</b><span>不管什麼格式,有品名的都行。</span></li>
+      <li><b>品項:品名+規格(只要實際有用到的)</b><span>正航匯出的商品資料、價目表、報價單、型錄,有品名和規格的都行。不用整理,也不用挑,多給沒關係。</span></li>
+      <li><b>醫院(客戶)資料</b><span>醫院名稱、客戶代號、統一編號、聯絡人、地址,以及哪些醫院有寄庫。</span></li>
+      <li><b>經銷商資料</b><span>名稱、統一編號、聯絡人、帳期。</span></li>
+      <li><b>庫位與人員</b><span>公司倉、各醫院寄庫、各業務的移動庫存;還有每位同仁的姓名、職務、Email。</span></li>
       <li><b>出貨單、借出單、銷貨單(借出還回單也請一併提供)</b><span>新系統要<b>100% 模擬</b>這些單據:排版、欄位、GDP 流程都要跟現在一模一樣,所以請提供實際列印出來的樣本(PDF 或清楚的照片),並且要包含:<br>① 單筆(只有 1 個品項)<br>② 多筆(多個品項)<br>③ 多頁(品項多到換頁,看得到第 2 頁、頁首頁尾怎麼接續)<br>裡面的品名我們也會一起整理。</span></li>
-      <li><b>其他</b><span>有哪些檔案涵蓋到品名,就盡量都給,重複沒關係。</span></li>
+      <li><b>條碼照片</b><span>骨釘、骨板包裝上的條碼,每種拍 1 張,要看得到條碼和旁邊的文字。</span></li>
     </ul>
-    <p class="hint" style="margin:12px 0 0">可以一次選多個檔案。支援 Excel、CSV、PDF、Word、圖片、壓縮檔,單檔 20 MB 以內。</p>
+    <p class="hint" style="margin:12px 0 0">可以一次選多個檔案。支援 Excel、CSV、PDF、Word、圖片、壓縮檔,單檔 20 MB 以內。骨釘盒條碼和期初庫存不用提供,之後在系統裡建立。</p>
   </div>
 
   <div class="panel card" id="p-template">
     <b>步驟:</b>
     <ol style="margin:8px 0 12px; padding-left:22px">
-      <li>下載範本,在「品項主檔」一列填一個品名。只有品名一定要填,其他欄位有就填。</li>
-      <li>填好的檔案在下面上傳。</li>
+      <li>下載範本,依「說明」頁填寫(品項、醫院、經銷商、庫位、人員)。</li>
+      <li>品項只填<b>實際有用到</b>的,而且只有「品名」和「規格/型號」一定要填;沒涵蓋到的之後可在系統手動新增。</li>
+      <li>骨釘盒條碼和期初庫存不用填,之後在系統裡建立。</li>
+      <li>填好的檔案在下面上傳。單據樣本、條碼照片請改選「上傳現有的資料」另外送。</li>
     </ol>
-    <a class="btn alt" href="hs-template.xlsx" download="禾翔ERP_品名清單範本.xlsx">下載範本(Excel)</a>
+    <a class="btn alt" href="hs-template.xlsx" download="禾翔ERP_上線資料提供範本.xlsx">下載範本(Excel)</a>
   </div>
 
   <h2>② 選擇檔案</h2>
@@ -171,7 +175,7 @@
         .then(function () {
           $("go").disabled = false;
           if (failed) msg("err", okNames.length + " 個檔案已收到," + failed + " 個失敗。請只重新上傳失敗的檔案。");
-          else msg("ok", "已收到,謝謝!我們會自己整理品名,不用再做其他事。");
+          else msg("ok", "已收到,謝謝!我們會自己整理,不用再做其他事。");
         });
     });
   });
