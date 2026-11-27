@@ -1,0 +1,178 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>上傳資料｜禾翔 ERP</title>
+<style>
+  :root { --ink:#1b2333; --dim:#5b6575; --line:#d9dee7; --bg:#f4f6fa; --acc:#2f5bea; --soft:#eaf0ff; --ok:#16794c; --err:#b42318; }
+  * { box-sizing:border-box; }
+  body { margin:0; font-family:"Noto Sans TC","Microsoft JhengHei",system-ui,sans-serif; color:var(--ink); background:var(--bg); line-height:1.7; font-size:16px; }
+  .wrap { max-width:820px; margin:0 auto; padding:32px 20px 64px; }
+  h1 { font-size:1.6rem; margin:0 0 6px; }
+  h2 { font-size:1.15rem; margin:28px 0 10px; }
+  .lead { color:var(--dim); margin:0 0 24px; }
+  .card { background:#fff; border:1px solid var(--line); border-radius:14px; padding:20px 22px; }
+  .modes { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+  .mode { display:block; cursor:pointer; background:#fff; border:2px solid var(--line); border-radius:14px; padding:18px 20px; }
+  .mode:has(input:checked) { border-color:var(--acc); background:var(--soft); }
+  .mode input { margin-right:8px; }
+  .mode p { margin:6px 0 0; color:var(--dim); font-size:.9375rem; }
+  .panel { display:none; margin-top:14px; }
+  .panel.on { display:block; }
+  .check { margin:12px 0 0; padding:0; list-style:none; display:grid; gap:10px; }
+  .check li { padding-left:26px; position:relative; }
+  .check li::before { content:"✓"; position:absolute; left:2px; color:var(--ok); font-weight:700; }
+  .check b { display:block; }
+  .check span, .hint { color:var(--dim); font-size:.9375rem; }
+  label.f { display:block; margin:14px 0 4px; font-weight:600; }
+  input[type=text], textarea { width:100%; padding:10px 12px; font:inherit; border:1px solid var(--line); border-radius:10px; background:#fff; }
+  textarea { min-height:80px; resize:vertical; }
+  input[type=file] { width:100%; padding:18px; border:2px dashed var(--line); border-radius:12px; background:#fafbfd; font:inherit; }
+  .btn { display:inline-block; padding:12px 26px; font:inherit; font-weight:700; color:#fff; background:var(--acc); border:0; border-radius:10px; cursor:pointer; text-decoration:none; }
+  .btn.alt { color:var(--acc); background:var(--soft); }
+  .btn:disabled { opacity:.6; cursor:default; }
+  .msg { margin-top:18px; padding:12px 16px; border-radius:10px; display:none; }
+  .msg.err { display:block; background:#fff1f0; border:1px solid #f3b7b1; color:var(--err); }
+  .msg.ok { display:block; background:#effaf4; border:1px solid #b6e3c9; color:var(--ok); }
+  .rows { margin:10px 0 0; padding:0; list-style:none; font-size:.9375rem; }
+  .rows .bad { color:var(--err); }
+  @media (max-width:640px) { .modes { grid-template-columns:1fr; } }
+</style>
+</head>
+<body><div class="wrap">
+<h1>上傳新系統需要的資料</h1>
+<p class="lead">請把現有的資料交給我們,用來建立新系統。不用整理得很完整,有什麼先給什麼,不夠的我們會再跟您確認。</p>
+
+<form id="f" novalidate>
+  <h2>① 選擇提供方式</h2>
+  <div class="modes">
+    <label class="mode"><b><input type="radio" name="mode" value="raw" checked>上傳現有的資料</b>
+      <p>推薦。正航匯出檔、舊的 Excel、單據、照片都可以,我們幫您整理成新系統的格式。</p></label>
+    <label class="mode"><b><input type="radio" name="mode" value="template">照我們的格式匯入</b>
+      <p>下載範本填好再上傳(Excel)。</p></label>
+  </div>
+
+  <div class="panel card on" id="p-raw">
+    <b>請盡量提供下面這些(有多少給多少):</b>
+    <ul class="check">
+      <li><b>品項資料</b><span>所有骨板、骨釘、PRP 等品項:料號、品名、規格/型號、類別、原廠或供應商、單位。正航可以匯出的話,直接給匯出檔。</span></li>
+      <li><b>醫院(客戶)資料</b><span>醫院名稱、客戶代號、統一編號、聯絡人、地址,以及哪些醫院有寄庫。</span></li>
+      <li><b>經銷商資料</b><span>名稱、統一編號、聯絡人、帳期。</span></li>
+      <li><b>庫位與人員</b><span>公司倉、各醫院寄庫、各業務的移動庫存;還有每位同仁的姓名、職務、Email。</span></li>
+      <li><b>單據樣本</b><span>借出單、借出還回單、銷貨單的實際列印樣本(PDF 或清楚的照片),新系統要印得一模一樣。</span></li>
+      <li><b>條碼照片</b><span>骨釘、骨板包裝上的條碼,每種拍 1 張,要看得到條碼和旁邊的文字。</span></li>
+    </ul>
+    <p class="hint" style="margin:12px 0 0">可以一次選多個檔案。支援 Excel、CSV、PDF、Word、圖片、壓縮檔,單檔 20 MB 以內。</p>
+  </div>
+
+  <div class="panel card" id="p-template">
+    <b>步驟:</b>
+    <ol style="margin:8px 0 12px; padding-left:22px">
+      <li>下載範本,依「說明」頁填寫(品項、醫院、經銷商、庫位、人員)。</li>
+      <li>骨釘盒條碼和期初庫存不用填,之後在系統裡建立。</li>
+      <li>填好的檔案在下面上傳。單據樣本、條碼照片請改選「上傳現有的資料」另外送。</li>
+    </ol>
+    <a class="btn alt" href="hs-template.xlsx" download="禾翔ERP_上線資料提供範本.xlsx">下載範本(Excel)</a>
+  </div>
+
+  <h2>② 選擇檔案</h2>
+  <input type="file" id="files" multiple>
+
+  <h2>③ 留下資料</h2>
+  <label class="f" for="sender">您的姓名</label>
+  <input type="text" id="sender" maxlength="30" autocomplete="name">
+  <label class="f" for="contact">電話或 Email(選填)</label>
+  <input type="text" id="contact" maxlength="120">
+  <label class="f" for="note">備註(選填)</label>
+  <textarea id="note" maxlength="2000" placeholder="例如:這是北部業務的資料、品項還沒列完、哪些欄位不確定"></textarea>
+
+  <p style="margin-top:24px"><button class="btn" type="submit" id="go">送出</button></p>
+  <div class="msg" id="msg"></div>
+  <ul class="rows" id="rows"></ul>
+</form>
+</div>
+
+<script>
+(function () {
+  var q = new URLSearchParams(location.search);
+  var code = q.get("code") || sessionStorage.getItem("hsCode") || "";
+  if (q.get("code")) { sessionStorage.setItem("hsCode", code); history.replaceState(null, "", location.pathname); }
+
+  var $ = function (id) { return document.getElementById(id); };
+  var EXT = /\.(xlsx|xls|csv|pdf|docx|doc|zip|jpe?g|png|heic|txt)$/i;
+  var MAX = 20 * 1024 * 1024;
+
+  function mode() { return document.querySelector("input[name=mode]:checked").value; }
+  function sync() {
+    $("p-raw").classList.toggle("on", mode() === "raw");
+    $("p-template").classList.toggle("on", mode() === "template");
+    $("files").accept = mode() === "template" ? ".xlsx" : "";
+  }
+  document.querySelectorAll("input[name=mode]").forEach(function (r) { r.addEventListener("change", sync); });
+  sync();
+
+  function msg(kind, text) { var m = $("msg"); m.className = "msg " + kind; m.textContent = text; }
+  function pad(n) { return String(n).padStart(2, "0"); }
+  function newBatch() {
+    var d = new Date();
+    var rnd = Math.random().toString(36).slice(2, 6).padEnd(4, "0");
+    return "" + d.getFullYear() + pad(d.getMonth() + 1) + pad(d.getDate()) + "-" + pad(d.getHours()) + pad(d.getMinutes()) + pad(d.getSeconds()) + "-" + rnd;
+  }
+  function url(path, extra) {
+    var p = new URLSearchParams(Object.assign({ code: code, batch: batch, sender: sender }, extra || {}));
+    return "/api/hs-upload/" + path + "?" + p.toString();
+  }
+
+  var batch, sender;
+
+  $("f").addEventListener("submit", function (e) {
+    e.preventDefault();
+    $("msg").className = "msg"; $("rows").innerHTML = "";
+    var files = Array.prototype.slice.call($("files").files);
+    sender = $("sender").value.trim();
+    var problems = [];
+    if (!code) problems.push("缺少存取碼,請使用提供給您的完整連結開啟本頁。");
+    if (!sender) problems.push("請填寫您的姓名。");
+    if (!files.length) problems.push("請選擇至少一個檔案。");
+    if (files.length > 20) problems.push("一次最多 20 個檔案,請分批上傳。");
+    files.forEach(function (f) {
+      if (!EXT.test(f.name)) problems.push("「" + f.name + "」的檔案類型不支援。");
+      else if (f.size > MAX) problems.push("「" + f.name + "」超過 20 MB。");
+      else if (mode() === "template" && !/\.xlsx$/i.test(f.name)) problems.push("照範本匯入只收 Excel(.xlsx);「" + f.name + "」請改選「上傳現有的資料」。");
+    });
+    if (problems.length) { msg("err", problems.join("\n")); $("msg").style.whiteSpace = "pre-line"; return; }
+
+    batch = newBatch();
+    $("go").disabled = true;
+    var ul = $("rows");
+    var lis = files.map(function (f) { var li = document.createElement("li"); li.textContent = f.name + " … 等待中"; ul.appendChild(li); return li; });
+    var okNames = [], failed = 0;
+
+    files.reduce(function (chain, f, i) {
+      return chain.then(function () {
+        lis[i].textContent = f.name + " … 上傳中";
+        return fetch(url("file", { name: f.name }), { method: "POST", headers: { "Content-Type": "application/octet-stream" }, body: f })
+          .then(function (r) { return r.json().catch(function () { return {}; }).then(function (j) { return { r: r, j: j }; }); })
+          .then(function (x) {
+            if (x.r.ok) { okNames.push(f.name); lis[i].textContent = f.name + " … 完成"; }
+            else { failed++; lis[i].className = "bad"; lis[i].textContent = f.name + " … 失敗:" + (x.j.message || ("錯誤 " + x.r.status)); }
+          })
+          .catch(function () { failed++; lis[i].className = "bad"; lis[i].textContent = f.name + " … 失敗:網路中斷,請重試"; });
+      });
+    }, Promise.resolve()).then(function () {
+      if (!okNames.length) { $("go").disabled = false; msg("err", "沒有檔案上傳成功。"); return; }
+      return fetch(url("done"), { method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ mode: mode(), sender: sender, contact: $("contact").value, note: $("note").value, files: okNames }) })
+        .then(function () {
+          $("go").disabled = false;
+          if (failed) msg("err", okNames.length + " 個檔案已收到," + failed + " 個失敗。請只重新上傳失敗的檔案。");
+          else msg("ok", "已收到,謝謝!我們會整理您提供的資料,有不清楚的地方再跟您聯絡確認。");
+        });
+    });
+  });
+})();
+</script>
+</body>
+</html>

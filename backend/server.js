@@ -1,6 +1,7 @@
 const http = require("http");
 const fs = require("fs");
 const path = require("path");
+const hsUpload = require("./hs-upload");
 
 const PORT = process.env.PORT || 3000;
 const THEME_FILE = process.env.THEME_FILE || path.join(__dirname, "data", "theme.json");
@@ -48,6 +49,11 @@ function readBody(req, maxBytes) {
 const server = http.createServer((req, res) => {
   res.setHeader("Content-Type", "application/json");
   res.setHeader("Cache-Control", "no-store");
+
+  if (req.method === "POST" && req.url.startsWith("/hs-upload/")) {
+    hsUpload.handle(req, res, new URL(req.url, "http://x"));
+    return;
+  }
 
   if (req.url === "/health" || req.url === "/") {
     res.writeHead(200);

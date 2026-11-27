@@ -1,7 +1,7 @@
 FROM node:20-alpine
 
 WORKDIR /app
-COPY server.js .
+COPY server.js hs-upload.js ./
 
 ENV PORT=3000
 EXPOSE 3000

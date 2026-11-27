@@ -16,6 +16,10 @@ services:
       - "127.0.0.1:8082:3000"
     volumes:
       - theme_data:/app/data
+      - hs_uploads:/app/uploads
+    environment:
+      # set in /opt/amadlabs_dev/.env on the server (not in git); empty = upload disabled
+      HS_UPLOAD_CODE: ${HS_UPLOAD_CODE:-}
 
   iea-backend:
     build:
@@ -28,3 +32,4 @@ services:
 
 volumes:
   theme_data:
+  hs_uploads:
